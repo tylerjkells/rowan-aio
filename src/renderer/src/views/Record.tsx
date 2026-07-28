@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import type {
   EngineProgress,
   EngineStatus,
-  Meeting,
   RecordingMode,
   TranscriptSegment
 } from '../../../shared/types'
@@ -16,7 +15,9 @@ export function RecordView({
   setRec,
   paused,
   setPaused,
-  onDone,
+  finishing,
+  stopError,
+  onStop,
   onCancel
 }: {
   engine: EngineStatus | null
@@ -25,13 +26,15 @@ export function RecordView({
   setRec: (r: RecorderHandles | null) => void
   paused: boolean
   setPaused: (p: boolean) => void
-  onDone: (m: Meeting) => void
+  /** the shell is saving the recording (it also owns the auto-end path) */
+  finishing: boolean
+  stopError: string | null
+  onStop: () => void
   onCancel: () => void
 }): React.JSX.Element {
   const [mode, setMode] = useState<RecordingMode>('virtual')
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [finishing, setFinishing] = useState(false)
   const [liveSegs, setLiveSegs] = useState<TranscriptSegment[]>([])
   const [confirmEl, confirm] = useConfirm()
   const [notes, setNotes] = useState('')
@@ -96,20 +99,10 @@ export function RecordView({
     }
   }
 
-  async function stop(): Promise<void> {
+  function stop(): void {
     if (!rec || finishing) return
-    setFinishing(true)
     flushNotes()
-    try {
-      const meeting = await rec.stop()
-      setRec(null)
-      setPaused(false)
-      onDone(meeting)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save recording')
-    } finally {
-      setFinishing(false)
-    }
+    onStop()
   }
 
   async function discard(): Promise<void> {
@@ -223,9 +216,9 @@ export function RecordView({
           Discard
         </button>
       </div>
-      {error && (
+      {(error ?? stopError) && (
         <div className="stage-banner error" role="alert">
-          {error}
+          {error ?? stopError}
         </div>
       )}
       {confirmEl}

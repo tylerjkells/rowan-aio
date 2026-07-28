@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AppSettings, EngineStatus, Meeting, MeetingListItem } from '../../shared/types'
+import type {
+  AppSettings,
+  AutoEndReason,
+  EngineStatus,
+  MeetingListItem
+} from '../../shared/types'
 import type { RecorderHandles } from './recorder'
 import { LibraryView } from './views/Library'
 import { RecordView } from './views/Record'
@@ -7,6 +12,7 @@ import { MeetingView } from './views/MeetingDetail'
 import { SettingsView } from './views/Settings'
 import { ActionsView } from './views/Actions'
 import { ImportView } from './views/Import'
+import { AutoEndWatch } from './AutoEnd'
 import { TodayView } from './views/Today'
 import { PeopleView, PersonView } from './views/People'
 import { SeriesView } from './views/Series'
@@ -47,6 +53,10 @@ export default function App(): React.JSX.Element {
   const [paused, setPaused] = useState(false)
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
   const [digestRequested, setDigestRequested] = useState(false)
+  // finishing state lives here because a recording can also be stopped by the
+  // auto-end watchdog while the user is on some other page
+  const [finishing, setFinishing] = useState(false)
+  const [stopError, setStopError] = useState<string | null>(null)
 
   useEffect(() => window.scribe.update.onReady(setUpdateVersion), [])
 
@@ -77,6 +87,28 @@ export default function App(): React.JSX.Element {
   }, [rec])
 
   const openMeeting = (id: string, at?: number): void => setView({ name: 'meeting', id, at })
+
+  /** the one way a recording ends: by the stop button or by the auto-end rules */
+  const stopRecording = useCallback(
+    async (autoEnd: AutoEndReason | null = null): Promise<void> => {
+      if (!rec || finishing) return
+      setFinishing(true)
+      setStopError(null)
+      try {
+        const meeting = await rec.stop(autoEnd)
+        setRec(null)
+        setPaused(false)
+        refreshMeetings()
+        setView({ name: 'meeting', id: meeting.id })
+      } catch (err) {
+        setStopError(err instanceof Error ? err.message : 'Failed to save recording')
+        setView({ name: 'record' })
+      } finally {
+        setFinishing(false)
+      }
+    },
+    [rec, finishing, refreshMeetings]
+  )
 
   return (
     <div className="shell">
@@ -181,10 +213,9 @@ export default function App(): React.JSX.Element {
               setRec={setRec}
               paused={paused}
               setPaused={setPaused}
-              onDone={(m: Meeting) => {
-                refreshMeetings()
-                setView({ name: 'meeting', id: m.id })
-              }}
+              finishing={finishing}
+              stopError={stopError}
+              onStop={() => stopRecording(null)}
               onCancel={() => setView({ name: 'library' })}
             />
           )}
@@ -224,6 +255,10 @@ export default function App(): React.JSX.Element {
                 refreshMeetings()
                 setView({ name: 'meeting', id: m.id })
               }}
+              onBulkDone={() => {
+                refreshMeetings()
+                setView({ name: 'library' })
+              }}
               onCancel={() => setView({ name: 'library' })}
             />
           )}
@@ -232,6 +267,14 @@ export default function App(): React.JSX.Element {
           )}
         </div>
       </main>
+
+      <AutoEndWatch
+        rec={rec}
+        settings={settings}
+        paused={paused}
+        busy={finishing}
+        onStop={(reason) => stopRecording(reason)}
+      />
 
       <WhatsNew />
       <Digest

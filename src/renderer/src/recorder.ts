@@ -1,5 +1,5 @@
 import fixWebmDuration from 'fix-webm-duration'
-import type { EnergySample, Meeting, RecordingMode } from '../../shared/types'
+import type { AutoEndReason, EnergySample, Meeting, RecordingMode } from '../../shared/types'
 
 /**
  * Recording engine. Mixes microphone (+ system loopback audio in virtual mode)
@@ -15,6 +15,14 @@ import type { EnergySample, Meeting, RecordingMode } from '../../shared/types'
 
 const CAPTURE_RATE = 48000
 
+/**
+ * RMS level (as reported by readLevel) below which a source counts as silent.
+ * Well under speech but above the noise floor of a live-but-idle mic, so a
+ * quiet room does not read as sound.
+ */
+const SILENCE_LEVEL = 0.02
+const SILENCE_SAMPLE_MS = 500
+
 export interface RecorderHandles {
   /** live meeting id assigned by the main process */
   id: string
@@ -26,10 +34,13 @@ export interface RecorderHandles {
   startedAt: number
   /** elapsed recording time excluding paused stretches */
   elapsedMs: () => number
+  /** how long every source has been below the silence floor (0 while paused) */
+  silentMs: () => number
   isPaused: () => boolean
   pause: () => void
   resume: () => void
-  stop: () => Promise<Meeting>
+  /** pass a reason when the app stopped the recording on the user's behalf */
+  stop: (autoEnd?: AutoEndReason | null) => Promise<Meeting>
   cancel: () => Promise<void>
 }
 
@@ -232,6 +243,25 @@ export async function startRecording(mode: RecordingMode): Promise<RecorderHandl
       }, 250)
     : null
 
+  // Silence watch, for the auto-end rule: track the last moment either source
+  // carried sound. Paused stretches keep pushing the marker forward, so
+  // pausing on purpose never trips the automatic stop.
+  let lastSoundAt = Date.now()
+  const silenceMicBuf = new Uint8Array(micAnalyser.fftSize)
+  const silenceSysBuf = sysAnalyser ? new Uint8Array(sysAnalyser.fftSize) : null
+  const silenceTimer = setInterval(() => {
+    if (stopped) return
+    if (pausedAt !== null) {
+      lastSoundAt = Date.now()
+      return
+    }
+    const level = Math.max(
+      readLevel(micAnalyser, silenceMicBuf),
+      sysAnalyser && silenceSysBuf ? readLevel(sysAnalyser, silenceSysBuf) : 0
+    )
+    if (level > SILENCE_LEVEL) lastSoundAt = Date.now()
+  }, SILENCE_SAMPLE_MS)
+
   function elapsedMs(): number {
     return (pausedAt ?? Date.now()) - startedAt - pausedTotal
   }
@@ -255,6 +285,7 @@ export async function startRecording(mode: RecordingMode): Promise<RecorderHandl
     stopped = true
     if (energyTimer) clearInterval(energyTimer)
     if (deviceWatch) clearInterval(deviceWatch)
+    clearInterval(silenceTimer)
     try {
       await reader.cancel()
     } catch {
@@ -266,7 +297,7 @@ export async function startRecording(mode: RecordingMode): Promise<RecorderHandl
     ctx.close()
   }
 
-  async function stop(): Promise<Meeting> {
+  async function stop(autoEnd: AutoEndReason | null = null): Promise<Meeting> {
     const durationMs = elapsedMs()
     const raw = await new Promise<Blob>((resolve) => {
       recorder.onstop = () => resolve(new Blob(chunks, { type: 'audio/webm' }))
@@ -294,7 +325,7 @@ export async function startRecording(mode: RecordingMode): Promise<RecorderHandl
       outBuf = []
     }
     const webm = await blob.arrayBuffer()
-    return window.scribe.rec.finish(id, webm, durationMs, energy.length ? energy : null)
+    return window.scribe.rec.finish(id, webm, durationMs, energy.length ? energy : null, autoEnd)
   }
 
   async function cancel(): Promise<void> {
@@ -314,6 +345,7 @@ export async function startRecording(mode: RecordingMode): Promise<RecorderHandl
     sysAnalyser,
     startedAt,
     elapsedMs,
+    silentMs: () => Math.max(0, Date.now() - lastSoundAt),
     isPaused: () => pausedAt !== null,
     pause,
     resume,

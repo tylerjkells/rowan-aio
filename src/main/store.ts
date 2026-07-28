@@ -124,6 +124,17 @@ export function listMeetings(): MeetingListItem[] {
   return items
 }
 
+/** fingerprints of everything already imported, so a re-import can skip them */
+export function existingImportKeys(): Set<string> {
+  const keys = new Set<string>()
+  for (const entry of readdirSync(meetingsRoot(), { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const key = readMeeting(entry.name)?.importKey
+    if (key) keys.add(key)
+  }
+  return keys
+}
+
 export function deleteMeeting(id: string): void {
   rmSync(meetingDir(id), { recursive: true, force: true })
 }

@@ -2809,6 +2809,122 @@ input[type='date'] {
   margin-bottom: var(--s1);
 }
 
+/* ---------- auto-end warning ---------- */
+
+.autoend-prompt {
+  position: fixed;
+  left: 248px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  background: var(--bg-raised);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-card);
+  box-shadow: 0 8px 28px oklch(0 0 0 / 0.4);
+  z-index: 41;
+  animation: askw-in 200ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .autoend-prompt {
+    animation: none;
+  }
+}
+
+/* ---------- auto-end settings ---------- */
+
+.minutes-row {
+  align-items: center;
+  gap: var(--s3);
+}
+
+.minutes-row .switch-label {
+  flex: 1;
+}
+
+.minutes-input {
+  width: 88px;
+  flex: none;
+}
+
+/* ---------- bulk import ---------- */
+
+.import-source {
+  margin-bottom: var(--s4);
+}
+
+.bulk-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+
+.bulk-tools .count-note {
+  margin-right: auto;
+}
+
+.bulk-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  overflow: hidden;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+
+.bulk-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  background: var(--bg-raised);
+}
+
+.bulk-row + .bulk-row {
+  border-top: 1px solid var(--line-soft);
+}
+
+.bulk-row.skipped {
+  opacity: 0.6;
+}
+
+.bulk-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.bulk-title {
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bulk-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 12px;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bulk-date {
+  width: 148px;
+  flex: none;
+  font-size: 12px;
+}
+
 /* view transitions: opacity/transform only, fast, ease-out */
 .view-enter {
   animation: view-in var(--t-med) var(--ease-out);
