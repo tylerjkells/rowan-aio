@@ -117,6 +117,8 @@ export interface Meeting {
   attendees?: string[]
   /** notes the user typed during or after the meeting; fed to the summarizer */
   notes?: string
+  /** fingerprint of imported transcript text, so a re-import can skip it */
+  importKey?: string
 }
 
 /** Lightweight listing shape (no transcript body) */
@@ -214,6 +216,54 @@ export interface PersonProfile {
   myCommitments: ActionRollupItem[]
 }
 
+/** why a recording stopped itself */
+export type AutoEndReason = 'silence' | 'overrun'
+
+/** one file found by a bulk import scan */
+export interface BulkCandidate {
+  /** absolute path of the source file (also the selection key) */
+  path: string
+  /** path shown in the UI, relative to the chosen folder or archive */
+  relPath: string
+  title: string
+  /** best guess at when the meeting happened */
+  dateIso: string
+  /** where that guess came from, so the UI can flag the weak ones */
+  dateSource: 'property' | 'filename' | 'file'
+  words: number
+  /** names read from an Attendees/Participants property */
+  attendees: string[]
+  /** set when the file cannot be imported as-is */
+  skip?: 'empty' | 'duplicate'
+}
+
+export interface BulkScan {
+  /** folder that was scanned (the extracted copy, for an archive) */
+  root: string
+  /** the archive or folder the user actually picked */
+  sourceLabel: string
+  candidates: BulkCandidate[]
+}
+
+/** what the user chose to import, after reviewing the scan */
+export interface BulkSelection {
+  path: string
+  title: string
+  dateIso: string
+  attendees: string[]
+}
+
+export interface BulkProgress {
+  phase: 'creating' | 'summarizing' | 'done' | 'cancelled'
+  done: number
+  total: number
+  /** title of the meeting currently being worked on */
+  current: string
+  /** ids of meetings created so far */
+  imported: string[]
+  failed: { title: string; error: string }[]
+}
+
 export type WhisperModel = 'base.en' | 'small.en' | 'medium.en' | 'small.en-tdrz'
 
 export type AppTheme = 'studio' | 'rowan' | 'slate' | 'paper'
@@ -227,6 +277,14 @@ export interface AppSettings {
   hasCalendar: boolean
   /** notify when a calendared meeting starts and nothing is recording */
   recordNudge: boolean
+  /** stop a recording by itself once the room has gone quiet */
+  autoEndSilence: boolean
+  /** minutes of silence before the automatic stop */
+  autoEndSilenceMinutes: number
+  /** stop a recording by itself once its calendar event is well over */
+  autoEndOverrun: boolean
+  /** minutes past the scheduled end before the automatic stop */
+  autoEndOverrunMinutes: number
   theme: AppTheme
   /** names, acronyms, and jargon fed to transcription and summaries */
   vocabulary: string

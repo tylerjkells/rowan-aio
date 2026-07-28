@@ -82,6 +82,15 @@ usable in meetings that touch student data.
 - [x] **Real due dates** — free-text dues parsed into dates; urgency sorting and overdue
       flags across Action items, Today, People, Series, and the digest (v0.8.0).
 - [x] **What's new** — a once-per-version card after silent auto-updates (v0.8.0).
+- [x] **Auto-end recordings** — a recording stops itself after a stretch of silence, or once
+      it runs past the end of the calendar event it started in. Both give a 30-second warning
+      with a "Keep recording" button, both are configurable in Settings, and a deliberate
+      pause never counts as silence. A recording that ends on its own raises a system
+      notification, since the point is that nobody was watching (v0.10.0).
+- [x] **Bulk import** — point the app at a Notion export (`.zip` or the unzipped folder), or
+      any folder of `.md`/`.txt` transcripts: it reads every page, pulls titles, dates, and
+      attendees from the page properties, flags anything already in the library, and imports
+      the reviewed list. Summaries then run one meeting at a time in the background (v0.10.0).
 - [ ] **Transcript redaction** — remove a sensitive span from the transcript, summary, and
       Ask context permanently.
 

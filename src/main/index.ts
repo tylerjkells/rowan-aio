@@ -37,7 +37,15 @@ import {
   findLiveEvent,
   clearCalendarCache
 } from './calendar'
-import { startRecordNudge } from './nudge'
+import { startRecordNudge, notifyAutoEnd } from './nudge'
+import {
+  bulkImportStatus,
+  cancelBulkImport,
+  isBulkImportRunning,
+  pickBulkSource,
+  runBulkImport,
+  scanBulkSource
+} from './bulk'
 import { briefForEvent } from './brief'
 import { listPeople, personProfile } from './people'
 import { buildDigest } from './digest'
@@ -56,6 +64,8 @@ import { patchLegacyAudioDurations } from './migrate'
 import type {
   ActionRollupItem,
   AppSettings,
+  AutoEndReason,
+  BulkSelection,
   EnergySample,
   Meeting,
   RecordingMode,
@@ -277,7 +287,8 @@ function registerIpc(): void {
       id: string,
       webm: ArrayBuffer,
       durationMs: number,
-      energy: EnergySample[] | null
+      energy: EnergySample[] | null,
+      autoEnd: AutoEndReason | null
     ) => {
       const meeting = await finishRecording(id, Buffer.from(webm), durationMs, energy)
       // recording made during a calendar event inherits its title (the
@@ -292,6 +303,7 @@ function registerIpc(): void {
       } catch {
         // calendar unreachable: keep the default title
       }
+      if (autoEnd) notifyAutoEnd(meeting.title, autoEnd)
       // fire-and-forget: transcribe + summarize in the background
       processMeeting(id)
       return meeting
@@ -392,6 +404,23 @@ function registerIpc(): void {
     return meeting
   })
 
+  // --- bulk import (Notion export or a folder of transcripts) ---
+  ipcMain.handle('bulk:pick', async (e, kind: 'zip' | 'folder') => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const source = await pickBulkSource(win, kind)
+    if (!source) return null
+    return scanBulkSource(source)
+  })
+  ipcMain.handle('bulk:run', (_e, selection: BulkSelection[]) => {
+    if (isBulkImportRunning()) throw new Error('A bulk import is already running.')
+    // fire-and-forget: progress arrives on the bulk:progress channel
+    runBulkImport(selection).catch(() => {
+      // per-item failures are already reported; nothing left to do here
+    })
+  })
+  ipcMain.handle('bulk:cancel', () => cancelBulkImport())
+  ipcMain.handle('bulk:status', () => bulkImportStatus())
+
   ipcMain.handle(
     'meetings:setSpeakers',
     (_e, id: string, names: { me: string; them: string }) => {
@@ -468,6 +497,16 @@ function registerIpc(): void {
         events: [],
         error: err instanceof Error ? err.message : 'The calendar feed could not be reached.'
       }
+    }
+  })
+  // the event a live recording sits inside, so the app knows when it was meant
+  // to end (auto-end) — null when no calendar is connected
+  ipcMain.handle('calendar:liveEvent', async (_e, startedAtIso: string) => {
+    if (!getSettings().hasCalendar) return null
+    try {
+      return await findLiveEvent(startedAtIso)
+    } catch {
+      return null
     }
   })
   ipcMain.handle('calendar:today', async () => {

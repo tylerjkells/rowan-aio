@@ -8,6 +8,10 @@ interface StoredSettings {
   claudeModel: string
   autoSummarize: boolean
   recordNudge: boolean
+  autoEndSilence: boolean
+  autoEndSilenceMinutes: number
+  autoEndOverrun: boolean
+  autoEndOverrunMinutes: number
   theme: AppTheme
   vocabulary: string
   closeToTray: boolean
@@ -29,6 +33,10 @@ const DEFAULTS: StoredSettings = {
   claudeModel: 'claude-haiku-4-5',
   autoSummarize: true,
   recordNudge: true,
+  autoEndSilence: true,
+  autoEndSilenceMinutes: 10,
+  autoEndOverrun: true,
+  autoEndOverrunMinutes: 15,
   theme: 'studio',
   vocabulary: '',
   closeToTray: true,
@@ -74,6 +82,10 @@ export function getSettings(): AppSettings {
     claudeModel: s.claudeModel,
     autoSummarize: s.autoSummarize,
     recordNudge: s.recordNudge !== false,
+    autoEndSilence: s.autoEndSilence !== false,
+    autoEndSilenceMinutes: clampMinutes(s.autoEndSilenceMinutes, DEFAULTS.autoEndSilenceMinutes),
+    autoEndOverrun: s.autoEndOverrun !== false,
+    autoEndOverrunMinutes: clampMinutes(s.autoEndOverrunMinutes, DEFAULTS.autoEndOverrunMinutes),
     theme: s.theme ?? 'studio',
     vocabulary: s.vocabulary ?? '',
     closeToTray: s.closeToTray !== false,
@@ -87,6 +99,16 @@ export function getSettings(): AppSettings {
   }
 }
 
+/** auto-end delays are minutes; keep them sane whatever lands in the file */
+const MIN_AUTO_END_MINUTES = 1
+const MAX_AUTO_END_MINUTES = 240
+
+function clampMinutes(value: number, fallback: number): number {
+  const n = Math.round(Number(value))
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(MAX_AUTO_END_MINUTES, Math.max(MIN_AUTO_END_MINUTES, n))
+}
+
 export function updateSettings(
   patch: Partial<
     Pick<
@@ -95,6 +117,10 @@ export function updateSettings(
       | 'claudeModel'
       | 'autoSummarize'
       | 'recordNudge'
+      | 'autoEndSilence'
+      | 'autoEndSilenceMinutes'
+      | 'autoEndOverrun'
+      | 'autoEndOverrunMinutes'
       | 'theme'
       | 'vocabulary'
       | 'closeToTray'
@@ -111,6 +137,20 @@ export function updateSettings(
   if (patch.claudeModel) s.claudeModel = patch.claudeModel
   if (typeof patch.autoSummarize === 'boolean') s.autoSummarize = patch.autoSummarize
   if (typeof patch.recordNudge === 'boolean') s.recordNudge = patch.recordNudge
+  if (typeof patch.autoEndSilence === 'boolean') s.autoEndSilence = patch.autoEndSilence
+  if (patch.autoEndSilenceMinutes !== undefined) {
+    s.autoEndSilenceMinutes = clampMinutes(
+      patch.autoEndSilenceMinutes,
+      DEFAULTS.autoEndSilenceMinutes
+    )
+  }
+  if (typeof patch.autoEndOverrun === 'boolean') s.autoEndOverrun = patch.autoEndOverrun
+  if (patch.autoEndOverrunMinutes !== undefined) {
+    s.autoEndOverrunMinutes = clampMinutes(
+      patch.autoEndOverrunMinutes,
+      DEFAULTS.autoEndOverrunMinutes
+    )
+  }
   if (patch.theme) s.theme = patch.theme
   if (typeof patch.vocabulary === 'string') s.vocabulary = patch.vocabulary.trim()
   if (typeof patch.closeToTray === 'boolean') s.closeToTray = patch.closeToTray

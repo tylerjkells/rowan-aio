@@ -19,6 +19,12 @@ title and date:
 
 (Titles will be overwritten by auto-titling if summarization runs — that's fine.)
 
+Faster route: **Import → Bulk import → Choose a folder…** and point it at this `samples`
+folder. It picks up all six in one pass. These files carry no date of their own, so every
+row comes in flagged "no date found" on today's date — set the dates from the table above
+in the review list before importing, otherwise the series and digest views have nothing
+interesting to show.
+
 Good questions to test Ask with afterwards:
 
 - *What did we decide about the enrollment dashboard?* — the decision **changes** between

@@ -61,6 +61,50 @@ function SwitchRow({
   )
 }
 
+/** a minutes field that only saves once the user is done typing */
+function MinutesRow({
+  label,
+  value,
+  onCommit
+}: {
+  label: string
+  value: number
+  onCommit: (minutes: number) => void
+}): React.JSX.Element {
+  const [draft, setDraft] = useState(String(value))
+
+  useEffect(() => setDraft(String(value)), [value])
+
+  function commit(): void {
+    const n = Math.round(Number(draft))
+    if (!Number.isFinite(n) || n === value) {
+      setDraft(String(value))
+      return
+    }
+    onCommit(Math.min(240, Math.max(1, n)))
+  }
+
+  return (
+    <div className="field-row minutes-row">
+      <label className="switch-label" htmlFor={`minutes-${label}`}>
+        <span className="opt-title">{label}</span>
+      </label>
+      <input
+        id={`minutes-${label}`}
+        className="text-input minutes-input"
+        type="number"
+        min={1}
+        max={240}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      />
+      <span className="opt-desc">minutes</span>
+    </div>
+  )
+}
+
 function OptRow({
   title,
   desc,
@@ -406,6 +450,56 @@ export function SettingsView({
               future transcriptions and summaries.
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <header className="settings-label">
+          <h2>Auto-end recordings</h2>
+          <p className="hint">
+            For the meetings you walk away from. Either rule shows a 30-second warning first, with
+            a &ldquo;Keep recording&rdquo; button, and pausing on purpose never counts as silence.
+          </p>
+        </header>
+        <div className="settings-body">
+          <SwitchRow
+            title="Stop when the audio goes quiet"
+            desc="Nothing on your mic or from the call for a stretch — the meeting is over and the recorder is still running."
+            checked={settings.autoEndSilence}
+            onToggle={async (v) =>
+              onChange(await window.scribe.settings.update({ autoEndSilence: v }))
+            }
+          />
+          {settings.autoEndSilence && (
+            <MinutesRow
+              label="Silence before stopping"
+              value={settings.autoEndSilenceMinutes}
+              onCommit={async (v) =>
+                onChange(await window.scribe.settings.update({ autoEndSilenceMinutes: v }))
+              }
+            />
+          )}
+          <SwitchRow
+            title="Stop after the scheduled end"
+            desc={
+              settings.hasCalendar
+                ? 'Recordings started inside a calendar event stop once they run well past its end time.'
+                : 'Needs a connected calendar — the scheduled end comes from the event the recording started in.'
+            }
+            checked={settings.autoEndOverrun}
+            onToggle={async (v) =>
+              onChange(await window.scribe.settings.update({ autoEndOverrun: v }))
+            }
+          />
+          {settings.autoEndOverrun && (
+            <MinutesRow
+              label="Grace past the scheduled end"
+              value={settings.autoEndOverrunMinutes}
+              onCommit={async (v) =>
+                onChange(await window.scribe.settings.update({ autoEndOverrunMinutes: v }))
+              }
+            />
+          )}
         </div>
       </section>
 

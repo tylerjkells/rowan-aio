@@ -2,6 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   ActionRollupItem,
   AppSettings,
+  AutoEndReason,
+  BulkProgress,
+  BulkScan,
+  BulkSelection,
   CalendarEvent,
   EnergySample,
   EngineProgress,
@@ -58,8 +62,10 @@ const api = {
       id: string,
       webm: ArrayBuffer,
       durationMs: number,
-      energy: EnergySample[] | null
-    ): Promise<Meeting> => ipcRenderer.invoke('rec:finish', id, webm, durationMs, energy),
+      energy: EnergySample[] | null,
+      autoEnd: AutoEndReason | null
+    ): Promise<Meeting> =>
+      ipcRenderer.invoke('rec:finish', id, webm, durationMs, energy, autoEnd),
     cancel: (id: string): Promise<void> => ipcRenderer.invoke('rec:cancel', id),
     stashNotes: (id: string, text: string): void => ipcRenderer.send('rec:stashNotes', id, text),
     readNotes: (id: string): Promise<string> => ipcRenderer.invoke('rec:readNotes', id),
@@ -98,6 +104,17 @@ const api = {
       ipcRenderer.invoke('meetings:setSpeakers', id, names),
     import: (title: string, dateIso: string, text: string): Promise<Meeting> =>
       ipcRenderer.invoke('meetings:import', title, dateIso, text),
+    bulkPick: (kind: 'zip' | 'folder'): Promise<BulkScan | null> =>
+      ipcRenderer.invoke('bulk:pick', kind),
+    bulkRun: (selection: BulkSelection[]): Promise<void> =>
+      ipcRenderer.invoke('bulk:run', selection),
+    bulkCancel: (): Promise<void> => ipcRenderer.invoke('bulk:cancel'),
+    bulkStatus: (): Promise<BulkProgress | null> => ipcRenderer.invoke('bulk:status'),
+    onBulkProgress: (cb: (p: BulkProgress) => void): (() => void) => {
+      const handler = (_e: unknown, p: BulkProgress): void => cb(p)
+      ipcRenderer.on('bulk:progress', handler)
+      return () => ipcRenderer.removeListener('bulk:progress', handler)
+    },
     search: (query: string): Promise<{ id: string; snippet: string }[]> =>
       ipcRenderer.invoke('meetings:search', query),
     briefFor: (eventTitle: string): Promise<EventBrief | null> =>
@@ -124,6 +141,8 @@ const api = {
     disconnect: (): Promise<AppSettings> => ipcRenderer.invoke('calendar:disconnect'),
     today: (): Promise<{ events: CalendarEvent[]; error?: string }> =>
       ipcRenderer.invoke('calendar:today'),
+    liveEvent: (startedAtIso: string): Promise<CalendarEvent | null> =>
+      ipcRenderer.invoke('calendar:liveEvent', startedAtIso),
     range: (fromIso: string, toIso: string): Promise<{ events: CalendarEvent[]; error?: string }> =>
       ipcRenderer.invoke('calendar:range', fromIso, toIso)
   },

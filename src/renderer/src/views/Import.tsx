@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Meeting } from '../../../shared/types'
+import { BulkImportView } from './BulkImport'
 
 function todayLocalIso(): string {
   const d = new Date()
@@ -8,11 +9,14 @@ function todayLocalIso(): string {
 
 export function ImportView({
   onDone,
+  onBulkDone,
   onCancel
 }: {
   onDone: (m: Meeting) => void
+  onBulkDone: () => void
   onCancel: () => void
 }): React.JSX.Element {
+  const [source, setSource] = useState<'paste' | 'bulk'>('paste')
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(todayLocalIso())
   const [text, setText] = useState('')
@@ -36,15 +40,49 @@ export function ImportView({
 
   const words = text.trim() ? text.trim().split(/\s+/).length : 0
 
+  const modeToggle = (
+    <div className="mode-toggle import-source" role="radiogroup" aria-label="Import source">
+      <button
+        className={source === 'paste' ? 'active' : ''}
+        role="radio"
+        aria-checked={source === 'paste'}
+        onClick={() => setSource('paste')}
+      >
+        Paste one
+      </button>
+      <button
+        className={source === 'bulk' ? 'active' : ''}
+        role="radio"
+        aria-checked={source === 'bulk'}
+        onClick={() => setSource('bulk')}
+      >
+        Bulk import
+      </button>
+    </div>
+  )
+
+  if (source === 'bulk') {
+    return (
+      <div className="main-narrow">
+        <div className="page-head">
+          <h1>Import transcripts</h1>
+        </div>
+        {modeToggle}
+        <BulkImportView onDone={onBulkDone} />
+      </div>
+    )
+  }
+
   return (
     <div className="main-narrow">
       <div className="page-head">
         <h1>Import a transcript</h1>
       </div>
+      {modeToggle}
       <p className="hint import-hint">
         Paste a transcript from Notion or anywhere else. Timestamps like 0:00 and speaker names are
         picked up when present. The meeting gets summarized just like a recording, minus audio
-        playback.
+        playback. Got a stack of them? Switch to <strong>Bulk import</strong>.
       </p>
 
       <div className="import-form">
