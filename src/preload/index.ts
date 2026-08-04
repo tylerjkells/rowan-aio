@@ -174,14 +174,18 @@ const api = {
   people: {
     list: (): Promise<PersonSummary[]> => ipcRenderer.invoke('people:list'),
     profile: (name: string): Promise<PersonProfile | null> =>
-      ipcRenderer.invoke('people:profile', name)
+      ipcRenderer.invoke('people:profile', name),
+    merge: (from: string, to: string): Promise<PersonSummary[]> =>
+      ipcRenderer.invoke('people:merge', from, to)
   },
   actions: {
     list: (): Promise<ActionRollupItem[]> => ipcRenderer.invoke('actions:list'),
     toggle: (meetingId: string, index: number): Promise<boolean> =>
       ipcRenderer.invoke('actions:toggle', meetingId, index),
     setOwner: (meetingId: string, index: number, owner: string | null): Promise<Meeting | null> =>
-      ipcRenderer.invoke('actions:setOwner', meetingId, index, owner)
+      ipcRenderer.invoke('actions:setOwner', meetingId, index, owner),
+    setDue: (meetingId: string, index: number, isoDate: string | null): Promise<Meeting | null> =>
+      ipcRenderer.invoke('actions:setDue', meetingId, index, isoDate)
   }
 }
 

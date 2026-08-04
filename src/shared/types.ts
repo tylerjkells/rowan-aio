@@ -37,6 +37,8 @@ export interface ActionItem {
   due: string | null
   /** user-toggled completion state (not set by the model) */
   done?: boolean
+  /** user-set ISO due date; overrides whatever parses out of the free-text due */
+  dueDate?: string | null
 }
 
 /** one Q&A exchange in "ask about this meeting" */
@@ -76,8 +78,12 @@ export interface ActionRollupItem {
   owner: string | null
   due: string | null
   done: boolean
-  /** ISO date parsed from the free-text due, when parseable */
+  /** effective ISO due date: the user's edit if set, else parsed from the free text */
   dueDate?: string
+  /** the user set dueDate explicitly (so the free-text due is superseded) */
+  dueEdited?: boolean
+  /** canonical owner names after identity resolution ('Me' for the user); empty = unassigned */
+  owners: string[]
 }
 
 export interface SummaryTopic {
@@ -300,6 +306,10 @@ export interface AppSettings {
   backupSkipAudio: boolean
   /** team directory: names offered when assigning action items */
   people: string[]
+  /** the user's own name, so transcripts saying "Tyler" resolve to Me */
+  yourName: string
+  /** identity merges: normalized raw name -> canonical display name */
+  personAliases: Record<string, string>
 }
 
 export interface EngineStatus {

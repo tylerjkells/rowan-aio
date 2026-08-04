@@ -3,12 +3,15 @@ import type { Meeting } from '../../../shared/types'
 import {
   BackIcon,
   ChevronIcon,
+  DueEditor,
   formatDuration,
   formatWhen,
+  isOverdue,
   OwnerEditor,
   StageBadge,
   useConfirm
 } from '../ui'
+import { parseDueDate } from '../../../shared/dates'
 import { exportFilename, followUpEmail, meetingToMarkdown, summaryToMarkdown } from '../markdown'
 
 function Collapse({
@@ -206,8 +209,9 @@ export function MeetingView({
   useEffect(() => {
     Promise.all([window.scribe.settings.get(), window.scribe.actions.list()]).then(
       ([settings, items]) => {
-        const seen = items.map((i) => i.owner).filter((o): o is string => !!o)
-        setKnownOwners([...new Set(['Me', ...settings.people, ...seen])])
+        // resolved canonical names, not the raw strings meetings arrived with
+        const seen = items.flatMap((i) => i.owners).filter((o) => o !== 'Me')
+        setKnownOwners(['Me', ...[...new Set([...settings.people, ...seen])].sort()])
         setHasApiKey(settings.hasApiKey)
       }
     )
@@ -483,7 +487,19 @@ export function MeetingView({
                         }
                       }}
                     />
-                    {a.due && <span className="action-due">{a.due}</span>}
+                    <DueEditor
+                      due={a.due}
+                      dueDate={a.dueDate ?? parseDueDate(a.due, meeting.createdAt) ?? undefined}
+                      edited={!!a.dueDate}
+                      overdue={isOverdue({
+                        dueDate: a.dueDate ?? parseDueDate(a.due, meeting.createdAt) ?? undefined,
+                        done: a.done
+                      })}
+                      onSave={async (iso) => {
+                        const updated = await window.scribe.actions.setDue(meeting.id, i, iso)
+                        if (updated) setMeeting(updated)
+                      }}
+                    />
                   </div>
                 ))}
               </div>

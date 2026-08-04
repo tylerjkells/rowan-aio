@@ -153,6 +153,7 @@ export function SettingsView({
   const [dlProgress, setDlProgress] = useState<EngineProgress | null>(null)
   const [downloading, setDownloading] = useState<WhisperModel | null>(null)
   const [personDraft, setPersonDraft] = useState('')
+  const [yourNameDraft, setYourNameDraft] = useState(settings.yourName)
   const [vocabDraft, setVocabDraft] = useState(settings.vocabulary)
   const [backingUp, setBackingUp] = useState(false)
   const [claude, setClaude] = useState<{
@@ -582,6 +583,26 @@ export function SettingsView({
           </p>
         </header>
         <div className="settings-body">
+          <label className="field-label" htmlFor="your-name-input">
+            Your name
+          </label>
+          <input
+            id="your-name-input"
+            className="text-input"
+            placeholder="e.g. Tyler"
+            value={yourNameDraft}
+            onChange={(e) => setYourNameDraft(e.target.value)}
+            onBlur={async () => {
+              if (yourNameDraft.trim() !== settings.yourName) {
+                onChange(await window.scribe.settings.update({ yourName: yourNameDraft }))
+              }
+            }}
+            aria-label="Your name"
+          />
+          <p className="opt-desc">
+            So action items assigned to your name in a meeting count as yours (“Me”), not as a
+            separate person.
+          </p>
           <div className="field-row">
             <input
               className="text-input"

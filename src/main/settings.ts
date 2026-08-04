@@ -22,6 +22,10 @@ interface StoredSettings {
   /** epoch ms of the last automatic backup */
   lastBackupAt: number
   people: string[]
+  /** the user's own name, so "Tyler" in a meeting resolves to Me */
+  yourName: string
+  /** identity merges: normalized raw name -> canonical display name */
+  personAliases: Record<string, string>
   /** base64 of safeStorage-encrypted API key */
   apiKeyEncrypted: string | null
   /** base64 of safeStorage-encrypted iCal feed URL (the URL is a secret) */
@@ -46,6 +50,8 @@ const DEFAULTS: StoredSettings = {
   backupSkipAudio: true,
   lastBackupAt: 0,
   people: [],
+  yourName: '',
+  personAliases: {},
   apiKeyEncrypted: null,
   calendarUrlEncrypted: null
 }
@@ -94,6 +100,8 @@ export function getSettings(): AppSettings {
     backupFolder: s.backupFolder ?? null,
     backupSkipAudio: s.backupSkipAudio !== false,
     people: s.people ?? [],
+    yourName: s.yourName ?? '',
+    personAliases: s.personAliases ?? {},
     hasApiKey: !!s.apiKeyEncrypted,
     hasCalendar: !!s.calendarUrlEncrypted
   }
@@ -129,6 +137,7 @@ export function updateSettings(
       | 'backupFolder'
       | 'backupSkipAudio'
       | 'people'
+      | 'yourName'
     >
   >
 ): AppSettings {
@@ -161,6 +170,7 @@ export function updateSettings(
   if (Array.isArray(patch.people)) {
     s.people = dedupeNames(patch.people)
   }
+  if (typeof patch.yourName === 'string') s.yourName = patch.yourName.trim()
   persist()
   return getSettings()
 }
@@ -192,9 +202,31 @@ export function setLastBackupAt(ms: number): void {
 export function addPerson(name: string): void {
   const trimmed = name.trim()
   if (!trimmed || trimmed.toLowerCase() === 'me') return
+  // compound or qualified strings ("A and B", "Carol (maybe)") are not directory names
+  if (/[()&+/,]|\b(and|or)\b/i.test(trimmed)) return
   const s = load()
   if ((s.people ?? []).some((p) => p.toLowerCase() === trimmed.toLowerCase())) return
   s.people = dedupeNames([...(s.people ?? []), trimmed])
+  persist()
+}
+
+/**
+ * Record that one name is really another person (a merge from the People
+ * page). The alias applies at read time everywhere identities are resolved.
+ */
+export function addPersonAlias(from: string, to: string): void {
+  const key = from.trim().toLowerCase()
+  const target = to.trim()
+  if (!key || !target || key === target.toLowerCase()) return
+  const s = load()
+  s.personAliases = { ...(s.personAliases ?? {}), [key]: target }
+  // the merged-away spelling should no longer be offered in the directory
+  s.people = (s.people ?? []).filter((p) => p.toLowerCase() !== key)
+  if (target.toLowerCase() !== 'me') {
+    if (!s.people.some((p) => p.toLowerCase() === target.toLowerCase())) {
+      s.people = dedupeNames([...s.people, target])
+    }
+  }
   persist()
 }
 

@@ -48,7 +48,7 @@ const SUMMARY_SCHEMA = {
           owner: {
             anyOf: [{ type: 'string' }, { type: 'null' }],
             description:
-              'Who committed to it, using their name as spoken in the meeting. Use "Me" when the person this summary is for (transcript lines labeled Me) committed to it. Null if nobody was assigned.'
+              'Who committed to it: exactly one person\'s plain name. Use "Me" when the person this summary is for (transcript lines labeled Me) committed to it. Never a compound like "X and Y" or "X or Y" — pick the primary owner and mention the others in the task text. Never add qualifiers or parentheticals; if ownership is genuinely unclear, use null.'
           },
           due: {
             anyOf: [{ type: 'string' }, { type: 'null' }],
