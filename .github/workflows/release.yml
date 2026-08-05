@@ -2,6 +2,10 @@
 # blockmap, which the in-app auto-updater requires) to a DRAFT GitHub
 # release named after the version in package.json.
 #
+# electron-builder's own GitHub publisher uploads artifacts in parallel and
+# can race itself into creating duplicate draft releases, so packaging runs
+# with --publish never and a single release step uploads everything at once.
+#
 # To ship a release, entirely from the browser:
 #   1. Bump "version" in package.json on main (the web editor works fine)
 #   2. Actions tab -> Release -> Run workflow
@@ -30,7 +34,22 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Package and upload to a draft release
-        run: npx electron-builder --win --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Package installer
+        run: npx electron-builder --win --publish never
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Create draft release with all artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          tag_name: v${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          files: |
+            release/MeetingScribe-Setup-*.exe
+            release/MeetingScribe-Setup-*.exe.blockmap
+            release/MeetingScribe-portable.exe
+            release/latest.yml
