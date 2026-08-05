@@ -1,0 +1,36 @@
+# Builds the Windows installer and attaches it (plus latest.yml and the
+# blockmap, which the in-app auto-updater requires) to a DRAFT GitHub
+# release named after the version in package.json.
+#
+# To ship a release, entirely from the browser:
+#   1. Bump "version" in package.json on main (the web editor works fine)
+#   2. Actions tab -> Release -> Run workflow
+#   3. When it finishes, open Releases, review the draft, click Publish
+name: Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Package and upload to a draft release
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

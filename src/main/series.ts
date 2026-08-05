@@ -1,5 +1,5 @@
 import { listMeetings, readMeeting } from './store'
-import { parseDueDate } from './dates'
+import { actionRollup, identityContext } from './identity'
 import type { ActionRollupItem, SeriesData } from '../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -24,6 +24,7 @@ export function seriesSiblings(meetingId: string): string[] {
 
 /** the full thread for a title: occurrences, decisions by date, open items */
 export function seriesData(title: string): SeriesData {
+  const ctx = identityContext()
   const key = norm(title)
   const occurrences: SeriesData['occurrences'] = []
   const decisions: SeriesData['decisions'] = []
@@ -45,20 +46,9 @@ export function seriesData(title: string): SeriesData {
     if (m.summary && m.summary.decisions.length > 0) {
       decisions.push({ meetingId: m.id, createdAt: m.createdAt, items: m.summary.decisions })
     }
-    m.summary?.actionItems.forEach((a, index) => {
-      if (a.done) return
-      openActions.push({
-        meetingId: m.id,
-        meetingTitle: m.title,
-        createdAt: m.createdAt,
-        index,
-        task: a.task,
-        owner: a.owner,
-        due: a.due,
-        done: false,
-        dueDate: parseDueDate(a.due, m.createdAt) ?? undefined
-      })
-    })
+    for (const rollup of actionRollup(m, ctx)) {
+      if (!rollup.done) openActions.push(rollup)
+    }
   }
 
   return { title: display, occurrences, decisions, openActions }

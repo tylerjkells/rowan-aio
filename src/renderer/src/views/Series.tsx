@@ -77,7 +77,9 @@ export function SeriesView({
                 <div className="rollup-body">
                   <span className="rollup-task">{item.task}</span>
                   <span className="rollup-meta">
-                    {item.owner && <span className="owner-btn series-owner">{item.owner}</span>}
+                    {item.owners.length > 0 && (
+                      <span className="owner-btn series-owner">{item.owners.join(' + ')}</span>
+                    )}
                     {item.due && (
                       <span className={`action-due ${isOverdue(item) ? 'overdue' : ''}`}>
                         {item.due}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { PersonProfile, PersonSummary } from '../../../shared/types'
-import { BackIcon, formatWhen, isOverdue } from '../ui'
+import { BackIcon, DueEditor, formatWhen, isOverdue, useConfirm } from '../ui'
 
 export function PeopleView({
   onOpenPerson
@@ -9,6 +9,7 @@ export function PeopleView({
 }): React.JSX.Element {
   const [people, setPeople] = useState<PersonSummary[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [showDormant, setShowDormant] = useState(false)
 
   useEffect(() => {
     window.scribe.people.list().then((list) => {
@@ -29,33 +30,45 @@ export function PeopleView({
     )
   }
 
+  // directory entries you haven't actually met with stay out of the way
+  const active = people.filter((p) => p.meetingCount > 0 || p.openItems > 0)
+  const dormant = people.filter((p) => p.meetingCount === 0 && p.openItems === 0)
+
+  const row = (p: PersonSummary): React.JSX.Element => (
+    <button key={p.name} className="meeting-row compact" onClick={() => onOpenPerson(p.name)}>
+      <span className="meeting-row-title">{p.name}</span>
+      <span className="meeting-row-meta">
+        {p.openItems > 0 && (
+          <span className="person-open">
+            {p.openItems} open {p.openItems === 1 ? 'item' : 'items'}
+          </span>
+        )}
+        <span>
+          {p.meetingCount} {p.meetingCount === 1 ? 'meeting' : 'meetings'}
+        </span>
+      </span>
+    </button>
+  )
+
   return (
     <>
       <div className="page-head">
         <h1>People</h1>
         <div className="page-head-tools">
           <span className="count-note">
-            {people.length} {people.length === 1 ? 'person' : 'people'}
+            {active.length} {active.length === 1 ? 'person' : 'people'}
           </span>
         </div>
       </div>
-      <div className="meeting-list">
-        {people.map((p) => (
-          <button key={p.name} className="meeting-row compact" onClick={() => onOpenPerson(p.name)}>
-            <span className="meeting-row-title">{p.name}</span>
-            <span className="meeting-row-meta">
-              {p.openItems > 0 && (
-                <span className="person-open">
-                  {p.openItems} open {p.openItems === 1 ? 'item' : 'items'}
-                </span>
-              )}
-              <span>
-                {p.meetingCount} {p.meetingCount === 1 ? 'meeting' : 'meetings'}
-              </span>
-            </span>
+      <div className="meeting-list">{active.map(row)}</div>
+      {dormant.length > 0 && (
+        <div className="people-dormant">
+          <button className="btn btn-ghost" onClick={() => setShowDormant(!showDormant)}>
+            {showDormant ? 'Hide' : 'Show'} {dormant.length} more from your directory
           </button>
-        ))}
-      </div>
+          {showDormant && <div className="meeting-list">{dormant.map(row)}</div>}
+        </div>
+      )}
     </>
   )
 }
@@ -71,11 +84,31 @@ export function PersonView({
 }): React.JSX.Element {
   const [profile, setProfile] = useState<PersonProfile | null>(null)
   const [showDone, setShowDone] = useState(false)
+  const [directory, setDirectory] = useState<string[]>([])
+  const [confirmDialog, confirm] = useConfirm()
 
   function load(): void {
     window.scribe.people.profile(name).then(setProfile)
   }
   useEffect(load, [name]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    window.scribe.settings.get().then((s) => setDirectory(s.people))
+  }, [])
+
+  async function mergeInto(target: string): Promise<void> {
+    if (!profile) return
+    const ok = await confirm({
+      title: `Merge "${profile.name}" into "${target}"?`,
+      body: `Meetings and action items attributed to "${profile.name}" will count as ${
+        target === 'Me' ? 'yours' : `"${target}"`
+      } from now on.`,
+      confirmLabel: 'Merge'
+    })
+    if (!ok) return
+    await window.scribe.people.merge(profile.name, target)
+    onBack()
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -100,8 +133,18 @@ export function PersonView({
     load()
   }
 
+  async function setDue(meetingId: string, index: number, iso: string | null): Promise<void> {
+    await window.scribe.actions.setDue(meetingId, index, iso)
+    load()
+  }
+
+  const mergeTargets = ['Me', ...directory].filter(
+    (t) => t.toLowerCase() !== profile.name.toLowerCase()
+  )
+
   return (
     <div className="main-narrow">
+      {confirmDialog}
       <div className="detail-head">
         <button className="back-link" onClick={onBack}>
           <BackIcon /> All people
@@ -117,6 +160,20 @@ export function PersonView({
               {open.length} open {open.length === 1 ? 'item' : 'items'}
             </span>
           )}
+          <select
+            className="merge-select"
+            value=""
+            onChange={(e) => e.target.value && mergeInto(e.target.value)}
+            aria-label={`Merge ${profile.name} into another person`}
+            title="Same person under a different name? Merge them."
+          >
+            <option value="">Merge into…</option>
+            {mergeTargets.map((t) => (
+              <option value={t} key={t}>
+                {t === 'Me' ? 'Me (this is me)' : t}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -148,11 +205,13 @@ export function PersonView({
                 <div className="rollup-body">
                   <span className="rollup-task">{item.task}</span>
                   <span className="rollup-meta">
-                    {item.due && (
-                      <span className={`action-due ${isOverdue(item) ? 'overdue' : ''}`}>
-                        {item.due}
-                      </span>
-                    )}
+                    <DueEditor
+                      due={item.due}
+                      dueDate={item.dueDate}
+                      edited={item.dueEdited}
+                      overdue={isOverdue(item)}
+                      onSave={(iso) => setDue(item.meetingId, item.index, iso)}
+                    />
                     <button className="rollup-source" onClick={() => onOpenMeeting(item.meetingId)}>
                       {item.meetingTitle} · {formatWhen(item.createdAt)}
                     </button>
@@ -180,11 +239,13 @@ export function PersonView({
                 <div className="rollup-body">
                   <span className="rollup-task">{item.task}</span>
                   <span className="rollup-meta">
-                    {item.due && (
-                      <span className={`action-due ${isOverdue(item) ? 'overdue' : ''}`}>
-                        {item.due}
-                      </span>
-                    )}
+                    <DueEditor
+                      due={item.due}
+                      dueDate={item.dueDate}
+                      edited={item.dueEdited}
+                      overdue={isOverdue(item)}
+                      onSave={(iso) => setDue(item.meetingId, item.index, iso)}
+                    />
                     <button className="rollup-source" onClick={() => onOpenMeeting(item.meetingId)}>
                       {item.meetingTitle} · {formatWhen(item.createdAt)}
                     </button>
