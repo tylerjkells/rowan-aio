@@ -301,6 +301,8 @@ export function MeetingView({
   }
 
   const transcriptOpen = transcriptToggled ?? (focusMs !== undefined || !meeting.summary)
+  // people offered when assigning a transcript speaker label to a real person
+  const speakerChoices = [...new Set([...knownOwners, ...(meeting.attendees ?? [])])]
 
   return (
     <div className="main-narrow">
@@ -619,9 +621,19 @@ export function MeetingView({
                       <span className="transcript-time">{formatDuration(seg.from)}</span>
                       <span className="transcript-text">
                         {showChip && (
-                          <span className={`speaker-chip ${seg.speaker === 'me' ? 'me' : 'them'}`}>
-                            {label}
-                          </span>
+                          <SpeakerChip
+                            speaker={seg.speaker!}
+                            label={label!}
+                            suggestions={speakerChoices}
+                            onRename={async (to) => {
+                              const updated = await window.scribe.meetings.renameSpeaker(
+                                meeting.id,
+                                seg.speaker!,
+                                to
+                              )
+                              if (updated) setMeeting(updated)
+                            }}
+                          />
                         )}
                         {seg.text}
                       </span>
@@ -756,6 +768,113 @@ function NotesEditor({
         Notes are folded into the summary — regenerate it after big edits.
       </p>
     </div>
+  )
+}
+
+/**
+ * A transcript speaker label. Identified labels ("Speaker 1", or a name the
+ * model got wrong) are clickable: pick a person from the directory (or type
+ * one) and every segment attributed to that label is reassigned. The mic
+ * channels ('me'/'them') are renamed via SpeakerNames instead.
+ */
+function SpeakerChip({
+  speaker,
+  label,
+  suggestions,
+  onRename
+}: {
+  speaker: string
+  label: string
+  suggestions: string[]
+  onRename: (to: string) => void
+}): React.JSX.Element {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [typed, setTyped] = useState(false)
+  const [hi, setHi] = useState(-1)
+
+  const editable = speaker !== 'me' && speaker !== 'them'
+  if (!editable) {
+    return <span className={`speaker-chip ${speaker === 'me' ? 'me' : 'them'}`}>{label}</span>
+  }
+
+  if (!editing) {
+    return (
+      <button
+        className="speaker-chip them speaker-chip-btn"
+        title={`Replace "${label}" with a person everywhere in this transcript`}
+        onClick={(e) => {
+          e.stopPropagation()
+          setDraft('')
+          setTyped(false)
+          setHi(-1)
+          setEditing(true)
+        }}
+      >
+        {label}
+      </button>
+    )
+  }
+
+  // full list until the user types; then filter by what they typed
+  const query = draft.trim().toLowerCase()
+  const options =
+    typed && query ? suggestions.filter((s) => s.toLowerCase().includes(query)) : suggestions
+
+  function pick(next: string): void {
+    setEditing(false)
+    const name = next.trim()
+    if (name && name !== speaker) onRename(name)
+  }
+
+  return (
+    <span className="owner-wrap speaker-chip-edit" onClick={(e) => e.stopPropagation()}>
+      <input
+        autoFocus
+        className="text-input owner-input"
+        placeholder={label}
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value)
+          setTyped(true)
+          setHi(e.target.value.trim() ? 0 : -1)
+        }}
+        onBlur={() => pick(draft)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setHi((h) => (h + 1) % Math.max(options.length, 1))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setHi((h) => (h <= 0 ? options.length - 1 : h - 1))
+          } else if (e.key === 'Enter') {
+            if (hi >= 0 && options[hi]) pick(options[hi])
+            else pick(draft)
+          } else if (e.key === 'Escape') {
+            setEditing(false)
+          }
+        }}
+        role="combobox"
+        aria-expanded="true"
+        aria-label={`Assign ${label} to a person`}
+      />
+      <div className="owner-pop" role="listbox">
+        {options.map((s, i) => (
+          <button
+            className={`owner-opt ${i === hi ? 'hi' : ''}`}
+            role="option"
+            aria-selected={i === hi}
+            key={s}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              pick(s)
+            }}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    </span>
   )
 }
 

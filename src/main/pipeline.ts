@@ -91,7 +91,8 @@ export async function summarizeMeeting(id: string): Promise<void> {
       settings.claudeModel,
       knownNames,
       settings.vocabulary,
-      meeting.notes
+      meeting.notes,
+      meeting.createdAt
     )
     const keepUserTitle =
       meeting.title && !/^(Virtual meeting|Imported meeting|Meeting) · /.test(meeting.title)

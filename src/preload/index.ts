@@ -98,6 +98,8 @@ const api = {
       ipcRenderer.invoke('meetings:ask', id, question),
     identifySpeakers: (id: string): Promise<Meeting | null> =>
       ipcRenderer.invoke('meetings:identifySpeakers', id),
+    renameSpeaker: (id: string, from: string, to: string): Promise<Meeting | null> =>
+      ipcRenderer.invoke('meetings:renameSpeaker', id, from, to),
     setNotes: (id: string, text: string): Promise<Meeting | null> =>
       ipcRenderer.invoke('meetings:setNotes', id, text),
     setSpeakers: (id: string, names: { me: string; them: string }): Promise<Meeting | null> =>
