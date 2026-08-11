@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.12.1': [
+    'Summaries are now fact-checked: after the draft is written, a second pass re-reads it against the transcript and fixes slipped numbers, drifted thresholds, unstated dates, and duplicated action items before you see it. Summaries cost roughly twice as much per meeting (still cents) and take a bit longer.'
+  ],
   '0.12.0': [
     'Fix speaker labels in place: after Identify speakers, click any “Speaker 1”-style label (or a wrong guess) in the transcript and pick the right person — every line with that label is reassigned at once.',
     'Summaries now know the meeting date, so deadlines stay in the speakers’ own words (“in three weeks”) instead of being turned into invented calendar dates, and explanations are only reported when someone actually said them.',
