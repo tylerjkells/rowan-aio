@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.11.1': [
+    'Sharper summaries: action items are consolidated and tracker-ready (no more per-person duplicates or “ongoing” due dates), dates and figures stay consistent across sections, numbers keep their filter context, and meeting mechanics like screen-share hiccups are left out.'
+  ],
   '0.10.0': [
     'Auto-end: a recording you walked away from stops itself — after a stretch of silence, or once it runs past the end of its calendar event. You get a 30-second warning with a “Keep recording” button, and the timings are in Settings → Auto-end recordings.',
     'Bulk import: Import → Bulk import takes a whole Notion export (.zip or the unzipped folder) or any folder of .md/.txt transcripts. Titles, dates, and attendees come from the page properties, anything already imported is flagged, and summaries run one at a time in the background.'
