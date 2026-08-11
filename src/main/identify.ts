@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getApiKey, getSettings } from './settings'
+import { recordUsage } from './usage'
 import type { Meeting, TranscriptSegment } from '../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -104,6 +105,7 @@ export async function identifySpeakers(meeting: Meeting): Promise<TranscriptSegm
     ]
   })
 
+  recordUsage(settings.claudeModel, response.usage)
   if (response.stop_reason === 'refusal') {
     throw new Error('The request was declined by the model.')
   }

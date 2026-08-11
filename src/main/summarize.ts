@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getApiKey } from './settings'
+import { recordUsage } from './usage'
 import type { MeetingSummary, TranscriptSegment } from '../shared/types'
 
 const SUMMARY_SCHEMA = {
@@ -211,6 +212,7 @@ export async function summarizeTranscript(
 
   // the fact sheet needs only the transcript, so it extracts while the draft generates
   const [response, factSheet] = await Promise.all([draftPromise, extractFacts(client, model, transcript)])
+  recordUsage(model, response.usage)
 
   if (response.stop_reason === 'refusal') {
     throw new Error('The summary request was declined by the model.')
@@ -248,6 +250,7 @@ async function extractFacts(
       },
       messages: [{ role: 'user', content: `Extract the facts from this transcript:\n\n${transcript}` }]
     })
+    recordUsage(model, response.usage)
     if (response.stop_reason === 'refusal') return null
     const text = response.content.find((b) => b.type === 'text')?.text
     if (!text) return null
@@ -313,6 +316,7 @@ async function verifySummary(
         }
       ]
     })
+    recordUsage(model, response.usage)
     if (response.stop_reason === 'refusal') return draft
     const text = response.content.find((b) => b.type === 'text')?.text
     if (!text) return draft
@@ -360,6 +364,7 @@ export async function askAboutMeeting(
       `Answer concisely in plain prose.\n\n<transcript>\n${transcriptToText(meeting.transcript, meeting.speakerNames)}\n</transcript>`,
     messages: [...history, { role: 'user', content: question }]
   })
+  recordUsage(model, response.usage)
 
   if (response.stop_reason === 'refusal') {
     throw new Error('The request was declined by the model.')
@@ -373,11 +378,12 @@ export async function askAboutMeeting(
 export async function testApiKey(key: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const client = new Anthropic({ apiKey: key.trim() })
-    await client.messages.create({
+    const response = await client.messages.create({
       model: 'claude-haiku-4-5',
       max_tokens: 8,
       messages: [{ role: 'user', content: 'Reply with OK' }]
     })
+    recordUsage('claude-haiku-4-5', response.usage)
     return { ok: true }
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {

@@ -327,3 +327,17 @@ export interface EngineProgress {
   done?: boolean
   error?: string
 }
+
+/** one calendar month of local Claude API cost tracking */
+export interface MonthUsage {
+  /** estimated cost in USD, computed from token counts at list prices */
+  costUsd: number
+  calls: number
+  inputTokens: number
+  outputTokens: number
+}
+
+export interface UsageSummary {
+  thisMonth: MonthUsage
+  lastMonth: MonthUsage | null
+}

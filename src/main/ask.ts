@@ -3,6 +3,7 @@ import { app } from 'electron'
 import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { getApiKey } from './settings'
+import { recordUsage } from './usage'
 import { listMeetings, readMeeting } from './store'
 import { transcriptToText } from './summarize'
 import type { AskSource, LibraryQA, Meeting } from '../shared/types'
@@ -244,6 +245,7 @@ export async function askLibrary(question: string, model: string): Promise<Libra
       },
       messages: [...history, { role: 'user', content: question }]
     })
+    recordUsage(model, sel.usage)
     if (sel.stop_reason === 'refusal') {
       throw new Error('The request was declined by the model.')
     }
@@ -284,6 +286,7 @@ export async function askLibrary(question: string, model: string): Promise<Libra
     },
     messages: [...history, { role: 'user', content: question }]
   })
+  recordUsage(model, response.usage)
 
   if (response.stop_reason === 'refusal') {
     throw new Error('The request was declined by the model.')
