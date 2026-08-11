@@ -42,12 +42,21 @@ jobs:
         shell: bash
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
+      # Seed the release body with this version's What's New bullets (the same
+      # notes shown in-app after auto-update); GitHub's auto-generated
+      # PR/commit notes are appended below them by generate_release_notes.
+      - name: Extract What's New notes for release body
+        shell: bash
+        run: node scripts/whatsnew-notes.js "${{ steps.version.outputs.version }}" > release-body.md
+
       - name: Create draft release with all artifacts
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           tag_name: v${{ steps.version.outputs.version }}
           name: ${{ steps.version.outputs.version }}
+          body_path: release-body.md
+          generate_release_notes: true
           files: |
             release/MeetingScribe-Setup-*.exe
             release/MeetingScribe-Setup-*.exe.blockmap

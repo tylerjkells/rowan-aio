@@ -12,7 +12,9 @@ Do all of these together:
 2. Bump `"version"` in `package.json` (patch for fixes/prompt tuning, minor for
    features).
 3. Add a short user-facing entry for the new version to `NOTES` in
-   `src/renderer/src/WhatsNew.tsx` — it's shown once in-app after auto-update.
+   `src/renderer/src/WhatsNew.tsx` — it's shown once in-app after auto-update,
+   and the Release workflow also copies it into the GitHub release body
+   (via `scripts/whatsnew-notes.js`) above GitHub's auto-generated notes.
 4. Run `npm run typecheck` (install deps first if `node_modules` is missing;
    `ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci` avoids the Electron binary download).
 5. Push to `main`.
