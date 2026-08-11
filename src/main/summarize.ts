@@ -54,7 +54,7 @@ const SUMMARY_SCHEMA = {
           owner: {
             anyOf: [{ type: 'string' }, { type: 'null' }],
             description:
-              'Who committed to it: exactly one person\'s plain name. Use "Me" when the person this summary is for (transcript lines labeled Me) committed to it. Never a compound like "X and Y" or "X or Y" — pick the primary owner and mention the others in the task text. Never add qualifiers or parentheticals; if ownership is genuinely unclear, use null.'
+              'Who committed to it: plain name(s), no qualifiers or parentheticals. Usually one person. When several people genuinely share the same task, list every one of them separated by commas ("Caroline, Andrew, Brian") — never duplicate the item per person and never drop anyone. Use "Me" when the person this summary is for (transcript lines labeled Me) committed to it. If ownership is genuinely unclear, use null.'
           },
           due: {
             anyOf: [{ type: 'string' }, { type: 'null' }],
@@ -66,7 +66,7 @@ const SUMMARY_SCHEMA = {
         additionalProperties: false
       },
       description:
-        'Concrete follow-ups someone committed to, written as a checklist the reader could paste straight into a task tracker. One item per real task: when several people share the same task, emit it once under the primary owner and name the others in the task text rather than repeating the item per person; when several small fixes are part of one piece of work, fold them into one item. Fewer, sharper items beat an exhaustive list. Empty if none.'
+        'Concrete follow-ups someone committed to, written as a checklist the reader could paste straight into a task tracker. One item per real task: when several people share the same task, emit it once with every participant listed in the owner field; when several small fixes are part of one piece of work, fold them into one item. Fewer, sharper items beat an exhaustive list — but every person who took on work must appear as an owner somewhere. Empty if none.'
     },
     openQuestions: {
       type: 'array',
@@ -297,7 +297,7 @@ async function verifySummary(
         '(5) Assignments that contradict the roles the meeting established: a task must sit with the person who actually took it. ' +
         '(6) Internal contradictions between sections: align every mention on the version the transcript supports, and remove an "open question" that the meeting (or the summary itself) answers. ' +
         '(7) Stray artifacts: leftover labels, dangling punctuation, list counts that do not match the list. ' +
-        '(8) Action items duplicated per person for the same task: collapse to one item under the primary owner — but never lose a person. Every owner in the draft must still appear in the result, as an item\'s owner or named in a collapsed item\'s task text. ' +
+        '(8) Action items duplicated per person for the same task: collapse to one item whose owner field lists every participant, comma-separated ("Caroline, Andrew, Brian") — never lose a person. Every owner in the draft must still appear as an owner in the result. ' +
         'Do NOT shorten, condense, or drop anything else: reproduce every section, every note, and every action item at full length — your output must be the complete summary with only the corrections applied. Anything you cannot verify either way, leave exactly as the draft has it.' +
         dateNote,
       output_config: {
