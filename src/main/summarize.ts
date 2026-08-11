@@ -77,6 +77,47 @@ const SUMMARY_SCHEMA = {
   additionalProperties: false
 } as const
 
+/**
+ * Schema for the fact-extraction pass: every hard fact a summary might cite,
+ * each pinned to a verbatim transcript quote. Extraction is a mechanically
+ * easier task than summarization, so this list is far more reliable about
+ * exact figures than a generated summary is — it then anchors the checking
+ * pass.
+ */
+const FACTS_SCHEMA = {
+  type: 'object',
+  properties: {
+    facts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          kind: {
+            type: 'string',
+            enum: ['figure', 'date', 'threshold', 'assignment'],
+            description:
+              'figure: a count/amount/percentage. date: a calendar date, deadline, or timeframe. threshold: a cutoff or comparator. assignment: who owns a task or role.'
+          },
+          claim: {
+            type: 'string',
+            description:
+              'The fact stated precisely, WITH the context that scopes it: for a figure, the filter/view/timeframe it was measured under; for a date, the specific event the speaker attached it to; for an assignment, the exact task or role.'
+          },
+          quote: {
+            type: 'string',
+            description: 'Short verbatim transcript excerpt (one sentence or two) this fact comes from'
+          }
+        },
+        required: ['kind', 'claim', 'quote'],
+        additionalProperties: false
+      },
+      description: 'Every hard fact in the transcript, in the order spoken.'
+    }
+  },
+  required: ['facts'],
+  additionalProperties: false
+} as const
+
 /** 'me'/'them' resolve through the meeting's speaker names; identified speakers are already names */
 function speakerLabel(
   speaker: string | undefined,
@@ -131,7 +172,7 @@ export async function summarizeTranscript(
       ? ` The meeting took place on ${parsedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Use this only to make sense of relative time references — do not repeat it in the summary.`
       : ''
 
-  const response = await client.messages.create({
+  const draftPromise = client.messages.create({
     model,
     max_tokens: 8192,
     system:
@@ -144,6 +185,8 @@ export async function summarizeTranscript(
       'Never state a specific calendar date unless a speaker said that date. When the transcript gives a relative timeframe ("in three weeks", "next month"), keep the speakers\' phrasing instead of converting it to a date yourself — ASR mishears dates often enough that a computed date is more likely wrong than helpful. Before finishing, sanity-check the timeline you have written: every deadline must be consistent with the meeting date and with the sequence of events (work that supports a launch cannot be due after the launch); if a date fails that check, fall back to the relative phrasing actually used. ' +
       'Report a cause or explanation for a problem only when a participant actually voiced it in the meeting; never present your own inference as a conclusion the group reached. When describing a reported bug or issue, preserve the specific symptom as described rather than paraphrasing it into a different-sounding problem. ' +
       'When a figure was tied to a particular filter, view, or timeframe (e.g. a count that only holds for one term or one campus), keep that context attached to the number wherever it appears, and never mix figures from different views as if they were the same measurement. Copy thresholds and comparators exactly — "five or more" means at least 5, not more than 5. When the meeting covered two distinct items (two problems, two dependencies, two features), keep them distinct; never fold one into the other because they sound related. ' +
+      'A date belongs to the event the speaker attached it to — re-read the surrounding lines before pairing a date with a deadline, and never move a date from one event to another. When a speaker gives a partial date ("the week of the 21st") without naming the month, do not fill the month in yourself — not even from a month mentioned in a neighboring sentence about a different event; keep it as spoken. ' +
+      'An open question is one the meeting left unanswered; if the discussion (or another part of your own summary) answers it, it is not open. ' +
       'Leave out meeting mechanics — screen-share hiccups, audio trouble, waiting for people to join — unless someone committed to follow up on them.' +
       attendeeNote +
       vocabNote +
@@ -166,13 +209,56 @@ export async function summarizeTranscript(
     ]
   })
 
+  // the fact sheet needs only the transcript, so it extracts while the draft generates
+  const [response, factSheet] = await Promise.all([draftPromise, extractFacts(client, model, transcript)])
+
   if (response.stop_reason === 'refusal') {
     throw new Error('The summary request was declined by the model.')
   }
   const text = response.content.find((b) => b.type === 'text')?.text
   if (!text) throw new Error('Empty response from Claude')
   const draft = JSON.parse(text) as MeetingSummary
-  return verifySummary(client, model, transcript, draft, dateNote)
+  return verifySummary(client, model, transcript, draft, dateNote, factSheet)
+}
+
+/**
+ * Pull every hard fact out of the transcript with its supporting quote.
+ * Runs concurrently with draft generation; returns null on any failure so
+ * the checking pass can still run unanchored.
+ */
+async function extractFacts(
+  client: Anthropic,
+  model: string,
+  transcript: string
+): Promise<string | null> {
+  try {
+    const response = await client.messages.create({
+      model,
+      max_tokens: 8192,
+      system:
+        'You extract hard facts from a meeting transcript produced by automatic speech recognition. ' +
+        'List every figure, date/deadline/timeframe, threshold, and task-or-role assignment stated in the transcript — each as a precise claim with the verbatim quote it comes from. ' +
+        'Scope matters: a figure carries the filter/view/timeframe it was measured under; a date carries the specific event the speaker tied it to (look at the surrounding lines — a date near a topic is not necessarily about that topic); an assignment carries the exact task. ' +
+        'Extract only what is actually said. Do not interpret, reconcile, or summarize.',
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: FACTS_SCHEMA as unknown as Record<string, unknown>
+        }
+      },
+      messages: [{ role: 'user', content: `Extract the facts from this transcript:\n\n${transcript}` }]
+    })
+    if (response.stop_reason === 'refusal') return null
+    const text = response.content.find((b) => b.type === 'text')?.text
+    if (!text) return null
+    const parsed = JSON.parse(text) as {
+      facts: { kind: string; claim: string; quote: string }[]
+    }
+    if (!parsed.facts?.length) return null
+    return parsed.facts.map((f) => `[${f.kind}] ${f.claim}\n  quote: "${f.quote}"`).join('\n')
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -188,21 +274,27 @@ async function verifySummary(
   model: string,
   transcript: string,
   draft: MeetingSummary,
-  dateNote: string
+  dateNote: string,
+  factSheet: string | null
 ): Promise<MeetingSummary> {
   try {
     const response = await client.messages.create({
       model,
       max_tokens: 8192,
       system:
-        'You are fact-checking a draft meeting summary against the source transcript. The draft\'s structure, coverage, and wording are already good — reproduce it faithfully and change ONLY what is factually unsupported. Specifically correct: ' +
+        'You are fact-checking a draft meeting summary against the source transcript. The draft\'s structure, coverage, and wording are already good — reproduce it faithfully and change ONLY what is factually unsupported. ' +
+        (factSheet
+          ? 'A fact sheet extracted from the transcript is provided: every figure, date, threshold, and assignment, each pinned to a verbatim quote. Check the draft against it claim by claim — a draft claim that contradicts the fact sheet must be corrected to match the fact sheet, and a specific figure or date that appears in neither the fact sheet nor the transcript must be removed or replaced with the speakers\' own phrasing. '
+          : '') +
+        'Specifically correct: ' +
         '(1) Figures that do not match the transcript: restore the exact number, keep its filter/view/timeframe context attached, and never merge two different figures into one claim. ' +
         '(2) Thresholds and comparators: "five or more" is at least 5, not more than 5. ' +
-        '(3) Dates or deadlines the transcript does not state: replace them with the speakers\' own phrasing or drop them; verify the timeline is coherent (work supporting a launch cannot be due after the launch). ' +
+        '(3) Dates or deadlines: a date belongs to the event the speaker attached it to — never moved to another event, and a partial date ("the week of the 21st") never gets a month filled in from a neighboring sentence about a different event. Replace unsupported dates with the speakers\' own phrasing or drop them, and verify the timeline is coherent (work supporting a launch cannot be due after the launch). ' +
         '(4) Distinct topics merged into one claim (two problems, two dependencies, two features treated as one): split them back apart as the transcript has them. ' +
-        '(5) Internal contradictions between sections: align every mention on the version the transcript supports. ' +
-        '(6) Stray artifacts: leftover labels, dangling punctuation, list counts that do not match the list. ' +
-        '(7) Action items duplicated per person for the same task: collapse to one item under the primary owner, naming the others in the task text. ' +
+        '(5) Assignments that contradict the roles the meeting established: a task must sit with the person who actually took it. ' +
+        '(6) Internal contradictions between sections: align every mention on the version the transcript supports, and remove an "open question" that the meeting (or the summary itself) answers. ' +
+        '(7) Stray artifacts: leftover labels, dangling punctuation, list counts that do not match the list. ' +
+        '(8) Action items duplicated per person for the same task: collapse to one item under the primary owner, naming the others in the task text. ' +
         'Anything you cannot verify either way, leave exactly as the draft has it. Return the complete corrected summary.' +
         dateNote,
       output_config: {
@@ -214,7 +306,10 @@ async function verifySummary(
       messages: [
         {
           role: 'user',
-          content: `<transcript>\n${transcript}\n</transcript>\n\n<draft_summary>\n${JSON.stringify(draft, null, 2)}\n</draft_summary>\n\nCheck the draft against the transcript and return the corrected summary.`
+          content:
+            `<transcript>\n${transcript}\n</transcript>\n\n` +
+            (factSheet ? `<fact_sheet>\n${factSheet}\n</fact_sheet>\n\n` : '') +
+            `<draft_summary>\n${JSON.stringify(draft, null, 2)}\n</draft_summary>\n\nCheck the draft against the fact sheet and transcript, and return the corrected summary.`
         }
       ]
     })
