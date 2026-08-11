@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.13.0': [
+    'See what summaries cost: Settings now shows your Claude usage this month and last, priced from actual token counts and tracked entirely on this machine.',
+    'Sturdier fact-checking: the verification pass can no longer shorten a summary or drop a person from the action items — if it tries, the original draft wins.',
+    'Honest model guidance: for meetings where the details matter, Claude Sonnet is now the recommended summary model in Settings — Haiku stays the budget pick.'
+  ],
   '0.12.2': [
     'Sharper fact-checking for summaries: numbers, dates, thresholds, and who-owns-what are now extracted from the transcript with their exact quotes first, and the summary is corrected against that list — so figures keep their context, partial dates stay as spoken, and tasks stay with the person who took them.'
   ],
