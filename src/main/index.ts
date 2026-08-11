@@ -443,6 +443,24 @@ function registerIpc(): void {
     }
   )
 
+  ipcMain.handle('meetings:renameSpeaker', (_e, id: string, from: string, to: string) => {
+    const m = readMeeting(id)
+    if (!m?.transcript || !from.trim() || !to.trim()) return m ?? null
+    const name = to.trim()
+    // naming yourself routes to the 'me' channel rather than a literal string
+    const target =
+      name.toLowerCase() === 'me' || name === (m.speakerNames?.me ?? '') ? 'me' : name
+    for (const seg of m.transcript) {
+      if (seg.speaker === from) seg.speaker = target
+    }
+    if (target !== 'me' && !/^speaker \d+$/i.test(target)) addPerson(target)
+    writeMeeting(m)
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('meeting:updated', m)
+    }
+    return m
+  })
+
   ipcMain.handle('meetings:setNotes', (_e, id: string, text: string) => {
     const m = readMeeting(id)
     if (!m) return null
