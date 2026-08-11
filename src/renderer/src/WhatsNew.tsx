@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.12.0': [
+    'Fix speaker labels in place: after Identify speakers, click any “Speaker 1”-style label (or a wrong guess) in the transcript and pick the right person — every line with that label is reassigned at once.',
+    'Summaries now know the meeting date, so deadlines stay in the speakers’ own words (“in three weeks”) instead of being turned into invented calendar dates, and explanations are only reported when someone actually said them.',
+    'The meeting page is centered and a bit wider, so large windows show longer lines instead of empty space on the right.'
+  ],
   '0.11.1': [
     'Sharper summaries: action items are consolidated and tracker-ready (no more per-person duplicates or “ongoing” due dates), dates and figures stay consistent across sections, numbers keep their filter context, and meeting mechanics like screen-share hiccups are left out.'
   ],
