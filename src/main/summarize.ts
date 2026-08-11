@@ -32,19 +32,24 @@ const SUMMARY_SCHEMA = {
         additionalProperties: false
       },
       description:
-        'The discussion grouped into topical sections in the order they came up. Split by subject matter, not by time. A short single-topic meeting may have just one section.'
+        'The discussion grouped into topical sections in the order they came up. Split by subject matter, not by time. A short single-topic meeting may have just one section. Every note must belong to its section: fold stray details into the topic they relate to instead of collecting leftovers in a vague catch-all section, and drop details too minor to place.'
     },
     decisions: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Decisions that were made. Empty if none.'
+      description:
+        'Decisions that were made. This is the section people cite weeks later, so hold it to the strictest standard: include only what the transcript clearly supports, and state dates and numbers exactly as the speakers did — a summary with a wrong date in its decisions is worse than one with a vague date. Empty if none.'
     },
     actionItems: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          task: { type: 'string' },
+          task: {
+            type: 'string',
+            description:
+              'The task, phrased as a specific, self-contained piece of work someone could paste into a task tracker and act on (start with a verb; include the concrete detail that makes it actionable)'
+          },
           owner: {
             anyOf: [{ type: 'string' }, { type: 'null' }],
             description:
@@ -53,13 +58,14 @@ const SUMMARY_SCHEMA = {
           due: {
             anyOf: [{ type: 'string' }, { type: 'null' }],
             description:
-              'Concise due date or timeframe, a few words at most (e.g. "July 21st", "next week", "end of Q3"), or null. Qualifying context belongs in the task text, not here.'
+              'Concise due date or timeframe, a few words at most (e.g. "July 21st", "next week", "end of Q3"), or null. Only when a real deadline was stated or clearly implied in the meeting — never invent one, and never use filler like "ongoing", "TBD", or "ASAP"; a task with no deadline gets null. Qualifying context belongs in the task text, not here.'
           }
         },
         required: ['task', 'owner', 'due'],
         additionalProperties: false
       },
-      description: 'Concrete follow-ups someone committed to. Empty if none.'
+      description:
+        'Concrete follow-ups someone committed to, written as a checklist the reader could paste straight into a task tracker. One item per real task: when several people share the same task, emit it once under the primary owner and name the others in the task text rather than repeating the item per person; when several small fixes are part of one piece of work, fold them into one item. Fewer, sharper items beat an exhaustive list. Empty if none.'
     },
     openQuestions: {
       type: 'array',
@@ -127,7 +133,10 @@ export async function summarizeTranscript(
       'The transcript comes from automatic speech recognition and may contain errors; infer meaning from context and do not invent facts that are not supported by the transcript. ' +
       'Lines labeled "Me" were spoken by the person you are summarizing for; lines labeled "Them" are the other participants (possibly several people); lines may also carry specific speaker names. Unlabeled lines could be anyone. ' +
       'Write for the meeting participant reviewing this later: concrete, specific, no filler. ' +
-      'Group the discussion into topical sections the way good meeting minutes do: when the conversation jumps between subjects, give each subject its own section with a short heading, and put the substance in the notes (numbers, names, formats, reasons), not vague paraphrase.' +
+      'Group the discussion into topical sections the way good meeting minutes do: when the conversation jumps between subjects, give each subject its own section with a short heading, and put the substance in the notes (numbers, names, formats, reasons), not vague paraphrase. ' +
+      'Keep the summary internally consistent: a date, deadline, or figure must read the same in every section that mentions it. If the transcript supports only a rough timeframe ("beginning of September"), use that same rough timeframe everywhere — never sharpen it into a specific date the transcript does not state, and if two spots in the transcript seem to conflict, use the version with stronger support rather than repeating both. ' +
+      'When a figure was tied to a particular filter, view, or timeframe (e.g. a count that only holds for one term or one campus), keep that context attached to the number wherever it appears, and never mix figures from different views as if they were the same measurement. ' +
+      'Leave out meeting mechanics — screen-share hiccups, audio trouble, waiting for people to join — unless someone committed to follow up on them.' +
       attendeeNote +
       vocabNote,
     output_config: {
