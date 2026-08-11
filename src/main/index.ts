@@ -29,7 +29,14 @@ import {
   meetingDir,
   recoverOrphanedRecordings
 } from './store'
-import { getSettings, updateSettings, setApiKey, setCalendarUrl, addPerson } from './settings'
+import {
+  getSettings,
+  updateSettings,
+  setApiKey,
+  setCalendarUrl,
+  addPerson,
+  addPersonAlias
+} from './settings'
 import {
   refreshCalendar,
   getTodayEvents,
@@ -53,7 +60,7 @@ import { seriesSiblings, seriesData } from './series'
 import { identifySpeakers } from './identify'
 import { applySystemSettings, isQuitting, startHidden } from './system'
 import { runBackup, startAutoBackup } from './backup'
-import { parseDueDate } from './dates'
+import { actionRollup, identityContext } from './identity'
 import { claudeConnectionStatus, connectClaude, disconnectClaude } from './claudeConnect'
 import { engineStatus, setupEngine } from './whisper'
 import { processMeeting, summarizeMeeting } from './pipeline'
@@ -566,25 +573,18 @@ function registerIpc(): void {
   // --- person pages ---
   ipcMain.handle('people:list', () => listPeople())
   ipcMain.handle('people:profile', (_e, name: string) => personProfile(name))
+  ipcMain.handle('people:merge', (_e, from: string, to: string) => {
+    addPersonAlias(from, to)
+    return listPeople()
+  })
 
   ipcMain.handle('actions:list', (): ActionRollupItem[] => {
+    const ctx = identityContext()
     const items: ActionRollupItem[] = []
     for (const entry of listMeetings()) {
       const m = readMeeting(entry.id)
       if (!m?.summary) continue
-      m.summary.actionItems.forEach((a, index) => {
-        items.push({
-          meetingId: m.id,
-          meetingTitle: m.title,
-          createdAt: m.createdAt,
-          index,
-          task: a.task,
-          owner: a.owner,
-          due: a.due,
-          done: a.done ?? false,
-          dueDate: parseDueDate(a.due, m.createdAt) ?? undefined
-        })
-      })
+      items.push(...actionRollup(m, ctx))
     }
     return items
   })
@@ -606,6 +606,21 @@ function registerIpc(): void {
       if (!m || !item) return null
       item.owner = owner?.trim() || null
       if (item.owner) addPerson(item.owner)
+      writeMeeting(m)
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send('meeting:updated', m)
+      }
+      return m
+    }
+  )
+
+  ipcMain.handle(
+    'actions:setDue',
+    (_e, meetingId: string, index: number, isoDate: string | null) => {
+      const m = readMeeting(meetingId)
+      const item = m?.summary?.actionItems[index]
+      if (!m || !item) return null
+      item.dueDate = isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate) ? isoDate : null
       writeMeeting(m)
       for (const win of BrowserWindow.getAllWindows()) {
         win.webContents.send('meeting:updated', m)

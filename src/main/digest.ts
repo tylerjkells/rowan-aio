@@ -1,5 +1,5 @@
 import { listMeetings, readMeeting } from './store'
-import { parseDueDate } from './dates'
+import { actionRollup, identityContext, SELF } from './identity'
 import type { ActionRollupItem, WeeklyDigest } from '../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -11,6 +11,7 @@ import type { ActionRollupItem, WeeklyDigest } from '../shared/types'
 const AGING_DAYS = 14
 
 export function buildDigest(): WeeklyDigest {
+  const ctx = identityContext()
   const now = new Date()
   const weekAgo = new Date(now.getTime() - 7 * 86400000)
   const agingCutoff = new Date(now.getTime() - AGING_DAYS * 86400000)
@@ -34,30 +35,18 @@ export function buildDigest(): WeeklyDigest {
       })
     }
 
-    m.summary?.actionItems.forEach((a, index) => {
-      if (a.done) return
-      const rollup: ActionRollupItem = {
-        meetingId: m.id,
-        meetingTitle: m.title,
-        createdAt: m.createdAt,
-        index,
-        task: a.task,
-        owner: a.owner,
-        due: a.due,
-        done: false,
-        dueDate: parseDueDate(a.due, m.createdAt) ?? undefined
-      }
-      const owner = a.owner?.trim().toLowerCase()
-      if (owner === 'me') {
-        myOpen.push(rollup)
-      } else if (a.owner && owner !== 'them') {
-        const key = owner!
-        const entry = byPerson.get(key) ?? { name: a.owner.trim(), count: 0 }
+    for (const rollup of actionRollup(m, ctx)) {
+      if (rollup.done) continue
+      if (rollup.owners.includes(SELF)) myOpen.push(rollup)
+      for (const owner of rollup.owners) {
+        if (owner === SELF) continue
+        const key = owner.toLowerCase()
+        const entry = byPerson.get(key) ?? { name: owner, count: 0 }
         entry.count++
         byPerson.set(key, entry)
       }
       if (created < agingCutoff) aging.push(rollup)
-    })
+    }
   }
 
   const weekLabel = now.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })

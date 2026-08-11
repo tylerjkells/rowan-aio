@@ -81,10 +81,11 @@ export async function summarizeMeeting(id: string): Promise<void> {
   const settings = getSettings()
   meeting = update(meeting, { stage: 'summarizing', error: undefined })
   try {
-    // calendar attendees when the feed provides them, else the team directory:
-    // either way the model gets real name spellings to attribute against
-    const knownNames =
-      meeting.attendees && meeting.attendees.length > 0 ? meeting.attendees : settings.people
+    // calendar attendees plus the team directory: the model gets real name
+    // spellings to attribute against, attendees first
+    const knownNames = [...(meeting.attendees ?? []), ...settings.people]
+      .filter((n, i, all) => all.findIndex((x) => x.toLowerCase() === n.toLowerCase()) === i)
+      .slice(0, 40)
     const summary = await summarizeTranscript(
       transcript,
       settings.claudeModel,

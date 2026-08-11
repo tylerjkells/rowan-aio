@@ -193,7 +193,7 @@ export function TodayView({
   const myOpenActions = useMemo(
     () =>
       actions
-        .filter((a) => !a.done && a.owner?.toLowerCase() === 'me')
+        .filter((a) => !a.done && a.owners.includes('Me'))
         .sort((a, b) => ((a.dueDate ?? '9999') < (b.dueDate ?? '9999') ? -1 : 1)),
     [actions]
   )

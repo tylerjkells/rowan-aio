@@ -134,65 +134,209 @@ export function StageBadge({
   }
 }
 
-/** Click-to-edit owner chip for action items, with known-owner suggestions. */
+/**
+ * Click-to-edit owner chip for action items. Opens a combobox that shows the
+ * whole directory up front (no pre-filtering by the current owner) and only
+ * narrows once the user actually types.
+ */
 export function OwnerEditor({
   owner,
   suggestions,
-  onSave
+  onSave,
+  label
 }: {
   owner: string | null
   suggestions: string[]
   onSave: (owner: string | null) => void
+  /** display text for the chip; defaults to the raw owner */
+  label?: string | null
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  const [typed, setTyped] = useState(false)
+  const [hi, setHi] = useState(-1)
+  const display = label ?? owner
 
   if (!editing) {
     return (
       <button
-        className={`owner-btn ${owner ? '' : 'unassigned'}`}
-        title={owner ? `Assigned to ${owner} (click to change)` : 'Assign to someone'}
+        className={`owner-btn ${display ? '' : 'unassigned'}`}
+        title={display ? `Assigned to ${display} (click to change)` : 'Assign to someone'}
         onClick={() => {
           setDraft(owner ?? '')
+          setTyped(false)
+          setHi(-1)
           setEditing(true)
         }}
       >
-        {owner ?? '+ Assign'}
+        {display ?? '+ Assign'}
       </button>
     )
   }
 
-  function commit(): void {
+  // full list until the user types; then filter by what they typed
+  const query = draft.trim().toLowerCase()
+  const options =
+    typed && query ? suggestions.filter((s) => s.toLowerCase().includes(query)) : suggestions
+
+  function pick(next: string | null): void {
     setEditing(false)
-    const next = draft.trim() || null
     if (next !== owner) onSave(next)
   }
 
+  function commitTyped(): void {
+    pick(draft.trim() || null)
+  }
+
   return (
-    <>
+    <span className="owner-wrap">
       <input
         autoFocus
         className="text-input owner-input"
-        list="owner-suggestions"
         placeholder="Name"
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => {
+          setDraft(e.target.value)
+          setTyped(true)
+          setHi(e.target.value.trim() ? 0 : -1)
+        }}
+        onBlur={commitTyped}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-          if (e.key === 'Escape') {
-            setDraft(owner ?? '')
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setHi((h) => (h + 1) % Math.max(options.length, 1))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setHi((h) => (h <= 0 ? options.length - 1 : h - 1))
+          } else if (e.key === 'Enter') {
+            if (hi >= 0 && options[hi]) pick(options[hi])
+            else commitTyped()
+          } else if (e.key === 'Escape') {
             setEditing(false)
           }
         }}
+        role="combobox"
+        aria-expanded="true"
         aria-label="Action item owner"
       />
-      <datalist id="owner-suggestions">
-        {suggestions.map((s) => (
-          <option value={s} key={s} />
+      <div className="owner-pop" role="listbox">
+        {owner && (
+          <button
+            className="owner-opt owner-opt-clear"
+            role="option"
+            aria-selected="false"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              pick(null)
+            }}
+          >
+            Unassign
+          </button>
+        )}
+        {options.map((s, i) => (
+          <button
+            className={`owner-opt ${i === hi ? 'hi' : ''} ${s === owner ? 'current' : ''}`}
+            role="option"
+            aria-selected={s === owner}
+            key={s}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              pick(s)
+            }}
+            onMouseEnter={() => setHi(i)}
+          >
+            {s}
+          </button>
         ))}
-      </datalist>
-    </>
+        {options.length === 0 && <span className="owner-opt-empty">New name — press Enter</span>}
+      </div>
+    </span>
+  )
+}
+
+/** "Jul 21", with the year only when it isn't this year */
+export function formatDueLabel(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: y === new Date().getFullYear() ? undefined : 'numeric'
+  })
+}
+
+/**
+ * Click-to-edit due date for action items. Shows the summarizer's free text
+ * with the date it resolved to ("before Monday · Jul 21"); once the user sets
+ * a date explicitly, the date alone is the truth.
+ */
+export function DueEditor({
+  due,
+  dueDate,
+  edited,
+  overdue,
+  onSave
+}: {
+  /** free text from the summary, e.g. "before Monday" */
+  due: string | null
+  /** effective ISO date (user-set or parsed), if any */
+  dueDate?: string
+  /** the user set the date explicitly */
+  edited?: boolean
+  overdue?: boolean
+  onSave: (isoDate: string | null) => void
+}): React.JSX.Element {
+  const [editing, setEditing] = useState(false)
+  const cancelled = useRef(false)
+
+  if (!editing) {
+    const text = edited && dueDate
+      ? formatDueLabel(dueDate)
+      : due
+        ? dueDate
+          ? `${due} · ${formatDueLabel(dueDate)}`
+          : due
+        : dueDate
+          ? formatDueLabel(dueDate)
+          : null
+    return (
+      <button
+        className={`due-btn ${overdue ? 'overdue' : ''} ${text ? '' : 'no-due'}`}
+        title={text ? 'Change due date' : 'Set a due date'}
+        onClick={() => {
+          cancelled.current = false
+          setEditing(true)
+        }}
+      >
+        {text ?? '+ Due'}
+      </button>
+    )
+  }
+
+  function commit(value: string): void {
+    setEditing(false)
+    if (cancelled.current) return
+    const next = value || null
+    if (next !== (dueDate ?? null)) onSave(next)
+  }
+
+  return (
+    <input
+      autoFocus
+      type="date"
+      className="text-input due-input"
+      defaultValue={dueDate ?? ''}
+      onBlur={(e) => commit(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        if (e.key === 'Escape') {
+          cancelled.current = true
+          setEditing(false)
+        }
+      }}
+      aria-label="Action item due date"
+    />
   )
 }
 
