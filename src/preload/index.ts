@@ -19,6 +19,7 @@ import type {
   RecordingMode,
   SeriesData,
   TranscriptSegment,
+  UsageSummary,
   WeeklyDigest,
   WhisperModel
 } from '../shared/types'
@@ -44,6 +45,9 @@ const api = {
       ipcRenderer.invoke('settings:setApiKey', key),
     testApiKey: (key: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('settings:testApiKey', key)
+  },
+  usage: {
+    get: (): Promise<UsageSummary> => ipcRenderer.invoke('usage:get')
   },
   engine: {
     status: (): Promise<EngineStatus> => ipcRenderer.invoke('engine:status'),

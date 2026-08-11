@@ -4,6 +4,7 @@ import type {
   AppTheme,
   EngineProgress,
   EngineStatus,
+  UsageSummary,
   WhisperModel
 } from '../../../shared/types'
 
@@ -26,10 +27,23 @@ const WHISPER_MODELS: { id: WhisperModel; title: string; desc: string }[] = [
 ]
 
 const CLAUDE_MODELS = [
-  { id: 'claude-haiku-4-5', title: 'Claude Haiku 4.5', desc: 'Recommended: excellent summaries for pennies.' },
-  { id: 'claude-sonnet-5', title: 'Claude Sonnet 5', desc: 'Stronger on long or messy meetings.' },
+  {
+    id: 'claude-haiku-4-5',
+    title: 'Claude Haiku 4.5',
+    desc: 'Cheapest. Good summaries, but on long meetings small details (a date, a number, who owns a task) can slip.'
+  },
+  {
+    id: 'claude-sonnet-5',
+    title: 'Claude Sonnet 5',
+    desc: 'Recommended for meetings that matter: far more reliable on details, a few cents more per meeting.'
+  },
   { id: 'claude-opus-4-8', title: 'Claude Opus 4.8', desc: 'Highest quality, highest cost.' }
 ]
+
+function formatUsd(v: number): string {
+  if (v > 0 && v < 0.005) return 'under $0.01'
+  return `$${v.toFixed(2)}`
+}
 
 function SwitchRow({
   title,
@@ -167,6 +181,11 @@ export function SettingsView({
   const [calStatus, setCalStatus] = useState<{ ok: boolean; msg: string } | null>(null)
   const [connectingCal, setConnectingCal] = useState(false)
   const [storage, setStorage] = useState<{ count: number; totalBytes: number; audioBytes: number } | null>(null)
+  const [usage, setUsage] = useState<UsageSummary | null>(null)
+
+  useEffect(() => {
+    window.scribe.usage.get().then(setUsage)
+  }, [])
   const [version, setVersion] = useState('')
 
   useEffect(() => {
@@ -344,6 +363,13 @@ export function SettingsView({
           {keyStatus && (
             <p className={`field-note ${keyStatus.ok ? 'ok' : 'error'}`} role="status">
               {keyStatus.msg}
+            </p>
+          )}
+          {usage && (usage.thisMonth.calls > 0 || usage.lastMonth) && (
+            <p className="opt-desc">
+              {formatUsd(usage.thisMonth.costUsd)} in Claude usage this month
+              {usage.lastMonth ? ` · ${formatUsd(usage.lastMonth.costUsd)} last month` : ''} —
+              estimated from token counts, tracked on this machine.
             </p>
           )}
 

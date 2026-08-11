@@ -58,6 +58,7 @@ import { listPeople, personProfile } from './people'
 import { buildDigest } from './digest'
 import { seriesSiblings, seriesData } from './series'
 import { identifySpeakers } from './identify'
+import { getUsage } from './usage'
 import { applySystemSettings, isQuitting, startHidden } from './system'
 import { runBackup, startAutoBackup } from './backup'
 import { actionRollup, identityContext } from './identity'
@@ -268,6 +269,7 @@ function registerIpc(): void {
   })
   ipcMain.handle('settings:setApiKey', (_e, key: string | null) => setApiKey(key))
   ipcMain.handle('settings:testApiKey', (_e, key: string) => testApiKey(key))
+  ipcMain.handle('usage:get', () => getUsage())
 
   // --- transcription engine ---
   ipcMain.handle('engine:status', () => engineStatus(getSettings().whisperModel))
