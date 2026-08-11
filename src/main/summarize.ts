@@ -143,7 +143,7 @@ export async function summarizeTranscript(
       'Keep the summary internally consistent: a date, deadline, or figure must read the same in every section that mentions it. If the transcript supports only a rough timeframe ("beginning of September"), use that same rough timeframe everywhere — never sharpen it into a specific date the transcript does not state, and if two spots in the transcript seem to conflict, use the version with stronger support rather than repeating both. ' +
       'Never state a specific calendar date unless a speaker said that date. When the transcript gives a relative timeframe ("in three weeks", "next month"), keep the speakers\' phrasing instead of converting it to a date yourself — ASR mishears dates often enough that a computed date is more likely wrong than helpful. Before finishing, sanity-check the timeline you have written: every deadline must be consistent with the meeting date and with the sequence of events (work that supports a launch cannot be due after the launch); if a date fails that check, fall back to the relative phrasing actually used. ' +
       'Report a cause or explanation for a problem only when a participant actually voiced it in the meeting; never present your own inference as a conclusion the group reached. When describing a reported bug or issue, preserve the specific symptom as described rather than paraphrasing it into a different-sounding problem. ' +
-      'When a figure was tied to a particular filter, view, or timeframe (e.g. a count that only holds for one term or one campus), keep that context attached to the number wherever it appears, and never mix figures from different views as if they were the same measurement. ' +
+      'When a figure was tied to a particular filter, view, or timeframe (e.g. a count that only holds for one term or one campus), keep that context attached to the number wherever it appears, and never mix figures from different views as if they were the same measurement. Copy thresholds and comparators exactly — "five or more" means at least 5, not more than 5. When the meeting covered two distinct items (two problems, two dependencies, two features), keep them distinct; never fold one into the other because they sound related. ' +
       'Leave out meeting mechanics — screen-share hiccups, audio trouble, waiting for people to join — unless someone committed to follow up on them.' +
       attendeeNote +
       vocabNote +
@@ -171,7 +171,60 @@ export async function summarizeTranscript(
   }
   const text = response.content.find((b) => b.type === 'text')?.text
   if (!text) throw new Error('Empty response from Claude')
-  return JSON.parse(text) as MeetingSummary
+  const draft = JSON.parse(text) as MeetingSummary
+  return verifySummary(client, model, transcript, draft, dateNote)
+}
+
+/**
+ * Second pass: re-read the draft against the transcript and fix only factual
+ * slips. A single generation pass reliably garbles a few details on long
+ * transcripts (merged figures, drifted thresholds, conflated topics) and each
+ * regeneration shuffles which ones — a dedicated checking pass with the
+ * transcript in front of it is much better at exactness than generation is.
+ * Falls back to the draft on any failure so summaries never break here.
+ */
+async function verifySummary(
+  client: Anthropic,
+  model: string,
+  transcript: string,
+  draft: MeetingSummary,
+  dateNote: string
+): Promise<MeetingSummary> {
+  try {
+    const response = await client.messages.create({
+      model,
+      max_tokens: 8192,
+      system:
+        'You are fact-checking a draft meeting summary against the source transcript. The draft\'s structure, coverage, and wording are already good — reproduce it faithfully and change ONLY what is factually unsupported. Specifically correct: ' +
+        '(1) Figures that do not match the transcript: restore the exact number, keep its filter/view/timeframe context attached, and never merge two different figures into one claim. ' +
+        '(2) Thresholds and comparators: "five or more" is at least 5, not more than 5. ' +
+        '(3) Dates or deadlines the transcript does not state: replace them with the speakers\' own phrasing or drop them; verify the timeline is coherent (work supporting a launch cannot be due after the launch). ' +
+        '(4) Distinct topics merged into one claim (two problems, two dependencies, two features treated as one): split them back apart as the transcript has them. ' +
+        '(5) Internal contradictions between sections: align every mention on the version the transcript supports. ' +
+        '(6) Stray artifacts: leftover labels, dangling punctuation, list counts that do not match the list. ' +
+        '(7) Action items duplicated per person for the same task: collapse to one item under the primary owner, naming the others in the task text. ' +
+        'Anything you cannot verify either way, leave exactly as the draft has it. Return the complete corrected summary.' +
+        dateNote,
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: SUMMARY_SCHEMA as unknown as Record<string, unknown>
+        }
+      },
+      messages: [
+        {
+          role: 'user',
+          content: `<transcript>\n${transcript}\n</transcript>\n\n<draft_summary>\n${JSON.stringify(draft, null, 2)}\n</draft_summary>\n\nCheck the draft against the transcript and return the corrected summary.`
+        }
+      ]
+    })
+    if (response.stop_reason === 'refusal') return draft
+    const text = response.content.find((b) => b.type === 'text')?.text
+    if (!text) return draft
+    return JSON.parse(text) as MeetingSummary
+  } catch {
+    return draft
+  }
 }
 
 /** Answer a question about one meeting, grounded in its transcript. */
