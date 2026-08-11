@@ -34,7 +34,7 @@ interface StoredSettings {
 
 const DEFAULTS: StoredSettings = {
   whisperModel: 'small.en',
-  claudeModel: 'claude-haiku-4-5',
+  claudeModel: 'claude-sonnet-5',
   autoSummarize: true,
   recordNudge: true,
   autoEndSilence: true,
