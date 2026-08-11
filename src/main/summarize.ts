@@ -108,7 +108,8 @@ export async function summarizeTranscript(
   model: string,
   attendees?: string[],
   vocabulary?: string,
-  userNotes?: string
+  userNotes?: string,
+  meetingDate?: string
 ): Promise<MeetingSummary> {
   const apiKey = getApiKey()
   if (!apiKey) {
@@ -124,6 +125,11 @@ export async function summarizeTranscript(
   const vocabNote = vocabulary?.trim()
     ? ` The user's glossary of domain terms (correct spellings for words speech recognition often mangles): ${vocabulary.trim().slice(0, 600)}. Use these spellings when the transcript clearly means one of them.`
     : ''
+  const parsedDate = meetingDate ? new Date(meetingDate) : null
+  const dateNote =
+    parsedDate && !Number.isNaN(parsedDate.getTime())
+      ? ` The meeting took place on ${parsedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Use this only to make sense of relative time references — do not repeat it in the summary.`
+      : ''
 
   const response = await client.messages.create({
     model,
@@ -135,10 +141,13 @@ export async function summarizeTranscript(
       'Write for the meeting participant reviewing this later: concrete, specific, no filler. ' +
       'Group the discussion into topical sections the way good meeting minutes do: when the conversation jumps between subjects, give each subject its own section with a short heading, and put the substance in the notes (numbers, names, formats, reasons), not vague paraphrase. ' +
       'Keep the summary internally consistent: a date, deadline, or figure must read the same in every section that mentions it. If the transcript supports only a rough timeframe ("beginning of September"), use that same rough timeframe everywhere — never sharpen it into a specific date the transcript does not state, and if two spots in the transcript seem to conflict, use the version with stronger support rather than repeating both. ' +
+      'Never state a specific calendar date unless a speaker said that date. When the transcript gives a relative timeframe ("in three weeks", "next month"), keep the speakers\' phrasing instead of converting it to a date yourself — ASR mishears dates often enough that a computed date is more likely wrong than helpful. Before finishing, sanity-check the timeline you have written: every deadline must be consistent with the meeting date and with the sequence of events (work that supports a launch cannot be due after the launch); if a date fails that check, fall back to the relative phrasing actually used. ' +
+      'Report a cause or explanation for a problem only when a participant actually voiced it in the meeting; never present your own inference as a conclusion the group reached. When describing a reported bug or issue, preserve the specific symptom as described rather than paraphrasing it into a different-sounding problem. ' +
       'When a figure was tied to a particular filter, view, or timeframe (e.g. a count that only holds for one term or one campus), keep that context attached to the number wherever it appears, and never mix figures from different views as if they were the same measurement. ' +
       'Leave out meeting mechanics — screen-share hiccups, audio trouble, waiting for people to join — unless someone committed to follow up on them.' +
       attendeeNote +
-      vocabNote,
+      vocabNote +
+      dateNote,
     output_config: {
       format: {
         type: 'json_schema',
