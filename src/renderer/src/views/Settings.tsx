@@ -27,8 +27,16 @@ const WHISPER_MODELS: { id: WhisperModel; title: string; desc: string }[] = [
 ]
 
 const CLAUDE_MODELS = [
-  { id: 'claude-haiku-4-5', title: 'Claude Haiku 4.5', desc: 'Recommended: excellent summaries for pennies.' },
-  { id: 'claude-sonnet-5', title: 'Claude Sonnet 5', desc: 'Stronger on long or messy meetings.' },
+  {
+    id: 'claude-haiku-4-5',
+    title: 'Claude Haiku 4.5',
+    desc: 'Cheapest. Good summaries, but on long meetings small details (a date, a number, who owns a task) can slip.'
+  },
+  {
+    id: 'claude-sonnet-5',
+    title: 'Claude Sonnet 5',
+    desc: 'Recommended for meetings that matter: far more reliable on details, a few cents more per meeting.'
+  },
   { id: 'claude-opus-4-8', title: 'Claude Opus 4.8', desc: 'Highest quality, highest cost.' }
 ]
 

@@ -297,8 +297,8 @@ async function verifySummary(
         '(5) Assignments that contradict the roles the meeting established: a task must sit with the person who actually took it. ' +
         '(6) Internal contradictions between sections: align every mention on the version the transcript supports, and remove an "open question" that the meeting (or the summary itself) answers. ' +
         '(7) Stray artifacts: leftover labels, dangling punctuation, list counts that do not match the list. ' +
-        '(8) Action items duplicated per person for the same task: collapse to one item under the primary owner, naming the others in the task text. ' +
-        'Anything you cannot verify either way, leave exactly as the draft has it. Return the complete corrected summary.' +
+        '(8) Action items duplicated per person for the same task: collapse to one item under the primary owner — but never lose a person. Every owner in the draft must still appear in the result, as an item\'s owner or named in a collapsed item\'s task text. ' +
+        'Do NOT shorten, condense, or drop anything else: reproduce every section, every note, and every action item at full length — your output must be the complete summary with only the corrections applied. Anything you cannot verify either way, leave exactly as the draft has it.' +
         dateNote,
       output_config: {
         format: {
@@ -320,7 +320,12 @@ async function verifySummary(
     if (response.stop_reason === 'refusal') return draft
     const text = response.content.find((b) => b.type === 'text')?.text
     if (!text) return draft
-    return JSON.parse(text) as MeetingSummary
+    const checked = JSON.parse(text) as MeetingSummary
+    // Smaller models sometimes abbreviate when asked to reproduce a document,
+    // silently dropping whole sections. A fact-check should barely change the
+    // summary's size — if it shrank substantially, trust the draft instead.
+    if (JSON.stringify(checked).length < JSON.stringify(draft).length * 0.7) return draft
+    return checked
   } catch {
     return draft
   }
