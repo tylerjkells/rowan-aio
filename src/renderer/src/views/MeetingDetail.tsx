@@ -384,19 +384,18 @@ export function MeetingView({
               Export Markdown
             </button>
             {meeting.summary && meeting.transcript && meeting.transcript.length > 0 && (
-              <button
-                className="btn"
-                onClick={async () => {
+              <RegenerateButton
+                onRegenerate={async (model, label) => {
                   const sure = await confirm({
                     title: 'Rewrite the summary from the transcript?',
-                    body: 'Owner assignments and checked-off action items will be reset.',
+                    body:
+                      'Owner assignments and checked-off action items will be reset.' +
+                      (label ? ` This run uses ${label}.` : ''),
                     confirmLabel: 'Regenerate'
                   })
-                  if (sure) window.scribe.meetings.resummarize(meeting.id)
+                  if (sure) window.scribe.meetings.resummarize(meeting.id, model)
                 }}
-              >
-                Regenerate summary
-              </button>
+              />
             )}
             {exportedTo && (
               <span className="field-note ok" role="status">
@@ -768,6 +767,75 @@ function NotesEditor({
         Notes are folded into the summary — regenerate it after big edits.
       </p>
     </div>
+  )
+}
+
+const REGEN_MODELS = [
+  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+  { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
+  { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' }
+]
+
+/**
+ * Split button: the main half regenerates with the default model from
+ * Settings; the arrow opens a menu to run this one meeting on a specific
+ * (usually stronger) model without changing the default.
+ */
+function RegenerateButton({
+  onRegenerate
+}: {
+  onRegenerate: (model?: string, label?: string) => void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLSpanElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent): void => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  return (
+    <span className="split-btn" ref={wrapRef}>
+      <button
+        className="btn split-btn-main"
+        onClick={() => {
+          setOpen(false)
+          onRegenerate(undefined, undefined)
+        }}
+      >
+        Regenerate summary
+      </button>
+      <button
+        className="btn split-btn-arrow"
+        aria-label="Regenerate with a specific model"
+        aria-expanded={open}
+        title="Regenerate this meeting with a specific model"
+        onClick={() => setOpen(!open)}
+      >
+        ▾
+      </button>
+      {open && (
+        <div className="split-menu" role="menu">
+          {REGEN_MODELS.map((m) => (
+            <button
+              key={m.id}
+              className="split-menu-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                onRegenerate(m.id, m.label)
+              }}
+            >
+              With {m.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
   )
 }
 

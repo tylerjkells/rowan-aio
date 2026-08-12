@@ -130,6 +130,19 @@ function speakerLabel(
   return speaker
 }
 
+/**
+ * Collapse ASR hallucination loops. When a recording runs on over silence or
+ * office noise, Whisper emits the same word or phrase dozens of times in a
+ * row ("it's it's it's…", a sentence repeated 40 times). Sending that to the
+ * summarizer wastes tokens and can balloon the output until it truncates
+ * mid-JSON. A phrase of up to 16 words repeated 3+ times collapses to two;
+ * two passes catch loops of loops.
+ */
+function collapseRepeats(text: string): string {
+  const pass = (s: string): string => s.replace(/(\S+(?:\s+\S+){0,15}?)(?:\s+\1){2,}/g, '$1 $1')
+  return pass(pass(text))
+}
+
 export function transcriptToText(
   segments: TranscriptSegment[],
   names: { me: string; them: string } = { me: 'Me', them: 'Them' }
@@ -140,7 +153,7 @@ export function transcriptToText(
       const m = Math.floor(totalSec / 60)
       const sec = String(totalSec % 60).padStart(2, '0')
       const label = speakerLabel(s.speaker, names)
-      return `[${m}:${sec}] ${label ? `${label}: ` : ''}${s.text}`
+      return `[${m}:${sec}] ${label ? `${label}: ` : ''}${collapseRepeats(s.text)}`
     })
     .join('\n')
 }
@@ -175,7 +188,7 @@ export async function summarizeTranscript(
 
   const draftPromise = client.messages.create({
     model,
-    max_tokens: 8192,
+    max_tokens: 16000,
     system:
       'You summarize meeting transcripts produced by automatic speech recognition. ' +
       'The transcript comes from automatic speech recognition and may contain errors; infer meaning from context and do not invent facts that are not supported by the transcript. ' +
@@ -219,7 +232,16 @@ export async function summarizeTranscript(
   }
   const text = response.content.find((b) => b.type === 'text')?.text
   if (!text) throw new Error('Empty response from Claude')
-  const draft = JSON.parse(text) as MeetingSummary
+  let draft: MeetingSummary
+  try {
+    draft = JSON.parse(text) as MeetingSummary
+  } catch {
+    throw new Error(
+      response.stop_reason === 'max_tokens'
+        ? 'The summary ran past the output limit — usually a very long or repetitive transcript. Try trimming stray segments from the end of the transcript, then regenerate.'
+        : 'Claude returned a malformed summary. Regenerating usually fixes this.'
+    )
+  }
   return verifySummary(client, model, transcript, draft, dateNote, factSheet)
 }
 
@@ -236,7 +258,7 @@ async function extractFacts(
   try {
     const response = await client.messages.create({
       model,
-      max_tokens: 8192,
+      max_tokens: 16000,
       system:
         'You extract hard facts from a meeting transcript produced by automatic speech recognition. ' +
         'List every figure, date/deadline/timeframe, threshold, and task-or-role assignment stated in the transcript — each as a precise claim with the verbatim quote it comes from. ' +
@@ -283,7 +305,7 @@ async function verifySummary(
   try {
     const response = await client.messages.create({
       model,
-      max_tokens: 8192,
+      max_tokens: 16000,
       system:
         'You are fact-checking a draft meeting summary against the source transcript. The draft\'s structure, coverage, and wording are already good — reproduce it faithfully and change ONLY what is factually unsupported. ' +
         (factSheet

@@ -1,8 +1,27 @@
-import { BrowserWindow, Notification } from 'electron'
+import { Notification } from 'electron'
 import { refreshCalendar } from './calendar'
 import { getSettings } from './settings'
 import { hasActiveRecording } from './store'
+import { showMainWindow } from './system'
 import type { AutoEndReason } from '../shared/types'
+
+// A local Notification can be garbage-collected while its toast still sits in
+// the notification center — the click handler dies with it and Windows falls
+// back to a raw app activation. Hold the latest one until it's dismissed.
+let liveNotification: Notification | null = null
+
+function notify(title: string, body: string, onClick: () => void): void {
+  const n = new Notification({ title, body })
+  n.on('click', () => {
+    onClick()
+    if (liveNotification === n) liveNotification = null
+  })
+  n.on('close', () => {
+    if (liveNotification === n) liveNotification = null
+  })
+  liveNotification = n
+  n.show()
+}
 
 // ---------------------------------------------------------------------------
 // Record nudge: when a calendared meeting starts and nothing is recording,
@@ -27,21 +46,13 @@ export function startRecordNudge(): void {
  */
 export function notifyAutoEnd(title: string, reason: AutoEndReason): void {
   if (!Notification.isSupported()) return
-  const n = new Notification({
-    title: 'Recording ended automatically',
-    body:
-      reason === 'silence'
-        ? `“${title}” went quiet, so MeetingScribe stopped and is transcribing it.`
-        : `“${title}” ran past its scheduled end, so MeetingScribe stopped and is transcribing it.`
-  })
-  n.on('click', () => {
-    const win = BrowserWindow.getAllWindows()[0]
-    if (!win) return
-    if (win.isMinimized()) win.restore()
-    win.show()
-    win.focus()
-  })
-  n.show()
+  notify(
+    'Recording ended automatically',
+    reason === 'silence'
+      ? `“${title}” went quiet, so MeetingScribe stopped and is transcribing it.`
+      : `“${title}” ran past its scheduled end, so MeetingScribe stopped and is transcribing it.`,
+    () => showMainWindow()
+  )
 }
 
 async function check(): Promise<void> {
@@ -67,19 +78,11 @@ async function check(): Promise<void> {
     if (nudged.has(e.id)) continue
     nudged.add(e.id)
 
-    const n = new Notification({
-      title: 'Meeting started — record it?',
-      body: `${e.title} is on now and nothing is recording. Click to open MeetingScribe.`
-    })
-    n.on('click', () => {
-      const win = BrowserWindow.getAllWindows()[0]
-      if (!win) return
-      if (win.isMinimized()) win.restore()
-      win.show()
-      win.focus()
-      win.webContents.send('nudge:openRecord')
-    })
-    n.show()
+    notify(
+      'Meeting started — record it?',
+      `${e.title} is on now and nothing is recording. Click to open MeetingScribe.`,
+      () => showMainWindow('record')
+    )
     return // one nudge at a time; overlapping events wait for the next tick
   }
 }
