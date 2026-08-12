@@ -95,7 +95,8 @@ const api = {
       ipcRenderer.invoke('meetings:rename', id, title),
     delete: (id: string): Promise<void> => ipcRenderer.invoke('meetings:delete', id),
     retry: (id: string): Promise<void> => ipcRenderer.invoke('meetings:retry', id),
-    resummarize: (id: string): Promise<void> => ipcRenderer.invoke('meetings:resummarize', id),
+    resummarize: (id: string, model?: string): Promise<void> =>
+      ipcRenderer.invoke('meetings:resummarize', id, model),
     exportMarkdown: (defaultName: string, content: string): Promise<string | null> =>
       ipcRenderer.invoke('meetings:exportMarkdown', defaultName, content),
     ask: (id: string, question: string): Promise<string> =>

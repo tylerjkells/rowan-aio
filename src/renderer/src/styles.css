@@ -2677,6 +2677,58 @@ input[type='date'] {
   color: var(--ink-soft);
 }
 
+/* split regenerate button: main action + model picker arrow */
+.split-btn {
+  position: relative;
+  display: inline-flex;
+}
+
+.split-btn-main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.split-btn-arrow {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: 1px;
+  padding-left: 8px;
+  padding-right: 8px;
+  font-size: 10px;
+}
+
+.split-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+.split-menu-item {
+  text-align: left;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.split-menu-item:hover {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+
 /* identified labels are buttons: click to assign the speaker to a person */
 button.speaker-chip-btn {
   border: none;

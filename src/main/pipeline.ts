@@ -74,7 +74,8 @@ export async function processMeeting(id: string): Promise<void> {
   }
 }
 
-export async function summarizeMeeting(id: string): Promise<void> {
+/** modelOverride: one-off model for this run (the Regenerate menu); default is Settings */
+export async function summarizeMeeting(id: string, modelOverride?: string): Promise<void> {
   let meeting = readMeeting(id)
   const transcript = meeting?.transcript
   if (!meeting || !transcript || transcript.length === 0) return
@@ -88,7 +89,7 @@ export async function summarizeMeeting(id: string): Promise<void> {
       .slice(0, 40)
     const summary = await summarizeTranscript(
       transcript,
-      settings.claudeModel,
+      modelOverride ?? settings.claudeModel,
       knownNames,
       settings.vocabulary,
       meeting.notes,

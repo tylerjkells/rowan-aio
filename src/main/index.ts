@@ -344,8 +344,8 @@ function registerIpc(): void {
   ipcMain.handle('meetings:retry', (_e, id: string) => {
     processMeeting(id)
   })
-  ipcMain.handle('meetings:resummarize', (_e, id: string) => {
-    summarizeMeeting(id)
+  ipcMain.handle('meetings:resummarize', (_e, id: string, model?: string) => {
+    summarizeMeeting(id, model)
   })
   ipcMain.handle('update:install', () => {
     autoUpdater.quitAndInstall()

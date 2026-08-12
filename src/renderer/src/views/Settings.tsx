@@ -30,12 +30,12 @@ const CLAUDE_MODELS = [
   {
     id: 'claude-haiku-4-5',
     title: 'Claude Haiku 4.5',
-    desc: 'Cheapest. Good summaries, but on long meetings small details (a date, a number, who owns a task) can slip.'
+    desc: 'Recommended default: good summaries for pennies. On long meetings small details can slip — upgrade those from the Regenerate menu.'
   },
   {
     id: 'claude-sonnet-5',
     title: 'Claude Sonnet 5',
-    desc: 'Recommended for meetings that matter: far more reliable on details, a few cents more per meeting.'
+    desc: 'Far more reliable on details, at roughly 4x the cost. Worth it when every meeting matters.'
   },
   { id: 'claude-opus-4-8', title: 'Claude Opus 4.8', desc: 'Highest quality, highest cost.' }
 ]
@@ -373,8 +373,8 @@ export function SettingsView({
             </p>
           )}
 
-          <div className="card-subhead">Model</div>
-          <div className="opt-list" role="radiogroup" aria-label="Summary model">
+          <div className="card-subhead">Default model</div>
+          <div className="opt-list" role="radiogroup" aria-label="Default summary model">
             {CLAUDE_MODELS.map((m) => (
               <OptRow
                 key={m.id}
