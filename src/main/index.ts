@@ -59,7 +59,13 @@ import { buildDigest } from './digest'
 import { seriesSiblings, seriesData } from './series'
 import { identifySpeakers } from './identify'
 import { getUsage } from './usage'
-import { applySystemSettings, isQuitting, startHidden } from './system'
+import {
+  applySystemSettings,
+  isQuitting,
+  registerWindowFactory,
+  showMainWindow,
+  startHidden
+} from './system'
 import { runBackup, startAutoBackup } from './backup'
 import { actionRollup, identityContext } from './identity'
 import { claudeConnectionStatus, connectClaude, disconnectClaude } from './claudeConnect'
@@ -120,6 +126,11 @@ function createWindow(): BrowserWindow {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
+  // a renderer that dies while hidden in the tray would otherwise show as an
+  // empty window shell next time something brings the app forward
+  win.webContents.on('render-process-gone', (_e, details) => {
+    if (details.reason !== 'clean-exit') win.webContents.reload()
+  })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -142,14 +153,9 @@ app.setAppUserModelId('com.tylerkells.meetingscribe')
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
-    const win = BrowserWindow.getAllWindows()[0]
-    if (win) {
-      if (win.isMinimized()) win.restore()
-      win.show()
-      win.focus()
-    }
-  })
+  // a second launch (including a notification click routed through the OS)
+  // brings the existing instance forward, recovering the window if needed
+  app.on('second-instance', () => showMainWindow())
 }
 
 app.whenReady().then(() => {
@@ -214,6 +220,7 @@ app.whenReady().then(() => {
   })
 
   registerIpc()
+  registerWindowFactory(createWindow)
   createWindow()
   setupAutoUpdate()
   startRecordNudge()

@@ -28,13 +28,34 @@ function mainWindow(): BrowserWindow | null {
   return BrowserWindow.getAllWindows()[0] ?? null
 }
 
+/** index.ts hands us its window creator so show paths can recover from a missing window */
+let windowFactory: (() => BrowserWindow) | null = null
+export function registerWindowFactory(factory: () => BrowserWindow): void {
+  windowFactory = factory
+}
+
+/**
+ * Bring the app forward, whatever state it is in. After hours hidden in the
+ * tray the renderer process can be gone (crashed or killed by the OS) — naively
+ * showing that window presents an empty shell, so reload it; and if the window
+ * itself is gone, make a new one.
+ */
 export function showMainWindow(page?: 'record'): void {
-  const win = mainWindow()
-  if (!win) return
+  let win = mainWindow()
+  if (!win || win.isDestroyed()) {
+    if (!windowFactory) return
+    win = windowFactory()
+  } else if (win.webContents.isCrashed()) {
+    win.webContents.reload()
+  }
   if (win.isMinimized()) win.restore()
   win.show()
   win.focus()
-  if (page === 'record') win.webContents.send('nudge:openRecord')
+  if (page === 'record') {
+    const wc = win.webContents
+    if (wc.isLoading()) wc.once('did-finish-load', () => wc.send('nudge:openRecord'))
+    else wc.send('nudge:openRecord')
+  }
 }
 
 function ensureTray(): void {
