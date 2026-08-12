@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.15.0': [
+    'Fix the transcript itself: hover any line to edit it in place, delete it, or delete everything from that line to the end — perfect for cleaning up a recording you forgot to stop. Then hit Regenerate summary and the notes catch up.'
+  ],
   '0.14.0': [
     'Pick a model per meeting: summaries default to Claude Haiku (cheap), and the Regenerate button now has a ▾ menu to rerun any single meeting with Sonnet or Opus when the details really matter.',
     'Forgot to end a recording? Long stretches of office noise used to produce garbled repeated text that could break the summary entirely — that text is now cleaned up automatically and summaries have more room to breathe.',
