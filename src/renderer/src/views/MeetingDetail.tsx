@@ -196,6 +196,10 @@ export function MeetingView({
   const [identifying, setIdentifying] = useState(false)
   const [identifyError, setIdentifyError] = useState<string | null>(null)
   const [playheadMs, setPlayheadMs] = useState(-1)
+  const [editIdx, setEditIdx] = useState<number | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  const [transcriptEdited, setTranscriptEdited] = useState(false)
+  const cancelEditRef = useRef(false)
   const playerRef = useRef<PlayerControl | null>(null)
   const titleRef = useRef<HTMLInputElement>(null)
   const [confirmEl, confirm] = useConfirm()
@@ -303,6 +307,49 @@ export function MeetingView({
   const transcriptOpen = transcriptToggled ?? (focusMs !== undefined || !meeting.summary)
   // people offered when assigning a transcript speaker label to a real person
   const speakerChoices = [...new Set([...knownOwners, ...(meeting.attendees ?? [])])]
+
+  async function saveSegmentEdit(): Promise<void> {
+    const idx = editIdx
+    setEditIdx(null)
+    if (cancelEditRef.current) {
+      cancelEditRef.current = false
+      return
+    }
+    if (idx === null || !meeting?.transcript?.[idx]) return
+    const original = meeting.transcript[idx].text
+    if (editDraft.trim() === original.trim()) return
+    // an emptied line is a delete — confirm it like one
+    if (!editDraft.trim()) {
+      removeSegments(idx, idx)
+      return
+    }
+    const updated = await window.scribe.meetings.editSegment(meeting.id, idx, editDraft)
+    if (updated) {
+      setMeeting(updated)
+      setTranscriptEdited(true)
+    }
+  }
+
+  async function removeSegments(from: number, to: number): Promise<void> {
+    if (!meeting) return
+    const count = to - from + 1
+    const sure = await confirm({
+      title: count === 1 ? 'Delete this transcript line?' : `Delete ${count} transcript lines?`,
+      body:
+        (count === 1
+          ? 'The line is removed from the transcript.'
+          : 'Everything from this line to the end of the transcript is removed.') +
+        ' The audio recording is not changed. This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true
+    })
+    if (!sure) return
+    const updated = await window.scribe.meetings.deleteSegments(meeting.id, from, to)
+    if (updated) {
+      setMeeting(updated)
+      setTranscriptEdited(true)
+    }
+  }
 
   return (
     <div className="main-narrow">
@@ -596,6 +643,11 @@ export function MeetingView({
                     {identifyError}
                   </span>
                 )}
+                {transcriptEdited && meeting.summary && (
+                  <span className="field-note ok" role="status">
+                    Transcript changed — use Regenerate summary to update the notes.
+                  </span>
+                )}
               </div>
               <div className="transcript">
                 {meeting.transcript.map((seg, i) => {
@@ -634,8 +686,59 @@ export function MeetingView({
                             }}
                           />
                         )}
-                        {seg.text}
+                        {editIdx === i ? (
+                          <textarea
+                            className="text-input seg-edit-input"
+                            autoFocus
+                            value={editDraft}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => setEditDraft(e.target.value)}
+                            onBlur={saveSegmentEdit}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault()
+                                ;(e.target as HTMLTextAreaElement).blur()
+                              } else if (e.key === 'Escape') {
+                                cancelEditRef.current = true
+                                ;(e.target as HTMLTextAreaElement).blur()
+                              }
+                            }}
+                            aria-label="Edit transcript line"
+                          />
+                        ) : (
+                          seg.text
+                        )}
                       </span>
+                      {editIdx !== i && (
+                        <span className="seg-tools" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            className="seg-tool"
+                            title="Edit this line"
+                            onClick={() => {
+                              setEditDraft(seg.text)
+                              setEditIdx(i)
+                            }}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            className="seg-tool"
+                            title="Delete this line"
+                            onClick={() => removeSegments(i, i)}
+                          >
+                            ✕
+                          </button>
+                          {i < meeting.transcript!.length - 1 && (
+                            <button
+                              className="seg-tool"
+                              title="Delete from here to the end"
+                              onClick={() => removeSegments(i, meeting.transcript!.length - 1)}
+                            >
+                              ✕↓
+                            </button>
+                          )}
+                        </span>
+                      )}
                     </div>
                   )
                 })}

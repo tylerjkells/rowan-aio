@@ -452,6 +452,33 @@ function registerIpc(): void {
     }
   )
 
+  ipcMain.handle('meetings:editSegment', (_e, id: string, index: number, text: string) => {
+    const m = readMeeting(id)
+    if (!m?.transcript || !m.transcript[index]) return m ?? null
+    const t = String(text).trim()
+    if (t) m.transcript[index] = { ...m.transcript[index], text: t }
+    else m.transcript.splice(index, 1) // clearing a line deletes it
+    writeMeeting(m)
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('meeting:updated', m)
+    }
+    return m
+  })
+
+  ipcMain.handle('meetings:deleteSegments', (_e, id: string, from: number, to: number) => {
+    const m = readMeeting(id)
+    if (!m?.transcript?.length) return m ?? null
+    const start = Math.max(0, Math.floor(from))
+    const end = Math.min(m.transcript.length - 1, Math.floor(to))
+    if (start > end) return m
+    m.transcript.splice(start, end - start + 1)
+    writeMeeting(m)
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('meeting:updated', m)
+    }
+    return m
+  })
+
   ipcMain.handle('meetings:renameSpeaker', (_e, id: string, from: string, to: string) => {
     const m = readMeeting(id)
     if (!m?.transcript || !from.trim() || !to.trim()) return m ?? null

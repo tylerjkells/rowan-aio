@@ -1009,6 +1009,49 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/* per-line transcript editing: tools appear on hover */
+.transcript-seg {
+  position: relative;
+}
+
+.seg-tools {
+  position: absolute;
+  top: 2px;
+  right: var(--s2);
+  display: none;
+  gap: 2px;
+}
+
+.transcript-seg:hover .seg-tools {
+  display: inline-flex;
+}
+
+.seg-tool {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg-raised);
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.seg-tool:hover {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+
+.seg-edit-input {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
 .transcript-text {
   color: var(--ink-soft);
   text-wrap: pretty;
