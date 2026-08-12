@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.14.0': [
+    'Pick a model per meeting: summaries default to Claude Haiku (cheap), and the Regenerate button now has a ▾ menu to rerun any single meeting with Sonnet or Opus when the details really matter.',
+    'Forgot to end a recording? Long stretches of office noise used to produce garbled repeated text that could break the summary entirely — that text is now cleaned up automatically and summaries have more room to breathe.',
+    'Clicking a “Meeting started — record it?” notification now reliably opens the app, even when it had been sitting in the tray for a long time.'
+  ],
   '0.13.1': [
     'Shared action items now list everyone who took them on (“Caroline, Andrew, Brian”) in a single row — each person still sees the task under their own name in the Action items view, and nobody gets dropped.'
   ],
