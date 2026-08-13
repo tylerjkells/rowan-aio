@@ -68,6 +68,7 @@ import {
   removeToolboxGuide,
   removeToolboxImage,
   removeToolboxQuery,
+  importToolboxQueries,
   saveToolboxQuery,
   updateToolboxGuide,
   saveToolboxFileCopy,
@@ -812,6 +813,7 @@ function registerIpc(): void {
       saveToolboxQuery(input)
   )
   ipcMain.handle('toolbox:removeQuery', (_e, id: string) => removeToolboxQuery(id))
+  ipcMain.handle('toolbox:importQueries', () => importToolboxQueries())
   ipcMain.handle('toolbox:addFiles', () => addToolboxFiles())
   ipcMain.handle('toolbox:saveFileCopy', (_e, id: string) => saveToolboxFileCopy(id))
   ipcMain.handle('toolbox:removeFile', (_e, id: string) => removeToolboxFile(id))

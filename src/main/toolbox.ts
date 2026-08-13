@@ -270,6 +270,48 @@ export function saveToolboxQuery(input: {
   return data
 }
 
+/**
+ * Bulk-load queries from .sql/.txt files: each file becomes a query named
+ * after the file (extension dropped). A file whose name matches an existing
+ * query overwrites that query's SQL, so a folder can be re-imported safely.
+ */
+export async function importToolboxQueries(): Promise<
+  { data: ToolboxData; added: number; updated: number } | null
+> {
+  const res = await dialog.showOpenDialog({
+    title: 'Upload SQL files',
+    filters: [
+      { name: 'SQL or text', extensions: ['sql', 'txt'] },
+      { name: 'All files', extensions: ['*'] }
+    ],
+    properties: ['openFile', 'multiSelections']
+  })
+  if (res.canceled || res.filePaths.length === 0) return null
+  const data = readToolbox()
+  let added = 0
+  let updated = 0
+  for (const src of res.filePaths) {
+    let sql = ''
+    try {
+      sql = readFileSync(src, 'utf8').trim()
+    } catch {
+      continue // unreadable file: skip, keep importing the rest
+    }
+    if (!sql) continue
+    const name = basename(src, extname(src)).trim().slice(0, 120) || basename(src)
+    const existing = data.queries.find((q) => q.name.toLowerCase() === name.toLowerCase())
+    if (existing) {
+      existing.sql = sql
+      updated++
+    } else {
+      data.queries.unshift({ id: randomUUID(), name, sql, addedAt: new Date().toISOString() })
+      added++
+    }
+  }
+  if (added + updated > 0) write(data)
+  return { data, added, updated }
+}
+
 export function removeToolboxQuery(id: string): ToolboxData {
   const data = readToolbox()
   data.queries = data.queries.filter((q) => q.id !== id)

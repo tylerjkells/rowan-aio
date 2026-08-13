@@ -257,6 +257,8 @@ const api = {
     }): Promise<ToolboxData> => ipcRenderer.invoke('toolbox:saveQuery', input),
     removeQuery: (id: string): Promise<ToolboxData> =>
       ipcRenderer.invoke('toolbox:removeQuery', id),
+    importQueries: (): Promise<{ data: ToolboxData; added: number; updated: number } | null> =>
+      ipcRenderer.invoke('toolbox:importQueries'),
     addFiles: (): Promise<ToolboxData | null> => ipcRenderer.invoke('toolbox:addFiles'),
     saveFileCopy: (id: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('toolbox:saveFileCopy', id),

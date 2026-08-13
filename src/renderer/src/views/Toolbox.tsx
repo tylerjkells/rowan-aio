@@ -215,7 +215,21 @@ export function ToolboxView(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [editingQuery, setEditingQuery] = useState<ToolboxQuery | 'new' | null>(null)
   const [openQueryId, setOpenQueryId] = useState<string | null>(null)
+  const [importNote, setImportNote] = useState<string | null>(null)
   const [confirmDialog, confirm] = useConfirm()
+
+  // bulk upload: each .sql/.txt becomes a query named after the file
+  async function importQueries(): Promise<void> {
+    const r = await window.scribe.toolbox.importQueries()
+    if (!r) return
+    setData(r.data)
+    const parts = [
+      r.added > 0 ? `${r.added} added` : '',
+      r.updated > 0 ? `${r.updated} updated` : ''
+    ].filter(Boolean)
+    setImportNote(parts.length > 0 ? `${parts.join(', ')} ✓` : 'Files were empty')
+    setTimeout(() => setImportNote(null), 3000)
+  }
 
   async function copyQuery(q: ToolboxQuery): Promise<void> {
     await navigator.clipboard.writeText(q.sql)
@@ -366,9 +380,14 @@ export function ToolboxView(): React.JSX.Element {
             </button>
           )}
           {tab === 'queries' && (
-            <button className="btn" onClick={() => setEditingQuery('new')}>
-              Add query
-            </button>
+            <>
+              <button className="btn" onClick={importQueries}>
+                {importNote ?? 'Upload .sql files'}
+              </button>
+              <button className="btn" onClick={() => setEditingQuery('new')}>
+                Add query
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -536,6 +555,9 @@ export function ToolboxView(): React.JSX.Element {
             </p>
             <button className="btn btn-primary" onClick={() => setEditingQuery('new')}>
               Add query
+            </button>
+            <button className="btn" onClick={importQueries}>
+              {importNote ?? 'Upload .sql files'}
             </button>
           </div>
         ) : (

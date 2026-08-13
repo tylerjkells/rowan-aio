@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.19.0': [
+    'Bulk-load your SQL library: Toolbox → SQL → “Upload .sql files” takes any number of .sql or .txt files at once — each becomes a saved query named after its file, and re-uploading a file with the same name updates that query in place.'
+  ],
   '0.18.0': [
     'Rowan AIO has a real icon now — Rowan Brown badge, gold R — and it finally shows up in the Windows taskbar instead of the stock Electron logo (the old icon lacked the 256px frame Windows wants).',
     'The window titlebar follows your theme: pick Paper, Notion, or iOS and the frame goes light instead of staying dark.',
