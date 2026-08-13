@@ -15,11 +15,23 @@ import { ImportView } from './views/Import'
 import { AutoEndWatch } from './AutoEnd'
 import { TodayView } from './views/Today'
 import { PeopleView, PersonView } from './views/People'
+import { LinksView } from './views/Links'
+import { BrandView } from './views/Brand'
 import { SeriesView } from './views/Series'
 import { AskWidget } from './AskWidget'
 import { Digest } from './Digest'
 import { WhatsNew } from './WhatsNew'
-import { MicIcon, ListIcon, GearIcon, CheckIcon, TodayIcon, UsersIcon, formatDuration } from './ui'
+import {
+  MicIcon,
+  ListIcon,
+  GearIcon,
+  CheckIcon,
+  TodayIcon,
+  UsersIcon,
+  LinkIcon,
+  PaletteIcon,
+  formatDuration
+} from './ui'
 
 export type View =
   | { name: 'today' }
@@ -29,6 +41,8 @@ export type View =
   | { name: 'actions' }
   | { name: 'people' }
   | { name: 'person'; person: string }
+  | { name: 'links' }
+  | { name: 'brand' }
   | { name: 'series'; title: string }
   | { name: 'import' }
   | { name: 'settings' }
@@ -156,6 +170,18 @@ export default function App(): React.JSX.Element {
         >
           <UsersIcon /> People
         </button>
+        <button
+          className={`nav-btn ${view.name === 'links' ? 'active' : ''}`}
+          onClick={() => setView({ name: 'links' })}
+        >
+          <LinkIcon /> Links
+        </button>
+        <button
+          className={`nav-btn ${view.name === 'brand' ? 'active' : ''}`}
+          onClick={() => setView({ name: 'brand' })}
+        >
+          <PaletteIcon /> Brand
+        </button>
         <div className="sidebar-spacer" />
         <button
           className={`nav-btn ${view.name === 'settings' ? 'active' : ''}`}
@@ -265,6 +291,8 @@ export default function App(): React.JSX.Element {
               onOpenPerson={(person) => setView({ name: 'person', person })}
             />
           )}
+          {view.name === 'links' && <LinksView />}
+          {view.name === 'brand' && <BrandView />}
           {view.name === 'import' && (
             <ImportView
               onDone={(m) => {

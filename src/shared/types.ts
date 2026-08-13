@@ -197,6 +197,37 @@ export interface WeeklyDigest {
   byPerson: { name: string; count: number }[]
 }
 
+/** one saved link in the link hub */
+export interface LinkEntry {
+  id: string
+  name: string
+  url: string
+  category: string
+  note?: string
+  pinned?: boolean
+}
+
+/** one color in the brand guide */
+export interface BrandColor {
+  name: string
+  /** #RRGGBB; null only for print-only spot colors */
+  hex: string | null
+  pantone?: string
+  cmyk?: number[] | null
+  printOnly?: boolean
+}
+
+export interface BrandPalette {
+  name: string
+  colors: BrandColor[]
+}
+
+export interface BrandData {
+  palettes: BrandPalette[]
+  notes: string[]
+  typography?: { primarySans: string; alternatives: string[] }
+}
+
 /** editable directory fields for one colleague */
 export interface PersonDetails {
   title?: string

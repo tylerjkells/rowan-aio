@@ -3,6 +3,7 @@ import type {
   ActionRollupItem,
   AppSettings,
   AutoEndReason,
+  BrandData,
   BulkProgress,
   BulkScan,
   BulkSelection,
@@ -12,6 +13,7 @@ import type {
   EngineStatus,
   EventBrief,
   LibraryQA,
+  LinkEntry,
   Meeting,
   MeetingListItem,
   PersonDetails,
@@ -193,6 +195,17 @@ const api = {
     setDetails: (name: string, details: PersonDetails): Promise<PersonSummary[]> =>
       ipcRenderer.invoke('people:setDetails', name, details),
     remove: (name: string): Promise<PersonSummary[]> => ipcRenderer.invoke('people:remove', name)
+  },
+  links: {
+    list: (): Promise<LinkEntry[]> => ipcRenderer.invoke('links:list'),
+    save: (entry: Partial<LinkEntry> & Omit<LinkEntry, 'id'>): Promise<LinkEntry[]> =>
+      ipcRenderer.invoke('links:save', entry),
+    remove: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:remove', id),
+    togglePin: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:togglePin', id)
+  },
+  brand: {
+    get: (): Promise<BrandData> => ipcRenderer.invoke('brand:get'),
+    save: (data: BrandData): Promise<BrandData> => ipcRenderer.invoke('brand:save', data)
   },
   actions: {
     list: (): Promise<ActionRollupItem[]> => ipcRenderer.invoke('actions:list'),

@@ -42,6 +42,8 @@ import {
   removePerson
 } from './settings'
 import { mergeDetails, removeDetails, setDetails } from './directory'
+import { listLinks, removeLink, saveLink, toggleLinkPin } from './links'
+import { getBrand, saveBrand } from './brand'
 import {
   refreshCalendar,
   getTodayEvents,
@@ -84,8 +86,10 @@ import type {
   ActionRollupItem,
   AppSettings,
   AutoEndReason,
+  BrandData,
   BulkSelection,
   EnergySample,
+  LinkEntry,
   Meeting,
   PersonDetails,
   RecordingMode,
@@ -651,6 +655,16 @@ function registerIpc(): void {
     removeDetails(name)
     return listPeople()
   })
+
+  ipcMain.handle('links:list', () => listLinks())
+  ipcMain.handle('links:save', (_e, entry: Partial<LinkEntry> & Omit<LinkEntry, 'id'>) =>
+    saveLink(entry)
+  )
+  ipcMain.handle('links:remove', (_e, id: string) => removeLink(id))
+  ipcMain.handle('links:togglePin', (_e, id: string) => toggleLinkPin(id))
+
+  ipcMain.handle('brand:get', () => getBrand())
+  ipcMain.handle('brand:save', (_e, data: BrandData) => saveBrand(data))
 
   ipcMain.handle('actions:list', (): ActionRollupItem[] => {
     const ctx = identityContext()

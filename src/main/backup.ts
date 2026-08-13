@@ -22,7 +22,14 @@ export interface BackupResult {
 
 export async function runBackup(destZip: string, skipAudio: boolean): Promise<BackupResult> {
   const userData = app.getPath('userData')
-  const targets = ['meetings', 'settings.json', 'ask.json', 'directory.json'].filter((t) =>
+  const targets = [
+    'meetings',
+    'settings.json',
+    'ask.json',
+    'directory.json',
+    'links.json',
+    'brand.json'
+  ].filter((t) =>
     existsSync(join(userData, t))
   )
   if (!targets.includes('meetings')) {

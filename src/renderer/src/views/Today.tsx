@@ -4,6 +4,7 @@ import type {
   AppSettings,
   CalendarEvent,
   EventBrief,
+  LinkEntry,
   MeetingListItem
 } from '../../../shared/types'
 import { ChevronIcon, formatDuration, formatWhen, isOverdue, MicIcon, StageBadge } from '../ui'
@@ -141,6 +142,7 @@ export function TodayView({
   const [calLoaded, setCalLoaded] = useState(false)
   const [actions, setActions] = useState<ActionRollupItem[]>([])
   const [briefs, setBriefs] = useState<Map<string, EventBrief>>(new Map())
+  const [pinnedLinks, setPinnedLinks] = useState<LinkEntry[]>([])
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const autoExpanded = useRef(false)
   // re-render every minute so the "Now" marker tracks the clock
@@ -149,6 +151,7 @@ export function TodayView({
   useEffect(() => {
     window.scribe.settings.get().then(setSettings)
     window.scribe.actions.list().then(setActions)
+    window.scribe.links.list().then((ls) => setPinnedLinks(ls.filter((l) => l.pinned)))
     window.scribe.calendar.today().then((r) => {
       setEvents(r.events)
       setCalError(r.error ?? null)
@@ -227,6 +230,23 @@ export function TodayView({
           <span className="count-note">{dateLabel}</span>
         </div>
       </div>
+
+      {pinnedLinks.length > 0 && (
+        <div className="today-links">
+          {pinnedLinks.map((l) => (
+            <a
+              key={l.id}
+              className="today-link-chip"
+              href={l.url}
+              target="_blank"
+              rel="noreferrer"
+              title={l.url}
+            >
+              {l.name}
+            </a>
+          ))}
+        </div>
+      )}
 
       <div className="today-col">
         <section className="today-section">

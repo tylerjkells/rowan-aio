@@ -287,6 +287,214 @@ button:disabled {
   flex: 1;
 }
 
+/* ---- link hub ---- */
+
+.link-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.link-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+}
+
+.link-main {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.link-main:hover .link-name {
+  color: var(--accent);
+}
+
+.link-name {
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.link-host {
+  font-size: 12px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.link-note {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  flex: none;
+}
+
+.link-pin.pinned {
+  color: var(--accent);
+}
+
+.pd-check {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: var(--s3) 0;
+}
+
+/* pinned links strip on Today */
+.today-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+
+.today-link-chip {
+  padding: 3px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.today-link-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---- brand guide ---- */
+
+.swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--s3);
+}
+
+.swatch-card {
+  position: relative;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.swatch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 72px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.swatch-print-only {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--bg-overlay),
+    var(--bg-overlay) 6px,
+    var(--bg-raised) 6px,
+    var(--bg-raised) 12px
+  );
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+.swatch-info {
+  padding: var(--s2) var(--s3) var(--s3);
+}
+
+.swatch-name {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.swatch-detail {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.swatch-copies {
+  display: flex;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
+.swatch-copy {
+  padding: 1px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
+}
+
+.swatch-copy:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.swatch-edit {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  opacity: 0;
+  background: var(--bg-overlay);
+}
+
+.swatch-card:hover .swatch-edit {
+  opacity: 1;
+}
+
+.hex-input {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.hex-preview {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--line-soft);
+}
+
+.brand-notes {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--ink-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.brand-type {
+  color: var(--ink-soft);
+  margin: 0;
+}
+
 /* ---- org directory ---- */
 
 /* title · department under a name in the people list */

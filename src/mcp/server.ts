@@ -278,6 +278,42 @@ server.registerTool(
   }
 )
 
+server.registerTool(
+  'list_links',
+  {
+    description:
+      'The org link hub: saved work links (dashboards, data centers, tools) with name, URL, category, note, and pinned flag.',
+    inputSchema: {}
+  },
+  async () => {
+    let links: unknown = []
+    try {
+      links = JSON.parse(readFileSync(join(dataDir, 'links.json'), 'utf-8'))
+    } catch {
+      // no links saved yet
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(links, null, 2) }] }
+  }
+)
+
+server.registerTool(
+  'get_brand_guide',
+  {
+    description:
+      'The Rowan brand guide: color palettes (name, hex, Pantone, CMYK), usage notes, and typography.',
+    inputSchema: {}
+  },
+  async () => {
+    let brand: unknown = null
+    try {
+      brand = JSON.parse(readFileSync(join(dataDir, 'brand.json'), 'utf-8'))
+    } catch {
+      // brand guide not initialized yet
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(brand, null, 2) }] }
+  }
+)
+
 async function main(): Promise<void> {
   await server.connect(new StdioServerTransport())
 }
