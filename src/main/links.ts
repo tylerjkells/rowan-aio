@@ -1,4 +1,4 @@
-import { app, dialog } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { extname, join } from 'path'
 import { randomUUID } from 'crypto'
@@ -88,6 +88,53 @@ export async function pickLinkThumb(id: string): Promise<LinkEntry[] | null> {
   link.thumb = name
   write(links)
   return links
+}
+
+/**
+ * Load the link's page in a hidden, sandboxed window and screenshot it as
+ * the thumbnail. Pages behind a login capture the login page — that's what
+ * the manual image picker is for.
+ */
+export async function autoLinkThumb(
+  id: string
+): Promise<{ links?: LinkEntry[]; error?: string }> {
+  const links = listLinks()
+  const link = links.find((l) => l.id === id)
+  if (!link) return { links }
+
+  const win = new BrowserWindow({
+    show: false,
+    width: 1280,
+    height: 720,
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      // its own cookie jar, fully separate from the app
+      partition: 'thumb-capture'
+    }
+  })
+  try {
+    await Promise.race([
+      win.loadURL(link.url),
+      new Promise((_r, reject) => setTimeout(() => reject(new Error('Page took too long')), 20_000))
+    ])
+    // let late-rendering pages (charts, dashboards) settle
+    await new Promise((r) => setTimeout(r, 2000))
+    const image = await win.webContents.capturePage()
+    const jpeg = image.resize({ width: 800 }).toJPEG(82)
+    const name = `${id}-${Date.now()}.jpg`
+    mkdirSync(thumbsDir(), { recursive: true })
+    writeFileSync(join(thumbsDir(), name), jpeg)
+    deleteThumbFile(link.thumb)
+    link.thumb = name
+    write(links)
+    return { links }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Could not capture the page' }
+  } finally {
+    win.destroy()
+  }
 }
 
 export function clearLinkThumb(id: string): LinkEntry[] {

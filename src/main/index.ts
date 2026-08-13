@@ -45,6 +45,7 @@ import {
 import { mergeDetails, removeDetails, setDetails } from './directory'
 import { applyDirectoryImport, scanDirectoryCsv } from './directoryImport'
 import {
+  autoLinkThumb,
   clearLinkThumb,
   listLinks,
   pickLinkThumb,
@@ -723,6 +724,7 @@ function registerIpc(): void {
   ipcMain.handle('links:remove', (_e, id: string) => removeLink(id))
   ipcMain.handle('links:togglePin', (_e, id: string) => toggleLinkPin(id))
   ipcMain.handle('links:pickThumb', (_e, id: string) => pickLinkThumb(id))
+  ipcMain.handle('links:autoThumb', (_e, id: string) => autoLinkThumb(id))
   ipcMain.handle('links:clearThumb', (_e, id: string) => clearLinkThumb(id))
 
   ipcMain.handle('brand:get', () => getBrand())
@@ -734,7 +736,7 @@ function registerIpc(): void {
     disconnectClickup()
     return getSettings()
   })
-  ipcMain.handle('clickup:refresh', () => refreshClickup())
+  ipcMain.handle('clickup:refresh', (_e, scope: 'mine' | 'all' = 'mine') => refreshClickup(scope))
   ipcMain.handle('clickup:lists', () => clickupLists())
   ipcMain.handle('clickup:push', (_e, input: ClickupPushInput) => pushClickupTask(input))
   ipcMain.handle(

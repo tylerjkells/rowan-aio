@@ -217,6 +217,8 @@ const api = {
     togglePin: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:togglePin', id),
     pickThumb: (id: string): Promise<LinkEntry[] | null> =>
       ipcRenderer.invoke('links:pickThumb', id),
+    autoThumb: (id: string): Promise<{ links?: LinkEntry[]; error?: string }> =>
+      ipcRenderer.invoke('links:autoThumb', id),
     clearThumb: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:clearThumb', id)
   },
   brand: {
@@ -227,8 +229,10 @@ const api = {
     status: (): Promise<ClickupStatus> => ipcRenderer.invoke('clickup:status'),
     connect: (token: string): Promise<ClickupStatus> => ipcRenderer.invoke('clickup:connect', token),
     disconnect: (): Promise<AppSettings> => ipcRenderer.invoke('clickup:disconnect'),
-    refresh: (): Promise<{ tasks: ClickupTask[]; events: ClickupActivityEvent[] }> =>
-      ipcRenderer.invoke('clickup:refresh'),
+    refresh: (
+      scope: 'mine' | 'all'
+    ): Promise<{ tasks: ClickupTask[]; events: ClickupActivityEvent[] }> =>
+      ipcRenderer.invoke('clickup:refresh', scope),
     lists: (): Promise<ClickupList[]> => ipcRenderer.invoke('clickup:lists'),
     push: (input: ClickupPushInput): Promise<ClickupPushResult> =>
       ipcRenderer.invoke('clickup:push', input),

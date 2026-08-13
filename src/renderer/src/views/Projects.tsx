@@ -92,6 +92,9 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   const [mode, setMode] = useState<ProjectsMode>(
     () => (localStorage.getItem('projectsView') as ProjectsMode) || 'due'
   )
+  const [scope, setScope] = useState<'mine' | 'all'>(
+    () => (localStorage.getItem('projectsScope') as 'mine' | 'all') || 'mine'
+  )
   const [collapsed, setCollapsed] = useState<Set<string> | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -106,7 +109,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
       const st = await window.scribe.clickup.status()
       setStatus(st)
       if (st.connected) {
-        const r = await window.scribe.clickup.refresh()
+        const r = await window.scribe.clickup.refresh(scope)
         setTasks(r.tasks)
         setEvents(r.events)
       }
@@ -115,11 +118,17 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     } finally {
       setRefreshing(false)
     }
-  }, [])
+  }, [scope])
 
   useEffect(() => {
     load()
   }, [load])
+
+  function switchScope(s: 'mine' | 'all'): void {
+    setScope(s)
+    localStorage.setItem('projectsScope', s)
+    // load() reruns via its scope dependency
+  }
 
   if (!status) return <></>
 
@@ -198,6 +207,10 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     }
   }
 
+  // collaborators worth naming on a row: everyone assigned except yourself
+  const otherAssignees = (t: ClickupTask): string[] =>
+    t.assignees.filter((a) => a !== status?.userName)
+
   const row = (t: ClickupTask, overdueGroup: boolean): React.JSX.Element => {
     const expanded = expandedId === t.id
     const overdue = !!t.dueDate && t.dueDate < todayIso()
@@ -225,6 +238,8 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
             <span className="cu-where">
               {t.folderName && mode === 'due' ? `${t.folderName} / ` : ''}
               {mode === 'due' ? t.listName : t.status}
+              {otherAssignees(t).length > 0 && <> · {otherAssignees(t).join(', ')}</>}
+              {scope === 'all' && t.assignees.length === 0 && <> · Unassigned</>}
             </span>
           </button>
           <span className="cu-meta">
@@ -294,6 +309,26 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
             {status.teamName}
             {tasks && <> · {tasks.length} open {tasks.length === 1 ? 'task' : 'tasks'}</>}
           </span>
+          {mode !== 'activity' && (
+            <div className="mode-toggle view-toggle" role="radiogroup" aria-label="Whose tasks">
+              <button
+                className={scope === 'mine' ? 'active' : ''}
+                role="radio"
+                aria-checked={scope === 'mine'}
+                onClick={() => switchScope('mine')}
+              >
+                Mine
+              </button>
+              <button
+                className={scope === 'all' ? 'active' : ''}
+                role="radio"
+                aria-checked={scope === 'all'}
+                onClick={() => switchScope('all')}
+              >
+                Everyone
+              </button>
+            </div>
+          )}
           <div className="mode-toggle view-toggle" role="radiogroup" aria-label="Group by">
             <button
               className={mode === 'due' ? 'active' : ''}

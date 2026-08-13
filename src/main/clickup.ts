@@ -63,6 +63,7 @@ interface RawTask {
   list: { id: string; name: string }
   folder: { name: string; hidden?: boolean } | null
   priority: { priority: string } | null
+  assignees?: { username: string | null; email: string }[]
 }
 
 let teamCache: RawTeam | null = null
@@ -110,14 +111,15 @@ function toIsoDate(ms: string | null): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
 }
 
-/** Open tasks assigned to the token's user, ordered by due date. */
-export async function myClickupTasks(): Promise<ClickupTask[]> {
+/** Open tasks ordered by due date: the token user's, or everyone's. */
+export async function fetchClickupTasks(scope: 'mine' | 'all'): Promise<ClickupTask[]> {
   const { user } = await req<{ user: { id: number } }>('/user')
   const t = await team()
+  const filter = scope === 'mine' ? `&assignees[]=${user.id}` : ''
   const out: ClickupTask[] = []
   for (let page = 0; page < 10; page++) {
     const r = await req<{ tasks: RawTask[]; last_page?: boolean }>(
-      `/team/${t.id}/task?page=${page}&assignees[]=${user.id}&include_closed=false&subtasks=true&order_by=due_date`
+      `/team/${t.id}/task?page=${page}${filter}&include_closed=false&subtasks=true&order_by=due_date`
     )
     for (const raw of r.tasks) {
       // a done-type status (e.g. "Complete") is finished work even though
@@ -136,7 +138,8 @@ export async function myClickupTasks(): Promise<ClickupTask[]> {
         listName: raw.list.name,
         folderName: raw.folder && !raw.folder.hidden ? raw.folder.name : null,
         priority: raw.priority?.priority ?? null,
-        dateUpdated: raw.date_updated ?? null
+        dateUpdated: raw.date_updated ?? null,
+        assignees: (raw.assignees ?? []).map((a) => a.username ?? a.email)
       })
     }
     if (r.last_page || r.tasks.length === 0) break
@@ -266,12 +269,16 @@ interface RawComment {
   date: string
 }
 
-/** Fetch tasks and turn the differences since last refresh into changelog events. */
-export async function refreshClickup(): Promise<{
+/**
+ * Fetch tasks and turn the differences since last refresh into changelog
+ * events. The changelog always tracks the user's own tasks; the returned
+ * task list follows the requested scope.
+ */
+export async function refreshClickup(scope: 'mine' | 'all' = 'mine'): Promise<{
   tasks: ClickupTask[]
   events: ClickupActivityEvent[]
 }> {
-  const tasks = await myClickupTasks()
+  const tasks = await fetchClickupTasks('mine')
   const store = readActivity()
   const prev = store.snapshot
   const firstRun = Object.keys(prev).length === 0
@@ -350,7 +357,7 @@ export async function refreshClickup(): Promise<{
   store.snapshot = next
   store.events = [...fresh, ...store.events].slice(0, MAX_EVENTS)
   writeActivity(store)
-  return { tasks, events: store.events }
+  return { tasks: scope === 'all' ? await fetchClickupTasks('all') : tasks, events: store.events }
 }
 
 interface RawStatus {

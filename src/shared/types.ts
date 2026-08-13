@@ -216,6 +216,8 @@ export interface ClickupTask {
   priority: string | null
   /** ClickUp's last-modified stamp, used for change detection */
   dateUpdated: string | null
+  /** assignee display names */
+  assignees: string[]
 }
 
 /** one entry in the local ClickUp changelog, produced by diffing refreshes */

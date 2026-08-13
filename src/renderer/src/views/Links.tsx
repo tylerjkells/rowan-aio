@@ -35,6 +35,8 @@ function LinkEditDialog({
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [thumb, setThumb] = useState(link?.thumb)
   const [thumbChanged, setThumbChanged] = useState(false)
+  const [capturing, setCapturing] = useState(false)
+  const [captureError, setCaptureError] = useState<string | null>(null)
 
   async function chooseThumb(): Promise<void> {
     if (!link) return
@@ -42,6 +44,20 @@ function LinkEditDialog({
     if (updated) {
       setThumb(updated.find((l) => l.id === link.id)?.thumb)
       setThumbChanged(true)
+    }
+  }
+
+  async function captureThumb(): Promise<void> {
+    if (!link || capturing) return
+    setCapturing(true)
+    setCaptureError(null)
+    const r = await window.scribe.links.autoThumb(link.id)
+    setCapturing(false)
+    if (r.links) {
+      setThumb(r.links.find((l) => l.id === link.id)?.thumb)
+      setThumbChanged(true)
+    } else {
+      setCaptureError(r.error ?? 'Could not capture the page')
     }
   }
 
@@ -157,6 +173,15 @@ function LinkEditDialog({
             <button type="button" className="btn btn-ghost" onClick={chooseThumb}>
               {thumb ? 'Change image…' : 'Choose image…'}
             </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={captureThumb}
+              disabled={capturing}
+              title="Screenshot the page itself. Pages behind a login will capture the login screen — use Choose image for those."
+            >
+              {capturing ? 'Capturing…' : 'Auto-capture'}
+            </button>
             {thumb && (
               <button type="button" className="btn btn-ghost" onClick={removeThumb}>
                 Remove image
@@ -164,6 +189,7 @@ function LinkEditDialog({
             )}
           </div>
         )}
+        {captureError && <p className="field-note error">{captureError}</p>}
         {!link && (
           <p className="thumb-hint">Save the link first, then edit it to add a card thumbnail.</p>
         )}
