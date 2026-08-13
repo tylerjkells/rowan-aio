@@ -13,9 +13,20 @@ function formatBytes(n: number): string {
 // LOD calcs and formulas lift straight out of the steps.
 // ---------------------------------------------------------------------------
 
-function GuideReader({ guide, onBack }: { guide: ToolboxGuide; onBack: () => void }): React.JSX.Element {
+function GuideReader({
+  guide,
+  onBack,
+  onSaved
+}: {
+  guide: ToolboxGuide
+  onBack: () => void
+  onSaved: (data: ToolboxData) => void
+}): React.JSX.Element {
   const [html, setHtml] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(guide.title)
+  const [saving, setSaving] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -23,13 +34,39 @@ function GuideReader({ guide, onBack }: { guide: ToolboxGuide; onBack: () => voi
   }, [guide.id])
 
   async function copyBlock(e: React.MouseEvent): Promise<void> {
+    if (editing) return
     const block = (e.target as HTMLElement).closest('p, pre, li, td, h1, h2, h3, h4')
     if (!block || !bodyRef.current?.contains(block)) return
     const text = (block as HTMLElement).innerText.trim()
     if (!text) return
     await navigator.clipboard.writeText(text)
+    // feedback lands where the eye is: the block itself flashes…
+    block.classList.add('guide-flash')
+    setTimeout(() => block.classList.remove('guide-flash'), 900)
+    // …and a toast floats at the bottom of the viewport
     setCopied(true)
     setTimeout(() => setCopied(false), 1200)
+  }
+
+  async function save(): Promise<void> {
+    if (saving) return
+    setSaving(true)
+    const edited = bodyRef.current?.innerHTML
+    const data = await window.scribe.toolbox.updateGuide(guide.id, {
+      title: titleDraft.trim() || guide.title,
+      html: edited
+    })
+    if (edited) setHtml(edited)
+    setSaving(false)
+    setEditing(false)
+    onSaved(data)
+  }
+
+  async function cancelEdit(): Promise<void> {
+    setEditing(false)
+    setTitleDraft(guide.title)
+    // re-fetch so any in-place edits are discarded
+    setHtml(await window.scribe.toolbox.guideHtml(guide.id))
   }
 
   return (
@@ -38,12 +75,33 @@ function GuideReader({ guide, onBack }: { guide: ToolboxGuide; onBack: () => voi
         <button className="back-link" onClick={onBack}>
           <BackIcon /> All guides
         </button>
-        <h1>{guide.title}</h1>
+        {editing ? (
+          <input
+            className="text-input guide-title-input"
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            aria-label="Guide title"
+          />
+        ) : (
+          <h1>{guide.title}</h1>
+        )}
         <div className="detail-meta">
           <span>{guide.source}</span>
-          <span className={`guide-copy-hint ${copied ? 'flash' : ''}`}>
-            {copied ? 'Copied ✓' : 'Click any step to copy it'}
-          </span>
+          {!editing && <span className="guide-copy-hint">Click any step to copy it</span>}
+          {editing ? (
+            <>
+              <button className="btn btn-primary" onClick={save} disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button className="btn" onClick={cancelEdit} disabled={saving}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-ghost" onClick={() => setEditing(true)}>
+              Edit
+            </button>
+          )}
         </div>
       </div>
       {html === null ? (
@@ -51,11 +109,14 @@ function GuideReader({ guide, onBack }: { guide: ToolboxGuide; onBack: () => voi
       ) : (
         <div
           ref={bodyRef}
-          className="guide-body"
+          className={`guide-body ${editing ? 'editing' : ''}`}
+          contentEditable={editing}
+          suppressContentEditableWarning
           onClick={copyBlock}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       )}
+      {copied && <div className="copy-toast">Copied ✓</div>}
     </div>
   )
 }
@@ -138,7 +199,17 @@ export function ToolboxView(): React.JSX.Element {
     if (sure) setData(await run())
   }
 
-  if (reading) return <GuideReader guide={reading} onBack={() => setReading(null)} />
+  if (reading)
+    return (
+      <GuideReader
+        guide={reading}
+        onBack={() => setReading(null)}
+        onSaved={(next) => {
+          setData(next)
+          setReading(next.guides.find((g) => g.id === reading.id) ?? null)
+        }}
+      />
+    )
   if (!data) return <></>
 
   return (

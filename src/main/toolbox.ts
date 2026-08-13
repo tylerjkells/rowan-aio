@@ -85,6 +85,27 @@ export function getGuideHtml(id: string): string | null {
   }
 }
 
+/** Rename a guide and/or overwrite its edited HTML. */
+export function updateToolboxGuide(
+  id: string,
+  patch: { title?: string; html?: string }
+): ToolboxData {
+  const data = readToolbox()
+  const guide = data.guides.find((g) => g.id === id)
+  if (guide) {
+    if (patch.title?.trim()) guide.title = patch.title.trim().slice(0, 120)
+    if (typeof patch.html === 'string' && patch.html.trim()) {
+      try {
+        writeFileSync(join(dirs.guides(), id, 'content.html'), patch.html)
+      } catch {
+        // disk hiccup: the title change still persists
+      }
+    }
+    write(data)
+  }
+  return data
+}
+
 export function removeToolboxGuide(id: string): ToolboxData {
   const data = readToolbox()
   data.guides = data.guides.filter((g) => g.id !== id)

@@ -237,6 +237,8 @@ const api = {
     guideHtml: (id: string): Promise<string | null> => ipcRenderer.invoke('toolbox:guideHtml', id),
     removeGuide: (id: string): Promise<ToolboxData> =>
       ipcRenderer.invoke('toolbox:removeGuide', id),
+    updateGuide: (id: string, patch: { title?: string; html?: string }): Promise<ToolboxData> =>
+      ipcRenderer.invoke('toolbox:updateGuide', id, patch),
     addImages: (): Promise<ToolboxData | null> => ipcRenderer.invoke('toolbox:addImages'),
     copyImage: (id: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('toolbox:copyImage', id),

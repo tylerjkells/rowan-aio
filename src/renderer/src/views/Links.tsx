@@ -331,7 +331,7 @@ export function LinksView(): React.JSX.Element {
           )}
         </a>
         <div className="link-card-foot">
-          <a className="link-card-name" href={l.url} target="_blank" rel="noreferrer">
+          <a className="link-card-name" href={l.url} target="_blank" rel="noreferrer" title={l.name}>
             {l.name}
           </a>
           <span className="link-card-tools">

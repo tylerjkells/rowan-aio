@@ -66,6 +66,7 @@ import {
   removeToolboxFile,
   removeToolboxGuide,
   removeToolboxImage,
+  updateToolboxGuide,
   saveToolboxFileCopy,
   toolboxImagesDir
 } from './toolbox'
@@ -760,6 +761,9 @@ function registerIpc(): void {
   ipcMain.handle('toolbox:addGuide', () => addToolboxGuide())
   ipcMain.handle('toolbox:guideHtml', (_e, id: string) => getGuideHtml(id))
   ipcMain.handle('toolbox:removeGuide', (_e, id: string) => removeToolboxGuide(id))
+  ipcMain.handle('toolbox:updateGuide', (_e, id: string, patch: { title?: string; html?: string }) =>
+    updateToolboxGuide(id, patch)
+  )
   ipcMain.handle('toolbox:addImages', () => addToolboxImages())
   ipcMain.handle('toolbox:copyImage', (_e, id: string) => copyToolboxImage(id))
   ipcMain.handle('toolbox:removeImage', (_e, id: string) => removeToolboxImage(id))

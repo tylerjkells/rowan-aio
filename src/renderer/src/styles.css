@@ -530,11 +530,15 @@ button:disabled {
 
 .link-card-name {
   font-weight: 550;
+  font-size: 13px;
+  line-height: 1.3;
   color: var(--ink);
   text-decoration: none;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
 }
 
 .link-card-name:hover {
@@ -1098,13 +1102,52 @@ a.rollup-task:hover {
   overflow-x: auto;
 }
 
-.guide-body p:hover,
-.guide-body li:hover,
-.guide-body pre:hover,
-.guide-body td:hover {
+.guide-body:not(.editing) p:hover,
+.guide-body:not(.editing) li:hover,
+.guide-body:not(.editing) pre:hover,
+.guide-body:not(.editing) td:hover {
   background: var(--accent-tint);
   border-radius: 4px;
   cursor: copy;
+}
+
+/* the clicked block pulses so the confirmation is where the eye already is */
+.guide-body .guide-flash {
+  background: var(--accent-tint-strong) !important;
+  border-radius: 4px;
+  transition: background 0.5s var(--ease-out);
+}
+
+.guide-body.editing {
+  outline: 1px dashed var(--line-strong);
+  outline-offset: 8px;
+  border-radius: 4px;
+  cursor: text;
+}
+
+.guide-title-input {
+  font-size: 20px;
+  font-weight: 650;
+  font-family: var(--font-display);
+  width: 100%;
+}
+
+/* floating copy confirmation, visible at any scroll depth */
+.copy-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
 }
 
 /* image assets */
