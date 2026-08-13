@@ -164,7 +164,8 @@ export function LibraryView({
   )
 }
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+// weekends are dropped from the grid — this is a work calendar
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
@@ -207,14 +208,14 @@ function CalendarView({
     return map
   }, [meetings])
 
-  // 6 rows x 7 columns, weeks starting Monday
+  // 6 rows x 5 columns: weeks starting Monday, weekends skipped
   const days = useMemo(() => {
     const startOffset = (anchor.getDay() + 6) % 7
     const start = new Date(anchor.getFullYear(), anchor.getMonth(), 1 - startOffset)
     return Array.from(
       { length: 42 },
       (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
-    )
+    ).filter((d) => d.getDay() !== 0 && d.getDay() !== 6)
   }, [anchor])
 
   // scheduled calendar events for the visible grid (when a feed is connected)
