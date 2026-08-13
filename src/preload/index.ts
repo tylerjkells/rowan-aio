@@ -13,6 +13,7 @@ import type {
   ClickupPushInput,
   ClickupPushResult,
   ClickupStatus,
+  ClickupStatusOption,
   ClickupTask,
   DirectoryImportRow,
   DirectoryImportScan,
@@ -275,6 +276,16 @@ const api = {
       url?: string
     ): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('clickup:complete', taskId, listId, name, url),
+    listStatuses: (listId: string): Promise<ClickupStatusOption[]> =>
+      ipcRenderer.invoke('clickup:listStatuses', listId),
+    setStatus: (
+      taskId: string,
+      listId: string,
+      status: string,
+      name: string,
+      url?: string
+    ): Promise<{ ok: boolean; finished?: boolean; error?: string }> =>
+      ipcRenderer.invoke('clickup:setStatus', taskId, listId, status, name, url),
     setTaskDue: (
       taskId: string,
       iso: string | null,

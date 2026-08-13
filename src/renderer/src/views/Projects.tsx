@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ClickupActivityEvent, ClickupStatus, ClickupTask } from '../../../shared/types'
+import type {
+  ClickupActivityEvent,
+  ClickupStatus,
+  ClickupStatusOption,
+  ClickupTask
+} from '../../../shared/types'
 
 function todayIso(): string {
   const d = new Date()
@@ -101,6 +106,33 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   const [comment, setComment] = useState('')
   const [commentSent, setCommentSent] = useState(false)
   const [rowError, setRowError] = useState<string | null>(null)
+  const [listStatuses, setListStatuses] = useState<Record<string, ClickupStatusOption[]>>({})
+
+  function loadStatuses(listId: string): void {
+    if (listStatuses[listId]) return
+    window.scribe.clickup
+      .listStatuses(listId)
+      .then((s) => setListStatuses((prev) => ({ ...prev, [listId]: s })))
+  }
+
+  async function changeStatus(t: ClickupTask, status: string): Promise<void> {
+    setRowError(null)
+    const r = await window.scribe.clickup.setStatus(t.id, t.listId, status, t.name, t.url)
+    if (!r.ok) {
+      setRowError(r.error ?? 'Could not change the status')
+      return
+    }
+    if (r.finished) {
+      setTasks((prev) => prev?.filter((x) => x.id !== t.id) ?? null)
+      setExpandedId(null)
+    } else {
+      const color = listStatuses[t.listId]?.find((s) => s.status === status)?.color ?? null
+      setTasks(
+        (prev) =>
+          prev?.map((x) => (x.id === t.id ? { ...x, status, statusColor: color } : x)) ?? null
+      )
+    }
+  }
 
   const load = useCallback(async (): Promise<void> => {
     setRefreshing(true)
@@ -232,6 +264,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
               setExpandedId(expanded ? null : t.id)
               setComment('')
               setRowError(null)
+              if (!expanded) loadStatuses(t.listId)
             }}
           >
             <span className="cu-name">{t.name}</span>
@@ -269,10 +302,24 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
                   onChange={(e) => changeDue(t, e.target.value || null)}
                 />
               </label>
-              <span className="cu-control-status">
-                Status: {t.status}
-                {t.priority && <> · {t.priority}</>}
-              </span>
+              <label className="cu-control">
+                Status
+                <select
+                  className="text-input cu-status-select"
+                  value={t.status}
+                  onChange={(e) => changeStatus(t, e.target.value)}
+                >
+                  {!listStatuses[t.listId]?.some((s) => s.status === t.status) && (
+                    <option value={t.status}>{t.status}</option>
+                  )}
+                  {(listStatuses[t.listId] ?? []).map((s) => (
+                    <option key={s.status} value={s.status}>
+                      {s.status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {t.priority && <span className="cu-control-status">{t.priority}</span>}
               <a className="cu-pushed" href={t.url} target="_blank" rel="noreferrer">
                 Open in ClickUp ↗
               </a>

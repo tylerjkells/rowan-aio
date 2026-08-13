@@ -74,6 +74,7 @@ import {
 } from './toolbox'
 import {
   clickupLists,
+  clickupListStatuses,
   clickupStatus,
   commentClickupTask,
   completeClickupTask,
@@ -81,7 +82,8 @@ import {
   disconnectClickup,
   pushClickupTask,
   refreshClickup,
-  setClickupTaskDue
+  setClickupTaskDue,
+  setClickupTaskStatus
 } from './clickup'
 import {
   refreshCalendar,
@@ -792,6 +794,12 @@ function registerIpc(): void {
     'clickup:complete',
     (_e, taskId: string, listId: string, name: string, url?: string) =>
       completeClickupTask(taskId, listId, name, url)
+  )
+  ipcMain.handle('clickup:listStatuses', (_e, listId: string) => clickupListStatuses(listId))
+  ipcMain.handle(
+    'clickup:setStatus',
+    (_e, taskId: string, listId: string, status: string, name: string, url?: string) =>
+      setClickupTaskStatus(taskId, listId, status, name, url)
   )
   ipcMain.handle(
     'clickup:setTaskDue',

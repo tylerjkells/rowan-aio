@@ -833,6 +833,12 @@ a.rollup-task:hover {
   padding: 3px 8px;
 }
 
+.cu-status-select {
+  width: auto;
+  padding: 3px 8px;
+  text-transform: capitalize;
+}
+
 .cu-control-status {
   font-size: 12.5px;
   color: var(--ink-faint);

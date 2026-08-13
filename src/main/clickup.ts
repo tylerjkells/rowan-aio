@@ -6,6 +6,7 @@ import { getClickupToken, setClickupToken } from './settings'
 import type {
   ClickupActivityEvent,
   ClickupList,
+  ClickupStatusOption,
   ClickupPushInput,
   ClickupPushResult,
   ClickupStatus,
@@ -362,20 +363,62 @@ export async function refreshClickup(scope: 'mine' | 'all' = 'mine'): Promise<{
 
 interface RawStatus {
   status: string
+  color?: string | null
   type: 'open' | 'custom' | 'done' | 'closed'
 }
 
-const doneStatusCache = new Map<string, string | null>()
+const listStatusCache = new Map<string, RawStatus[]>()
+
+async function statusesFor(listId: string): Promise<RawStatus[]> {
+  const cached = listStatusCache.get(listId)
+  if (cached) return cached
+  const list = await req<{ statuses?: RawStatus[] }>(`/list/${listId}`)
+  const statuses = list.statuses ?? []
+  listStatusCache.set(listId, statuses)
+  return statuses
+}
+
+/** The columns a task on this list can sit in, in board order. */
+export async function clickupListStatuses(listId: string): Promise<ClickupStatusOption[]> {
+  try {
+    return (await statusesFor(listId)).map((s) => ({
+      status: s.status,
+      color: s.color ?? null,
+      type: s.type
+    }))
+  } catch {
+    return []
+  }
+}
 
 /** The status that counts as finished on a list: its done status, else closed. */
 async function doneStatusFor(listId: string): Promise<string | null> {
-  if (doneStatusCache.has(listId)) return doneStatusCache.get(listId)!
-  const list = await req<{ statuses?: RawStatus[] }>(`/list/${listId}`)
-  const statuses = list.statuses ?? []
+  const statuses = await statusesFor(listId)
   const done =
     statuses.find((s) => s.type === 'done') ?? statuses.find((s) => s.type === 'closed') ?? null
-  doneStatusCache.set(listId, done?.status ?? null)
   return done?.status ?? null
+}
+
+/** Move a task to any status on its list ("in progress", "cancelled", …). */
+export async function setClickupTaskStatus(
+  taskId: string,
+  listId: string,
+  status: string,
+  taskName: string,
+  url?: string
+): Promise<{ ok: boolean; finished?: boolean; error?: string }> {
+  try {
+    await req(`/task/${taskId}`, { method: 'PUT', body: JSON.stringify({ status }) })
+    const type = (await statusesFor(listId)).find((s) => s.status === status)?.type
+    const finished = type === 'done' || type === 'closed'
+    recordLocalEvent(makeEvent('you', taskName, `You set it to ${status}`, url), (snapshot) => {
+      if (finished) delete snapshot[taskId]
+      else if (snapshot[taskId]) snapshot[taskId].status = status
+    })
+    return { ok: true, finished }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 export async function completeClickupTask(

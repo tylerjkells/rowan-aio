@@ -231,6 +231,13 @@ export interface ClickupActivityEvent {
   url?: string
 }
 
+/** one status column on a ClickUp list */
+export interface ClickupStatusOption {
+  status: string
+  color: string | null
+  type: 'open' | 'custom' | 'done' | 'closed'
+}
+
 /** one list a task can be pushed to */
 export interface ClickupList {
   id: string
