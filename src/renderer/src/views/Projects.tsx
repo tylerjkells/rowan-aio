@@ -5,6 +5,7 @@ import type {
   ClickupStatusOption,
   ClickupTask
 } from '../../../shared/types'
+import { ClickupCompleteDialog } from '../ClickupComplete'
 
 function todayIso(): string {
   const d = new Date()
@@ -102,6 +103,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   )
   const [collapsed, setCollapsed] = useState<Set<string> | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [completing, setCompleting] = useState<ClickupTask | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [comment, setComment] = useState('')
   const [commentSent, setCommentSent] = useState(false)
@@ -199,19 +201,6 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     localStorage.setItem('projectsView', m)
   }
 
-  async function complete(t: ClickupTask): Promise<void> {
-    setBusyId(t.id)
-    setRowError(null)
-    const r = await window.scribe.clickup.complete(t.id, t.listId, t.name, t.url)
-    setBusyId(null)
-    if (r.ok) {
-      setTasks((prev) => prev?.filter((x) => x.id !== t.id) ?? null)
-      if (expandedId === t.id) setExpandedId(null)
-    } else {
-      setRowError(r.error ?? 'Could not complete the task')
-    }
-  }
-
   async function changeDue(t: ClickupTask, iso: string | null): Promise<void> {
     setRowError(null)
     const r = await window.scribe.clickup.setTaskDue(t.id, iso, t.name, t.url)
@@ -246,6 +235,13 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   const row = (t: ClickupTask, overdueGroup: boolean): React.JSX.Element => {
     const expanded = expandedId === t.id
     const overdue = !!t.dueDate && t.dueDate < todayIso()
+    const where = [
+      mode === 'due' ? (t.folderName ? `${t.folderName} / ${t.listName}` : t.listName) : '',
+      otherAssignees(t).join(', '),
+      scope === 'all' && t.assignees.length === 0 ? 'Unassigned' : ''
+    ]
+      .filter(Boolean)
+      .join(' · ')
     return (
       <div key={t.id} className={`cu-item ${expanded ? 'expanded' : ''}`}>
         <div className="cu-row">
@@ -253,8 +249,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
             type="checkbox"
             className="rollup-check"
             checked={false}
-            disabled={busyId === t.id}
-            onChange={() => complete(t)}
+            onChange={() => setCompleting(t)}
             aria-label={`Mark "${t.name}" done in ClickUp`}
             title="Mark done in ClickUp"
           />
@@ -268,19 +263,16 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
             }}
           >
             <span className="cu-name">{t.name}</span>
-            <span className="cu-where">
-              {t.folderName && mode === 'due' ? `${t.folderName} / ` : ''}
-              {mode === 'due' ? t.listName : t.status}
-              {otherAssignees(t).length > 0 && <> · {otherAssignees(t).join(', ')}</>}
-              {scope === 'all' && t.assignees.length === 0 && <> · Unassigned</>}
-            </span>
+            {where && <span className="cu-where">{where}</span>}
           </button>
           <span className="cu-meta">
-            <span
-              className="cu-status-dot"
-              style={{ background: t.statusColor ?? 'var(--ink-faint)' }}
-              title={t.status}
-            />
+            <span className="cu-status">
+              <span
+                className="cu-status-dot"
+                style={{ background: t.statusColor ?? 'var(--ink-faint)' }}
+              />
+              <span className="cu-status-name">{t.status}</span>
+            </span>
             {t.priority && <span className="cu-priority">{t.priority}</span>}
             {t.dueDate && (
               <span className={`cu-due ${overdue || overdueGroup ? 'overdue' : ''}`}>
@@ -455,6 +447,17 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
           )}
         </section>
       ))}
+      {completing && (
+        <ClickupCompleteDialog
+          task={completing}
+          onDone={() => {
+            setTasks((prev) => prev?.filter((x) => x.id !== completing.id) ?? null)
+            if (expandedId === completing.id) setExpandedId(null)
+            setCompleting(null)
+          }}
+          onClose={() => setCompleting(null)}
+        />
+      )}
     </>
   )
 }

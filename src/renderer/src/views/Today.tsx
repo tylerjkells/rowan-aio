@@ -9,6 +9,7 @@ import type {
   MeetingListItem
 } from '../../../shared/types'
 import { ChevronIcon, formatDuration, formatWhen, isOverdue, MicIcon, StageBadge } from '../ui'
+import { ClickupCompleteDialog } from '../ClickupComplete'
 
 /**
  * The location field on virtual/hybrid events often carries platform
@@ -147,6 +148,7 @@ export function TodayView({
   const [briefs, setBriefs] = useState<Map<string, EventBrief>>(new Map())
   const [pinnedLinks, setPinnedLinks] = useState<LinkEntry[]>([])
   const [cuDue, setCuDue] = useState<ClickupTask[] | null>(null)
+  const [cuCompleting, setCuCompleting] = useState<ClickupTask | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const autoExpanded = useRef(false)
   // re-render every minute so the "Now" marker tracks the clock
@@ -450,10 +452,7 @@ export function TodayView({
                     type="checkbox"
                     className="rollup-check"
                     checked={false}
-                    onChange={async () => {
-                      const r = await window.scribe.clickup.complete(t.id, t.listId, t.name, t.url)
-                      if (r.ok) setCuDue((prev) => prev?.filter((x) => x.id !== t.id) ?? null)
-                    }}
+                    onChange={() => setCuCompleting(t)}
                     aria-label={`Mark "${t.name}" done in ClickUp`}
                     title="Mark done in ClickUp"
                   />
@@ -484,6 +483,16 @@ export function TodayView({
           </section>
         )}
       </div>
+      {cuCompleting && (
+        <ClickupCompleteDialog
+          task={cuCompleting}
+          onDone={() => {
+            setCuDue((prev) => prev?.filter((x) => x.id !== cuCompleting.id) ?? null)
+            setCuCompleting(null)
+          }}
+          onClose={() => setCuCompleting(null)}
+        />
+      )}
     </>
   )
 }

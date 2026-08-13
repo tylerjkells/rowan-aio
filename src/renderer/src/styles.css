@@ -854,11 +854,34 @@ a.rollup-task:hover {
   flex: 1;
 }
 
+.cu-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cu-status-name {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: capitalize;
+  color: var(--ink-faint);
+}
+
 .cu-status-dot {
   flex: none;
   width: 9px;
   height: 9px;
   border-radius: 50%;
+}
+
+/* task name inside the mark-done dialog */
+.complete-task-name {
+  margin: 2px 0 12px;
+  font-weight: 550;
+  color: var(--ink);
 }
 
 .cu-main {
