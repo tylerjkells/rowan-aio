@@ -56,7 +56,7 @@ interface RawTask {
   id: string
   name: string
   text_content?: string | null
-  status: { status: string; color: string | null }
+  status: { status: string; color: string | null; type?: string }
   due_date: string | null
   date_updated?: string | null
   url: string
@@ -120,6 +120,10 @@ export async function myClickupTasks(): Promise<ClickupTask[]> {
       `/team/${t.id}/task?page=${page}&assignees[]=${user.id}&include_closed=false&subtasks=true&order_by=due_date`
     )
     for (const raw of r.tasks) {
+      // a done-type status (e.g. "Complete") is finished work even though
+      // ClickUp doesn't count it as closed — without this, tasks marked done
+      // linger in the open list and reappear in the changelog as "new"
+      if (raw.status.type === 'done' || raw.status.type === 'closed') continue
       out.push({
         id: raw.id,
         name: raw.name,
