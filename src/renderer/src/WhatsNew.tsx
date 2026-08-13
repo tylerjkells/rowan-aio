@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.17.0': [
+    'Toolbox gains a SQL tab: save the queries you reuse (name, notes, and the SQL itself), expand one to read it, and copy it with a click.',
+    'Completing a ClickUp task now asks for a short closing note first — it posts to the task’s thread as a comment, then the task moves to done. “Done without comment” stays available for the rare exception.',
+    'Change a task’s status right from Projects: expand a row and pick any status from its list — including Cancelled — not just complete.',
+    'Status dots in Projects now say what they mean: the status name sits next to the colored dot.',
+    'The calendar shows Monday through Friday only — no more empty weekend columns.'
+  ],
   '0.16.1': [
     'Action items can be assigned to several people from the owner picker: type a comma and pick the next name — already-listed people are filtered out, and the result reads “Carol Primas-Young, Andrew Bunoza”.',
     'Person merges can no longer tangle: merging A into B after B had been merged into A used to corrupt the identity map (cards opening under the wrong name); merges now flatten cleanly, and a wrong-direction merge is fixed by simply merging back.',
