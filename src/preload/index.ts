@@ -226,7 +226,13 @@ const api = {
     myTasks: (): Promise<ClickupTask[]> => ipcRenderer.invoke('clickup:myTasks'),
     lists: (): Promise<ClickupList[]> => ipcRenderer.invoke('clickup:lists'),
     push: (input: ClickupPushInput): Promise<ClickupPushResult> =>
-      ipcRenderer.invoke('clickup:push', input)
+      ipcRenderer.invoke('clickup:push', input),
+    complete: (taskId: string, listId: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('clickup:complete', taskId, listId),
+    setTaskDue: (taskId: string, iso: string | null): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('clickup:setTaskDue', taskId, iso),
+    comment: (taskId: string, text: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('clickup:comment', taskId, text)
   },
   actions: {
     list: (): Promise<ActionRollupItem[]> => ipcRenderer.invoke('actions:list'),

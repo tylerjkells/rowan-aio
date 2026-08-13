@@ -49,10 +49,13 @@ import { getBrand, saveBrand } from './brand'
 import {
   clickupLists,
   clickupStatus,
+  commentClickupTask,
+  completeClickupTask,
   connectClickup,
   disconnectClickup,
   myClickupTasks,
-  pushClickupTask
+  pushClickupTask,
+  setClickupTaskDue
 } from './clickup'
 import {
   refreshCalendar,
@@ -698,6 +701,15 @@ function registerIpc(): void {
   ipcMain.handle('clickup:myTasks', () => myClickupTasks())
   ipcMain.handle('clickup:lists', () => clickupLists())
   ipcMain.handle('clickup:push', (_e, input: ClickupPushInput) => pushClickupTask(input))
+  ipcMain.handle('clickup:complete', (_e, taskId: string, listId: string) =>
+    completeClickupTask(taskId, listId)
+  )
+  ipcMain.handle('clickup:setTaskDue', (_e, taskId: string, iso: string | null) =>
+    setClickupTaskDue(taskId, iso)
+  )
+  ipcMain.handle('clickup:comment', (_e, taskId: string, text: string) =>
+    commentClickupTask(taskId, text)
+  )
   ipcMain.handle(
     'actions:setClickupUrl',
     (_e, meetingId: string, index: number, url: string | null) => {

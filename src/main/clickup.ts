@@ -50,6 +50,7 @@ interface RawTeam {
 interface RawTask {
   id: string
   name: string
+  text_content?: string | null
   status: { status: string; color: string | null }
   due_date: string | null
   url: string
@@ -116,10 +117,12 @@ export async function myClickupTasks(): Promise<ClickupTask[]> {
       out.push({
         id: raw.id,
         name: raw.name,
+        description: raw.text_content?.trim() ? raw.text_content.trim().slice(0, 2000) : null,
         status: raw.status.status,
         statusColor: raw.status.color,
         dueDate: toIsoDate(raw.due_date),
         url: raw.url,
+        listId: raw.list.id,
         listName: raw.list.name,
         folderName: raw.folder && !raw.folder.hidden ? raw.folder.name : null,
         priority: raw.priority?.priority ?? null
@@ -182,6 +185,68 @@ async function resolveAssignee(assignee: string): Promise<RawMember['user'] | nu
 
 function singleOrNull<T>(arr: T[]): T | null {
   return arr.length === 1 ? arr[0] : null
+}
+
+interface RawStatus {
+  status: string
+  type: 'open' | 'custom' | 'done' | 'closed'
+}
+
+const doneStatusCache = new Map<string, string | null>()
+
+/** The status that counts as finished on a list: its done status, else closed. */
+async function doneStatusFor(listId: string): Promise<string | null> {
+  if (doneStatusCache.has(listId)) return doneStatusCache.get(listId)!
+  const list = await req<{ statuses?: RawStatus[] }>(`/list/${listId}`)
+  const statuses = list.statuses ?? []
+  const done =
+    statuses.find((s) => s.type === 'done') ?? statuses.find((s) => s.type === 'closed') ?? null
+  doneStatusCache.set(listId, done?.status ?? null)
+  return done?.status ?? null
+}
+
+export async function completeClickupTask(
+  taskId: string,
+  listId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const status = await doneStatusFor(listId)
+    if (!status) return { ok: false, error: 'This list has no done/closed status' }
+    await req(`/task/${taskId}`, { method: 'PUT', body: JSON.stringify({ status }) })
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export async function setClickupTaskDue(
+  taskId: string,
+  isoDate: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await req(`/task/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ due_date: isoDate ? Date.parse(`${isoDate}T12:00:00`) : null })
+    })
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export async function commentClickupTask(
+  taskId: string,
+  text: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await req(`/task/${taskId}/comment`, {
+      method: 'POST',
+      body: JSON.stringify({ comment_text: text })
+    })
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 export async function pushClickupTask(input: ClickupPushInput): Promise<ClickupPushResult> {

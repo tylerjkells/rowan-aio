@@ -203,11 +203,14 @@ export interface WeeklyDigest {
 export interface ClickupTask {
   id: string
   name: string
+  /** plain-text description, trimmed */
+  description: string | null
   status: string
   statusColor: string | null
   /** ISO date (YYYY-MM-DD) or null */
   dueDate: string | null
   url: string
+  listId: string
   listName: string
   folderName: string | null
   priority: string | null
