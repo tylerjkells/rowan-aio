@@ -8,6 +8,7 @@ import type {
   BulkScan,
   BulkSelection,
   CalendarEvent,
+  ClickupActivityEvent,
   ClickupList,
   ClickupPushInput,
   ClickupPushResult,
@@ -223,16 +224,32 @@ const api = {
     status: (): Promise<ClickupStatus> => ipcRenderer.invoke('clickup:status'),
     connect: (token: string): Promise<ClickupStatus> => ipcRenderer.invoke('clickup:connect', token),
     disconnect: (): Promise<AppSettings> => ipcRenderer.invoke('clickup:disconnect'),
-    myTasks: (): Promise<ClickupTask[]> => ipcRenderer.invoke('clickup:myTasks'),
+    refresh: (): Promise<{ tasks: ClickupTask[]; events: ClickupActivityEvent[] }> =>
+      ipcRenderer.invoke('clickup:refresh'),
     lists: (): Promise<ClickupList[]> => ipcRenderer.invoke('clickup:lists'),
     push: (input: ClickupPushInput): Promise<ClickupPushResult> =>
       ipcRenderer.invoke('clickup:push', input),
-    complete: (taskId: string, listId: string): Promise<{ ok: boolean; error?: string }> =>
-      ipcRenderer.invoke('clickup:complete', taskId, listId),
-    setTaskDue: (taskId: string, iso: string | null): Promise<{ ok: boolean; error?: string }> =>
-      ipcRenderer.invoke('clickup:setTaskDue', taskId, iso),
-    comment: (taskId: string, text: string): Promise<{ ok: boolean; error?: string }> =>
-      ipcRenderer.invoke('clickup:comment', taskId, text)
+    complete: (
+      taskId: string,
+      listId: string,
+      name: string,
+      url?: string
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('clickup:complete', taskId, listId, name, url),
+    setTaskDue: (
+      taskId: string,
+      iso: string | null,
+      name: string,
+      url?: string
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('clickup:setTaskDue', taskId, iso, name, url),
+    comment: (
+      taskId: string,
+      text: string,
+      name: string,
+      url?: string
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('clickup:comment', taskId, text, name, url)
   },
   actions: {
     list: (): Promise<ActionRollupItem[]> => ipcRenderer.invoke('actions:list'),

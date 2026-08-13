@@ -214,6 +214,19 @@ export interface ClickupTask {
   listName: string
   folderName: string | null
   priority: string | null
+  /** ClickUp's last-modified stamp, used for change detection */
+  dateUpdated: string | null
+}
+
+/** one entry in the local ClickUp changelog, produced by diffing refreshes */
+export interface ClickupActivityEvent {
+  id: string
+  /** ISO timestamp of when the change was noticed (or made) */
+  at: string
+  kind: 'new' | 'done' | 'status' | 'due' | 'comment' | 'removed' | 'you'
+  taskName: string
+  detail?: string
+  url?: string
 }
 
 /** one list a task can be pushed to */

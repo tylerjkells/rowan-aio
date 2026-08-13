@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ClickupStatus, ClickupTask } from '../../../shared/types'
+import type { ClickupActivityEvent, ClickupStatus, ClickupTask } from '../../../shared/types'
 
 function todayIso(): string {
   const d = new Date()
@@ -62,11 +62,31 @@ function byProject(tasks: ClickupTask[]): Group[] {
     }))
 }
 
-type ProjectsMode = 'due' | 'project'
+type ProjectsMode = 'due' | 'project' | 'activity'
+
+const KIND_LABEL: Record<ClickupActivityEvent['kind'], string> = {
+  new: 'New',
+  done: 'Done',
+  status: 'Status',
+  due: 'Due',
+  comment: 'Comment',
+  removed: 'Removed',
+  you: 'You'
+}
+
+function formatWhenIso(iso: string): string {
+  const d = new Date(iso)
+  const today = new Date()
+  const sameDay = d.toDateString() === today.toDateString()
+  return sameDay
+    ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
 
 export function ProjectsView({ onSettings }: { onSettings: () => void }): React.JSX.Element {
   const [status, setStatus] = useState<ClickupStatus | null>(null)
   const [tasks, setTasks] = useState<ClickupTask[] | null>(null)
+  const [events, setEvents] = useState<ClickupActivityEvent[]>([])
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [mode, setMode] = useState<ProjectsMode>(
@@ -85,7 +105,11 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     try {
       const st = await window.scribe.clickup.status()
       setStatus(st)
-      if (st.connected) setTasks(await window.scribe.clickup.myTasks())
+      if (st.connected) {
+        const r = await window.scribe.clickup.refresh()
+        setTasks(r.tasks)
+        setEvents(r.events)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not reach ClickUp')
     } finally {
@@ -137,7 +161,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   async function complete(t: ClickupTask): Promise<void> {
     setBusyId(t.id)
     setRowError(null)
-    const r = await window.scribe.clickup.complete(t.id, t.listId)
+    const r = await window.scribe.clickup.complete(t.id, t.listId, t.name, t.url)
     setBusyId(null)
     if (r.ok) {
       setTasks((prev) => prev?.filter((x) => x.id !== t.id) ?? null)
@@ -149,7 +173,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
 
   async function changeDue(t: ClickupTask, iso: string | null): Promise<void> {
     setRowError(null)
-    const r = await window.scribe.clickup.setTaskDue(t.id, iso)
+    const r = await window.scribe.clickup.setTaskDue(t.id, iso, t.name, t.url)
     if (r.ok) {
       setTasks((prev) =>
         prev?.map((x) => (x.id === t.id ? { ...x, dueDate: iso } : x)) ?? null
@@ -163,7 +187,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     if (!comment.trim()) return
     setBusyId(t.id)
     setRowError(null)
-    const r = await window.scribe.clickup.comment(t.id, comment.trim())
+    const r = await window.scribe.clickup.comment(t.id, comment.trim(), t.name, t.url)
     setBusyId(null)
     if (r.ok) {
       setComment('')
@@ -287,6 +311,14 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
             >
               By project
             </button>
+            <button
+              className={mode === 'activity' ? 'active' : ''}
+              role="radio"
+              aria-checked={mode === 'activity'}
+              onClick={() => switchMode('activity')}
+            >
+              Activity
+            </button>
           </div>
           <button className="btn btn-ghost" onClick={load} disabled={refreshing}>
             {refreshing ? 'Refreshing…' : 'Refresh'}
@@ -294,10 +326,41 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
         </div>
       </div>
       {error && <p className="field-note error">{error}</p>}
-      {tasks && tasks.length === 0 && !error && (
-        <p className="today-quiet">Nothing assigned to you is open. Enjoy it while it lasts.</p>
+      {mode === 'activity' ? (
+        events.length === 0 ? (
+          <p className="today-quiet">
+            No changes noticed yet. The changelog builds as refreshes spot differences — new
+            assignments, status changes, completions, due-date moves, and fresh comments.
+          </p>
+        ) : (
+          <div className="cu-act-list">
+            {events.map((e) => (
+              <div className="cu-act" key={e.id}>
+                <span className={`cu-act-kind kind-${e.kind}`}>{KIND_LABEL[e.kind]}</span>
+                <span className="cu-act-body">
+                  {e.url ? (
+                    <a href={e.url} target="_blank" rel="noreferrer" className="cu-act-task">
+                      {e.taskName}
+                    </a>
+                  ) : (
+                    <span className="cu-act-task">{e.taskName}</span>
+                  )}
+                  {e.detail && <span className="cu-act-detail">{e.detail}</span>}
+                </span>
+                <span className="cu-act-when">{formatWhenIso(e.at)}</span>
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        <>
+          {tasks && tasks.length === 0 && !error && (
+            <p className="today-quiet">Nothing assigned to you is open. Enjoy it while it lasts.</p>
+          )}
+        </>
       )}
-      {groups.map((g) => (
+      {mode !== 'activity' &&
+        groups.map((g) => (
         <section className="section" key={g.label}>
           <button className="cu-section-head" onClick={() => toggleSection(g)}>
             <span className={`cu-section-chevron ${isCollapsed(g) ? '' : 'open'}`}>›</span>

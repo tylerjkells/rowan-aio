@@ -1,5 +1,10 @@
+import { app } from 'electron'
+import { mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { join } from 'path'
+import { randomUUID } from 'crypto'
 import { getClickupToken, setClickupToken } from './settings'
 import type {
+  ClickupActivityEvent,
   ClickupList,
   ClickupPushInput,
   ClickupPushResult,
@@ -53,6 +58,7 @@ interface RawTask {
   text_content?: string | null
   status: { status: string; color: string | null }
   due_date: string | null
+  date_updated?: string | null
   url: string
   list: { id: string; name: string }
   folder: { name: string; hidden?: boolean } | null
@@ -125,7 +131,8 @@ export async function myClickupTasks(): Promise<ClickupTask[]> {
         listId: raw.list.id,
         listName: raw.list.name,
         folderName: raw.folder && !raw.folder.hidden ? raw.folder.name : null,
-        priority: raw.priority?.priority ?? null
+        priority: raw.priority?.priority ?? null,
+        dateUpdated: raw.date_updated ?? null
       })
     }
     if (r.last_page || r.tasks.length === 0) break
@@ -187,6 +194,161 @@ function singleOrNull<T>(arr: T[]): T | null {
   return arr.length === 1 ? arr[0] : null
 }
 
+// ---------------------------------------------------------------------------
+// Local changelog: ClickUp's public API has no activity feed, so the app
+// keeps a snapshot of the user's tasks and diffs it on every refresh — new
+// assignments, status changes, due-date moves, completions, and (for tasks
+// whose modified stamp changed) new comments. Actions taken from the app are
+// logged immediately. Stored in userData/clickup-activity.json.
+// ---------------------------------------------------------------------------
+
+interface SnapshotEntry {
+  name: string
+  status: string
+  dueDate: string | null
+  dateUpdated: string
+  /** ms timestamp of the newest comment already seen */
+  lastCommentDate: number
+}
+
+interface StoredActivity {
+  snapshot: Record<string, SnapshotEntry>
+  events: ClickupActivityEvent[]
+}
+
+function activityFile(): string {
+  return join(app.getPath('userData'), 'clickup-activity.json')
+}
+
+function readActivity(): StoredActivity {
+  try {
+    return JSON.parse(readFileSync(activityFile(), 'utf8'))
+  } catch {
+    return { snapshot: {}, events: [] }
+  }
+}
+
+function writeActivity(a: StoredActivity): void {
+  mkdirSync(app.getPath('userData'), { recursive: true })
+  writeFileSync(activityFile(), JSON.stringify(a, null, 2))
+}
+
+const MAX_EVENTS = 200
+
+function makeEvent(
+  kind: ClickupActivityEvent['kind'],
+  taskName: string,
+  detail?: string,
+  url?: string
+): ClickupActivityEvent {
+  return { id: randomUUID(), at: new Date().toISOString(), kind, taskName, detail, url }
+}
+
+/** Log something the user just did from the app, and keep the snapshot in step. */
+function recordLocalEvent(
+  event: ClickupActivityEvent,
+  patchSnapshot?: (snapshot: Record<string, SnapshotEntry>) => void
+): void {
+  const a = readActivity()
+  a.events = [event, ...a.events].slice(0, MAX_EVENTS)
+  patchSnapshot?.(a.snapshot)
+  writeActivity(a)
+}
+
+interface RawComment {
+  id: string
+  comment_text?: string
+  user?: { username?: string | null }
+  date: string
+}
+
+/** Fetch tasks and turn the differences since last refresh into changelog events. */
+export async function refreshClickup(): Promise<{
+  tasks: ClickupTask[]
+  events: ClickupActivityEvent[]
+}> {
+  const tasks = await myClickupTasks()
+  const store = readActivity()
+  const prev = store.snapshot
+  const firstRun = Object.keys(prev).length === 0
+  const next: Record<string, SnapshotEntry> = {}
+  const fresh: ClickupActivityEvent[] = []
+  // per-refresh cap on per-task detail calls (comments, vanished-task lookups)
+  let detailBudget = 12
+
+  for (const t of tasks) {
+    const p = prev[t.id]
+    next[t.id] = {
+      name: t.name,
+      status: t.status,
+      dueDate: t.dueDate,
+      dateUpdated: t.dateUpdated ?? '',
+      lastCommentDate: p?.lastCommentDate ?? Date.now()
+    }
+    if (!p) {
+      if (!firstRun) fresh.push(makeEvent('new', t.name, `Assigned to you · ${t.listName}`, t.url))
+      continue
+    }
+    if (p.status !== t.status) {
+      fresh.push(makeEvent('status', t.name, `${p.status} → ${t.status}`, t.url))
+    }
+    if ((p.dueDate ?? null) !== (t.dueDate ?? null)) {
+      fresh.push(makeEvent('due', t.name, t.dueDate ? `Due ${t.dueDate}` : 'Due date cleared', t.url))
+    }
+    if (p.dateUpdated !== (t.dateUpdated ?? '') && detailBudget > 0) {
+      detailBudget--
+      try {
+        const { comments } = await req<{ comments: RawComment[] }>(`/task/${t.id}/comment`)
+        const unseen = comments.filter((c) => Number(c.date) > p.lastCommentDate)
+        if (comments[0]) next[t.id].lastCommentDate = Number(comments[0].date)
+        for (const c of unseen.slice(0, 3).reverse()) {
+          fresh.push(
+            makeEvent(
+              'comment',
+              t.name,
+              `${c.user?.username ?? 'Someone'}: ${(c.comment_text ?? '').trim().slice(0, 140)}`,
+              t.url
+            )
+          )
+        }
+      } catch {
+        // comments unavailable: skip quietly
+      }
+    }
+  }
+
+  // tasks that were assigned to you last time and are gone now
+  for (const [id, p] of Object.entries(prev)) {
+    if (next[id]) continue
+    if (detailBudget > 0) {
+      detailBudget--
+      try {
+        const task = await req<{
+          status?: { status: string; type?: string }
+          date_done?: string | null
+          url?: string
+        }>(`/task/${id}`)
+        const finished =
+          task.date_done || task.status?.type === 'done' || task.status?.type === 'closed'
+        fresh.push(
+          finished
+            ? makeEvent('done', p.name, `Marked ${task.status?.status ?? 'done'}`, task.url)
+            : makeEvent('removed', p.name, 'No longer assigned to you', task.url)
+        )
+        continue
+      } catch {
+        // deleted or inaccessible
+      }
+    }
+    fresh.push(makeEvent('removed', p.name, 'Gone from your list'))
+  }
+
+  store.snapshot = next
+  store.events = [...fresh, ...store.events].slice(0, MAX_EVENTS)
+  writeActivity(store)
+  return { tasks, events: store.events }
+}
+
 interface RawStatus {
   status: string
   type: 'open' | 'custom' | 'done' | 'closed'
@@ -207,12 +369,17 @@ async function doneStatusFor(listId: string): Promise<string | null> {
 
 export async function completeClickupTask(
   taskId: string,
-  listId: string
+  listId: string,
+  taskName: string,
+  url?: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const status = await doneStatusFor(listId)
     if (!status) return { ok: false, error: 'This list has no done/closed status' }
     await req(`/task/${taskId}`, { method: 'PUT', body: JSON.stringify({ status }) })
+    recordLocalEvent(makeEvent('you', taskName, `You marked it ${status}`, url), (snapshot) => {
+      delete snapshot[taskId]
+    })
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -221,13 +388,21 @@ export async function completeClickupTask(
 
 export async function setClickupTaskDue(
   taskId: string,
-  isoDate: string | null
+  isoDate: string | null,
+  taskName: string,
+  url?: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     await req(`/task/${taskId}`, {
       method: 'PUT',
       body: JSON.stringify({ due_date: isoDate ? Date.parse(`${isoDate}T12:00:00`) : null })
     })
+    recordLocalEvent(
+      makeEvent('you', taskName, isoDate ? `You set the due date to ${isoDate}` : 'You cleared the due date', url),
+      (snapshot) => {
+        if (snapshot[taskId]) snapshot[taskId].dueDate = isoDate
+      }
+    )
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -236,13 +411,21 @@ export async function setClickupTaskDue(
 
 export async function commentClickupTask(
   taskId: string,
-  text: string
+  text: string,
+  taskName: string,
+  url?: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     await req(`/task/${taskId}/comment`, {
       method: 'POST',
       body: JSON.stringify({ comment_text: text })
     })
+    recordLocalEvent(
+      makeEvent('you', taskName, `You commented: ${text.slice(0, 140)}`, url),
+      (snapshot) => {
+        if (snapshot[taskId]) snapshot[taskId].lastCommentDate = Date.now()
+      }
+    )
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -262,6 +445,14 @@ export async function pushClickupTask(input: ClickupPushInput): Promise<ClickupP
       method: 'POST',
       body: JSON.stringify(body)
     })
+    recordLocalEvent(
+      makeEvent(
+        'you',
+        input.name,
+        `You created it${assignee ? ` for ${assignee.username ?? assignee.email}` : ''}`,
+        task.url
+      )
+    )
     return { ok: true, url: task.url, assignedTo: assignee?.username ?? assignee?.email }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

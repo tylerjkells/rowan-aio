@@ -53,8 +53,8 @@ import {
   completeClickupTask,
   connectClickup,
   disconnectClickup,
-  myClickupTasks,
   pushClickupTask,
+  refreshClickup,
   setClickupTaskDue
 } from './clickup'
 import {
@@ -698,17 +698,23 @@ function registerIpc(): void {
     disconnectClickup()
     return getSettings()
   })
-  ipcMain.handle('clickup:myTasks', () => myClickupTasks())
+  ipcMain.handle('clickup:refresh', () => refreshClickup())
   ipcMain.handle('clickup:lists', () => clickupLists())
   ipcMain.handle('clickup:push', (_e, input: ClickupPushInput) => pushClickupTask(input))
-  ipcMain.handle('clickup:complete', (_e, taskId: string, listId: string) =>
-    completeClickupTask(taskId, listId)
+  ipcMain.handle(
+    'clickup:complete',
+    (_e, taskId: string, listId: string, name: string, url?: string) =>
+      completeClickupTask(taskId, listId, name, url)
   )
-  ipcMain.handle('clickup:setTaskDue', (_e, taskId: string, iso: string | null) =>
-    setClickupTaskDue(taskId, iso)
+  ipcMain.handle(
+    'clickup:setTaskDue',
+    (_e, taskId: string, iso: string | null, name: string, url?: string) =>
+      setClickupTaskDue(taskId, iso, name, url)
   )
-  ipcMain.handle('clickup:comment', (_e, taskId: string, text: string) =>
-    commentClickupTask(taskId, text)
+  ipcMain.handle(
+    'clickup:comment',
+    (_e, taskId: string, text: string, name: string, url?: string) =>
+      commentClickupTask(taskId, text, name, url)
   )
   ipcMain.handle(
     'actions:setClickupUrl',
