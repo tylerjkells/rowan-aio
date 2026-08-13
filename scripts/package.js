@@ -25,9 +25,11 @@ function cleanTemp() {
 }
 
 function run() {
+  // --publish never: in CI electron-builder otherwise tries to publish a
+  // release (implicit CI detection) and fails without a GH_TOKEN
   const args = ['electron-builder', '--win']
   if (isTest) args.push('portable')
-  args.push(`-c.directories.output=${OUT}`)
+  args.push('--publish', 'never', `-c.directories.output=${OUT}`)
   if (isTest) {
     args.push(
       '-c.extraMetadata.channel=test',
