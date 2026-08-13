@@ -34,7 +34,7 @@ function run() {
     args.push(
       '-c.extraMetadata.channel=test',
       '-c.appId=com.tylerkells.meetingscribe.test',
-      '-c.portable.artifactName=MeetingScribe-Test-portable.exe'
+      '-c.portable.artifactName=RowanAIO-Test-portable.exe'
     )
   }
   const r = spawnSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', args, {

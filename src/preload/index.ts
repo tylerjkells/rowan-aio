@@ -29,6 +29,7 @@ import type {
   PersonSummary,
   RecordingMode,
   SeriesData,
+  ToolboxData,
   TranscriptSegment,
   UsageSummary,
   WeeklyDigest,
@@ -228,6 +229,23 @@ const api = {
   brand: {
     get: (): Promise<BrandData> => ipcRenderer.invoke('brand:get'),
     save: (data: BrandData): Promise<BrandData> => ipcRenderer.invoke('brand:save', data)
+  },
+  toolbox: {
+    get: (): Promise<ToolboxData> => ipcRenderer.invoke('toolbox:get'),
+    addGuide: (): Promise<ToolboxData | { error: string } | null> =>
+      ipcRenderer.invoke('toolbox:addGuide'),
+    guideHtml: (id: string): Promise<string | null> => ipcRenderer.invoke('toolbox:guideHtml', id),
+    removeGuide: (id: string): Promise<ToolboxData> =>
+      ipcRenderer.invoke('toolbox:removeGuide', id),
+    addImages: (): Promise<ToolboxData | null> => ipcRenderer.invoke('toolbox:addImages'),
+    copyImage: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('toolbox:copyImage', id),
+    removeImage: (id: string): Promise<ToolboxData> =>
+      ipcRenderer.invoke('toolbox:removeImage', id),
+    addFiles: (): Promise<ToolboxData | null> => ipcRenderer.invoke('toolbox:addFiles'),
+    saveFileCopy: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('toolbox:saveFileCopy', id),
+    removeFile: (id: string): Promise<ToolboxData> => ipcRenderer.invoke('toolbox:removeFile', id)
   },
   clickup: {
     status: (): Promise<ClickupStatus> => ipcRenderer.invoke('clickup:status'),

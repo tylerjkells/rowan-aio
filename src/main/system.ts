@@ -63,10 +63,10 @@ function ensureTray(): void {
   if (tray) return
   const image = nativeImage.createFromPath(iconPath())
   tray = new Tray(image)
-  tray.setToolTip('MeetingScribe')
+  tray.setToolTip('Rowan AIO')
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Open MeetingScribe', click: () => showMainWindow() },
+      { label: 'Open Rowan AIO', click: () => showMainWindow() },
       { label: 'Start recording', click: () => showMainWindow('record') },
       { type: 'separator' },
       {

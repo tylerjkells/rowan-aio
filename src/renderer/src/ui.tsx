@@ -392,6 +392,14 @@ export function UsersIcon(): React.JSX.Element {
   )
 }
 
+export function WrenchIcon(): React.JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14.7 6.3a4.5 4.5 0 0 0-6 5.3L3 17.3a2.1 2.1 0 0 0 3 3l5.7-5.7a4.5 4.5 0 0 0 5.3-6L13.5 12l-1.8-.3-.3-1.8Z" />
+    </svg>
+  )
+}
+
 export function BoardIcon(): React.JSX.Element {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

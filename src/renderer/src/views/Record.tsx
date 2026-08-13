@@ -296,7 +296,7 @@ function EngineSetup({
     <div className="setup-card">
       <h2>One-time setup</h2>
       <p>
-        MeetingScribe transcribes on your own machine. Nothing is uploaded, and there is no
+        Rowan AIO transcribes on your own machine. Nothing is uploaded, and there is no
         subscription. It first needs to download the speech engine and a language model (about 550
         MB total).
       </p>

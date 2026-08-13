@@ -57,6 +57,19 @@ import {
 } from './links'
 import { getBrand, saveBrand } from './brand'
 import {
+  addToolboxFiles,
+  addToolboxGuide,
+  addToolboxImages,
+  copyToolboxImage,
+  getGuideHtml,
+  readToolbox,
+  removeToolboxFile,
+  removeToolboxGuide,
+  removeToolboxImage,
+  saveToolboxFileCopy,
+  toolboxImagesDir
+} from './toolbox'
+import {
   clickupLists,
   clickupStatus,
   commentClickupTask,
@@ -141,7 +154,7 @@ function createWindow(): BrowserWindow {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: WINDOW_BG[getSettings().theme] ?? '#101013',
-    title: 'MeetingScribe',
+    title: 'Rowan AIO',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -216,13 +229,14 @@ app.whenReady().then(() => {
     const parsed = new URL(request.url)
     const id = decodeURIComponent(parsed.hostname)
 
-    // scribe-media://thumb/<filename> serves link-card thumbnails
-    if (id === 'thumb') {
+    // scribe-media://thumb/<filename> serves link-card thumbnails;
+    // scribe-media://toolbox/<filename> serves toolbox images
+    if (id === 'thumb' || id === 'toolbox') {
       const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''))
       if (!/^[\w.-]+$/.test(name) || name.includes('..')) {
         return new Response('bad name', { status: 400 })
       }
-      const file = join(thumbsDir(), name)
+      const file = join(id === 'thumb' ? thumbsDir() : toolboxImagesDir(), name)
       if (!existsSync(file)) return new Response('not found', { status: 404 })
       const ext = name.split('.').pop()!.toLowerCase()
       const mime =
@@ -232,7 +246,9 @@ app.whenReady().then(() => {
             ? 'image/webp'
             : ext === 'gif'
               ? 'image/gif'
-              : 'image/jpeg'
+              : ext === 'svg'
+                ? 'image/svg+xml'
+                : 'image/jpeg'
       return new Response(Readable.toWeb(createReadStream(file)) as never, {
         headers: { 'Content-Type': mime, 'Cache-Control': 'max-age=31536000, immutable' }
       })
@@ -670,7 +686,7 @@ function registerIpc(): void {
       title: 'Back up library',
       defaultPath: join(
         app.getPath('documents'),
-        `MeetingScribe-backup-${new Date().toISOString().slice(0, 10)}.zip`
+        `RowanAIO-backup-${new Date().toISOString().slice(0, 10)}.zip`
       ),
       filters: [{ name: 'Zip archive', extensions: ['zip'] }]
     })
@@ -733,6 +749,17 @@ function registerIpc(): void {
 
   ipcMain.handle('brand:get', () => getBrand())
   ipcMain.handle('brand:save', (_e, data: BrandData) => saveBrand(data))
+
+  ipcMain.handle('toolbox:get', () => readToolbox())
+  ipcMain.handle('toolbox:addGuide', () => addToolboxGuide())
+  ipcMain.handle('toolbox:guideHtml', (_e, id: string) => getGuideHtml(id))
+  ipcMain.handle('toolbox:removeGuide', (_e, id: string) => removeToolboxGuide(id))
+  ipcMain.handle('toolbox:addImages', () => addToolboxImages())
+  ipcMain.handle('toolbox:copyImage', (_e, id: string) => copyToolboxImage(id))
+  ipcMain.handle('toolbox:removeImage', (_e, id: string) => removeToolboxImage(id))
+  ipcMain.handle('toolbox:addFiles', () => addToolboxFiles())
+  ipcMain.handle('toolbox:saveFileCopy', (_e, id: string) => saveToolboxFileCopy(id))
+  ipcMain.handle('toolbox:removeFile', (_e, id: string) => removeToolboxFile(id))
 
   ipcMain.handle('clickup:status', () => clickupStatus())
   ipcMain.handle('clickup:connect', (_e, token: string) => connectClickup(token))

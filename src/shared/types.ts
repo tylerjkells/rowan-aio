@@ -265,6 +265,39 @@ export interface ClickupPushResult {
   error?: string
 }
 
+/** one uploaded guide (Word doc rendered to HTML) in the Toolbox */
+export interface ToolboxGuide {
+  id: string
+  title: string
+  addedAt: string
+  /** original filename, for reference */
+  source: string
+}
+
+/** one reusable image in the Toolbox (logos, icons, buttons) */
+export interface ToolboxImage {
+  id: string
+  name: string
+  /** stored filename under toolbox/images */
+  file: string
+}
+
+/** one stored file in the Toolbox (templates, starters) */
+export interface ToolboxFile {
+  id: string
+  name: string
+  /** stored filename under toolbox/files */
+  file: string
+  bytes: number
+  addedAt: string
+}
+
+export interface ToolboxData {
+  guides: ToolboxGuide[]
+  images: ToolboxImage[]
+  files: ToolboxFile[]
+}
+
 /** one saved link in the link hub */
 export interface LinkEntry {
   id: string

@@ -1,5 +1,8 @@
+# appId (and the package name / data folder) deliberately stay meeting-scribe:
+# the auto-updater and existing installs key off them. Only the display
+# identity is Rowan AIO.
 appId: com.tylerkells.meetingscribe
-productName: MeetingScribe
+productName: Rowan AIO
 directories:
   buildResources: build
   output: release
@@ -17,10 +20,10 @@ nsis:
   oneClick: true
   perMachine: false
   deleteAppDataOnUninstall: false
-  artifactName: MeetingScribe-Setup-${version}.exe
+  artifactName: RowanAIO-Setup-${version}.exe
 publish:
   provider: github
   owner: tylerjkells
   repo: meeting-scribe
 portable:
-  artifactName: MeetingScribe-portable.exe
+  artifactName: RowanAIO-portable.exe

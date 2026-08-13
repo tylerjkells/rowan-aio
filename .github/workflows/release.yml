@@ -58,7 +58,7 @@ jobs:
           body_path: release-body.md
           generate_release_notes: true
           files: |
-            release/MeetingScribe-Setup-*.exe
-            release/MeetingScribe-Setup-*.exe.blockmap
-            release/MeetingScribe-portable.exe
+            release/RowanAIO-Setup-*.exe
+            release/RowanAIO-Setup-*.exe.blockmap
+            release/RowanAIO-portable.exe
             release/latest.yml

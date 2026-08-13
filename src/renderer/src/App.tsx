@@ -18,6 +18,7 @@ import { PeopleView, PersonView } from './views/People'
 import { LinksView } from './views/Links'
 import { BrandView } from './views/Brand'
 import { ProjectsView } from './views/Projects'
+import { ToolboxView } from './views/Toolbox'
 import { SeriesView } from './views/Series'
 import { AskWidget } from './AskWidget'
 import { Digest } from './Digest'
@@ -32,6 +33,7 @@ import {
   LinkIcon,
   PaletteIcon,
   BoardIcon,
+  WrenchIcon,
   formatDuration
 } from './ui'
 
@@ -46,6 +48,7 @@ export type View =
   | { name: 'links' }
   | { name: 'brand' }
   | { name: 'projects' }
+  | { name: 'toolbox' }
   | { name: 'series'; title: string }
   | { name: 'import' }
   | { name: 'settings' }
@@ -137,7 +140,7 @@ export default function App(): React.JSX.Element {
       <nav className="sidebar">
         <div className="brand">
           <span className="brand-dot" aria-hidden="true" />
-          MeetingScribe
+          Rowan AIO
           {channel !== 'stable' && <span className="channel-chip">{channel}</span>}
         </div>
         <button
@@ -190,6 +193,12 @@ export default function App(): React.JSX.Element {
           onClick={() => setView({ name: 'brand' })}
         >
           <PaletteIcon /> Brand
+        </button>
+        <button
+          className={`nav-btn ${view.name === 'toolbox' ? 'active' : ''}`}
+          onClick={() => setView({ name: 'toolbox' })}
+        >
+          <WrenchIcon /> Toolbox
         </button>
         <div className="sidebar-spacer" />
         <button
@@ -306,6 +315,7 @@ export default function App(): React.JSX.Element {
           {view.name === 'projects' && (
             <ProjectsView onSettings={() => setView({ name: 'settings' })} />
           )}
+          {view.name === 'toolbox' && <ToolboxView />}
           {view.name === 'import' && (
             <ImportView
               onDone={(m) => {

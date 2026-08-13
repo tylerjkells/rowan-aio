@@ -1035,7 +1035,7 @@ export function SettingsView({
         <header className="settings-label">
           <h2>System</h2>
           <p className="hint">
-            Keep MeetingScribe on duty in the background — the record nudge and calendar only
+            Keep Rowan AIO on duty in the background — the record nudge and calendar only
             work while the app is running.
           </p>
         </header>
@@ -1056,7 +1056,7 @@ export function SettingsView({
           />
           <SwitchRow
             title="Global record shortcut"
-            desc="Ctrl+Alt+R brings MeetingScribe forward on the Record page from anywhere."
+            desc="Ctrl+Alt+R brings Rowan AIO forward on the Record page from anywhere."
             checked={settings.recordHotkey}
             onToggle={async (v) =>
               onChange(await window.scribe.settings.update({ recordHotkey: v }))
@@ -1138,7 +1138,7 @@ export function SettingsView({
         </header>
         <div className="settings-body">
           <p className="opt-desc">
-            MeetingScribe {version ? `v${version}` : ''} · updates install automatically from{' '}
+            Rowan AIO {version ? `v${version}` : ''} · updates install automatically from{' '}
             <a href="https://github.com/tylerjkells/meeting-scribe/releases" target="_blank" rel="noreferrer">
               GitHub releases
             </a>

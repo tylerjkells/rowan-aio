@@ -5,7 +5,7 @@ The app has three *channels*, each fully isolated from the others:
 | Channel  | How it runs                            | Data folder                     | Self-updates | Badge |
 | -------- | -------------------------------------- | ------------------------------- | ------------ | ----- |
 | `stable` | The installed release                  | `%APPDATA%\meeting-scribe`      | yes          | none  |
-| `test`   | `MeetingScribe-Test-portable.exe`      | `%APPDATA%\meeting-scribe-test` | never        | TEST  |
+| `test`   | `RowanAIO-Test-portable.exe`      | `%APPDATA%\meeting-scribe-test` | never        | TEST  |
 | `dev`    | `npm run dev`                          | `%APPDATA%\meeting-scribe-dev`  | never        | DEV   |
 
 A test or dev instance can run at the same time as the installed app and can
@@ -19,8 +19,8 @@ Every push to a `claude/*` working branch runs the **Test Build** workflow,
 which builds the portable test exe on a Windows runner:
 
 1. GitHub → Actions → Test Build → open the run for the branch you want.
-2. Download the **MeetingScribe-Test** artifact (a zip), unzip it.
-3. Run `MeetingScribe-Test-portable.exe`. No install, no admin rights.
+2. Download the **RowanAIO-Test** artifact (a zip), unzip it.
+3. Run `RowanAIO-Test-portable.exe`. No install, no admin rights.
 
 You can also trigger it by hand (Actions → Test Build → Run workflow → pick
 the branch), or build locally on a Windows machine with `npm run dist:test`
