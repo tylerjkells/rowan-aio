@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.19.1': [
+    'The meeting header’s info line keeps its shape with a long participant list: items wrap between chips instead of squeezing each one into a two-line smear.'
+  ],
   '0.19.0': [
     'Bulk-load your SQL library: Toolbox → SQL → “Upload .sql files” takes any number of .sql or .txt files at once — each becomes a saved query named after its file, and re-uploading a file with the same name updates that query in place.'
   ],

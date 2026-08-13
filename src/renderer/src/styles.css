@@ -2269,12 +2269,25 @@ dialog.sql-edit {
 
 .detail-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--s3);
+  gap: var(--s2) var(--s3);
   color: var(--ink-faint);
   font-size: 12.5px;
   font-family: var(--font-mono);
   margin-top: var(--s2);
+}
+
+/* wrap between items, never inside one — a long participants list would
+   otherwise squeeze every other chip into a two-line smear */
+.detail-meta > * {
+  white-space: nowrap;
+}
+
+.detail-meta .att-edit {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .detail-audio {
