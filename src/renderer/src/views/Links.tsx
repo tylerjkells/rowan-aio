@@ -144,6 +144,21 @@ export function LinksView(): React.JSX.Element {
   const [loaded, setLoaded] = useState(false)
   const [editing, setEditing] = useState<LinkEntry | 'new' | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem('linksCollapsed') ?? '[]'))
+    } catch {
+      return new Set()
+    }
+  })
+
+  function toggleSection(label: string): void {
+    const next = new Set(collapsed)
+    if (next.has(label)) next.delete(label)
+    else next.add(label)
+    setCollapsed(next)
+    localStorage.setItem('linksCollapsed', JSON.stringify([...next]))
+  }
 
   function load(): void {
     window.scribe.links.list().then((list) => {
@@ -237,21 +252,29 @@ export function LinksView(): React.JSX.Element {
       </div>
       {pinned.length > 0 && (
         <section className="section">
-          <div className="card-subhead">Pinned</div>
-          <div className="link-list">{pinned.map(row)}</div>
+          <button className="cu-section-head" onClick={() => toggleSection('Pinned')}>
+            <span className={`cu-section-chevron ${collapsed.has('Pinned') ? '' : 'open'}`}>›</span>
+            <span className="card-subhead">Pinned · {pinned.length}</span>
+          </button>
+          {!collapsed.has('Pinned') && <div className="link-list">{pinned.map(row)}</div>}
         </section>
       )}
-      {categories.map((c) => (
-        <section className="section" key={c}>
-          <div className="card-subhead">{c}</div>
-          <div className="link-list">
-            {links
-              .filter((l) => l.category === c)
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map(row)}
-          </div>
-        </section>
-      ))}
+      {categories.map((c) => {
+        const inCategory = links
+          .filter((l) => l.category === c)
+          .sort((a, b) => a.name.localeCompare(b.name))
+        return (
+          <section className="section" key={c}>
+            <button className="cu-section-head" onClick={() => toggleSection(c)}>
+              <span className={`cu-section-chevron ${collapsed.has(c) ? '' : 'open'}`}>›</span>
+              <span className="card-subhead">
+                {c} · {inCategory.length}
+              </span>
+            </button>
+            {!collapsed.has(c) && <div className="link-list">{inCategory.map(row)}</div>}
+          </section>
+        )
+      })}
     </>
   )
 }
