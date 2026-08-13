@@ -111,6 +111,7 @@ import { identifySpeakers } from './identify'
 import { getUsage } from './usage'
 import {
   applySystemSettings,
+  iconPath,
   isQuitting,
   registerWindowFactory,
   showMainWindow,
@@ -173,6 +174,9 @@ function createWindow(): BrowserWindow {
     autoHideMenuBar: true,
     backgroundColor: WINDOW_BG[getSettings().theme] ?? '#101013',
     title: 'Rowan AIO',
+    // explicit window icon: the taskbar then shows the R even where Windows'
+    // shortcut icon cache still remembers the old exe icon
+    icon: iconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

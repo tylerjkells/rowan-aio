@@ -182,6 +182,7 @@ export function SettingsView({
   const [dlProgress, setDlProgress] = useState<EngineProgress | null>(null)
   const [downloading, setDownloading] = useState<WhisperModel | null>(null)
   const [personDraft, setPersonDraft] = useState('')
+  const [peopleOpen, setPeopleOpen] = useState(false)
   const [cuDraft, setCuDraft] = useState('')
   const [cuStatus, setCuStatus] = useState<{ ok: boolean; msg: string } | null>(null)
   const [connectingCu, setConnectingCu] = useState(false)
@@ -910,26 +911,40 @@ export function SettingsView({
             </button>
           </div>
           {settings.people.length > 0 ? (
-            <div className="dir-list" role="list">
-              {settings.people.map((p) => (
-                <div className="dir-row" role="listitem" key={p}>
-                  <span className="dir-name">{p}</span>
-                  <button
-                    className="dir-remove"
-                    aria-label={`Remove ${p} from directory`}
-                    onClick={async () =>
-                      onChange(
-                        await window.scribe.settings.update({
-                          people: settings.people.filter((x) => x !== p)
-                        })
-                      )
-                    }
-                  >
-                    Remove
-                  </button>
+            <>
+              <button
+                className="cu-section-head dir-toggle"
+                onClick={() => setPeopleOpen(!peopleOpen)}
+                aria-expanded={peopleOpen}
+              >
+                <span className={`cu-section-chevron ${peopleOpen ? 'open' : ''}`}>›</span>
+                <span className="card-subhead">
+                  {settings.people.length} {settings.people.length === 1 ? 'person' : 'people'}
+                </span>
+              </button>
+              {peopleOpen && (
+                <div className="dir-list" role="list">
+                  {settings.people.map((p) => (
+                    <div className="dir-row" role="listitem" key={p}>
+                      <span className="dir-name">{p}</span>
+                      <button
+                        className="dir-remove"
+                        aria-label={`Remove ${p} from directory`}
+                        onClick={async () =>
+                          onChange(
+                            await window.scribe.settings.update({
+                              people: settings.people.filter((x) => x !== p)
+                            })
+                          )
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           ) : (
             <p className="opt-desc">Nobody yet. Add your usual meeting crowd.</p>
           )}

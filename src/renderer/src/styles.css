@@ -3428,6 +3428,11 @@ select.text-input {
 
 /* ---------- meeting series ---------- */
 
+/* Settings → Team directory: the roster folds behind a count */
+.dir-toggle {
+  margin-top: var(--s3);
+}
+
 /* the "with …" chip in the meeting header opens the participants editor */
 .att-edit {
   border: none;

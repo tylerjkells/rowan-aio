@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.19.3': [
+    'Settings → Team directory now folds the roster behind a count — click “47 people” to expand it instead of scrolling a long list.',
+    'The app window declares its own icon to Windows, so the taskbar shows the Rowan R even where the shortcut icon cache still remembers the old one.'
+  ],
   '0.19.2': [
     'Action-item due chips no longer say the date twice: “August 24 · Aug 24” collapses to just “Aug 24”, while relative phrasings like “before Monday · Sep 9” keep both halves.'
   ],

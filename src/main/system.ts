@@ -20,7 +20,7 @@ export function isQuitting(): boolean {
   return quitting
 }
 
-function iconPath(): string {
+export function iconPath(): string {
   // packaged: build/icon.ico ships inside the asar; dev: repo path
   return join(app.getAppPath(), 'build', 'icon.ico')
 }
