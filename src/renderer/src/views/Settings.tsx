@@ -17,6 +17,19 @@ const THEMES: { id: AppTheme; title: string; desc: string; bg: string; accent: s
   { id: 'ios', title: 'iOS', desc: 'Grouped cards, pill buttons, Apple blue.', bg: '#f2f2f7', accent: '#007aff' }
 ]
 
+const OPENAI_MODELS = [
+  {
+    id: 'gpt-5.1',
+    title: 'GPT-5.1',
+    desc: 'OpenAI’s flagship — strong summaries at moderate cost.'
+  },
+  {
+    id: 'gpt-5.1-mini',
+    title: 'GPT-5.1 mini',
+    desc: 'Cheaper and faster; fine for routine meetings.'
+  }
+]
+
 const WHISPER_MODELS: { id: WhisperModel; title: string; desc: string }[] = [
   { id: 'base.en', title: 'Base', desc: 'Fastest, ~140 MB. Fine for clear audio.' },
   { id: 'small.en', title: 'Small', desc: 'Recommended: good accuracy, ~470 MB.' },
@@ -172,6 +185,35 @@ export function SettingsView({
   const [cuDraft, setCuDraft] = useState('')
   const [cuStatus, setCuStatus] = useState<{ ok: boolean; msg: string } | null>(null)
   const [connectingCu, setConnectingCu] = useState(false)
+  const [okDraft, setOkDraft] = useState('')
+  const [okStatus, setOkStatus] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [savingOKey, setSavingOKey] = useState(false)
+  const [customModelDraft, setCustomModelDraft] = useState('')
+  const [toc, setToc] = useState<{ id: string; label: string }[]>([])
+  const [activeToc, setActiveToc] = useState('')
+
+  // the jump-nav discovers sections from the DOM, so new sections join it
+  // automatically
+  useEffect(() => {
+    const els = [...document.querySelectorAll<HTMLElement>('.settings-section')]
+    const list = els.map((el) => {
+      const label = el.querySelector('h2')?.textContent ?? ''
+      const id = 'sec-' + label.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+      el.id = id
+      return { id, label }
+    })
+    setToc(list)
+    const root = document.querySelector('.main')
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const hit = entries.find((e) => e.isIntersecting)
+        if (hit) setActiveToc(hit.target.id)
+      },
+      { root, rootMargin: '-8% 0px -78% 0px' }
+    )
+    els.forEach((el) => obs.observe(el))
+    return () => obs.disconnect()
+  }, [])
   const [yourNameDraft, setYourNameDraft] = useState(settings.yourName)
   const [vocabDraft, setVocabDraft] = useState(settings.vocabulary)
   const [backingUp, setBackingUp] = useState(false)
@@ -229,6 +271,28 @@ export function SettingsView({
     const next = await window.scribe.settings.setApiKey(null)
     onChange(next)
     setKeyStatus(null)
+  }
+
+  async function saveOpenaiKey(): Promise<void> {
+    const key = okDraft.trim()
+    if (!key) return
+    setSavingOKey(true)
+    setOkStatus(null)
+    const test = await window.scribe.settings.testOpenaiKey(key)
+    if (!test.ok) {
+      setOkStatus({ ok: false, msg: test.error ?? 'Key check failed' })
+      setSavingOKey(false)
+      return
+    }
+    onChange(await window.scribe.settings.setOpenaiKey(key))
+    setOkDraft('')
+    setOkStatus({ ok: true, msg: 'Key verified and saved securely.' })
+    setSavingOKey(false)
+  }
+
+  async function removeOpenaiKey(): Promise<void> {
+    onChange(await window.scribe.settings.setOpenaiKey(null))
+    setOkStatus(null)
   }
 
   async function pickWhisper(model: WhisperModel): Promise<void> {
@@ -320,6 +384,21 @@ export function SettingsView({
         <h1>Settings</h1>
       </div>
 
+      <nav className="settings-toc" aria-label="Settings sections">
+        {toc.map((s) => (
+          <button
+            key={s.id}
+            className={activeToc === s.id ? 'active' : ''}
+            onClick={() =>
+              document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
+          >
+            {s.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="settings-sections">
       <section className="settings-section">
         <header className="settings-label">
           <h2>Appearance</h2>
@@ -351,13 +430,42 @@ export function SettingsView({
 
       <section className="settings-section">
         <header className="settings-label">
-          <h2>AI summaries</h2>
+          <h2>AI provider</h2>
           <p className="hint">
-            Billed per use by Anthropic, typically 1–5 cents per meeting. Keys come from
-            console.anthropic.com and are stored encrypted on this machine.
+            Powers summaries, Ask, and speaker identification. Billed per use by the provider,
+            typically 1–5 cents per meeting. Claude keys come from console.anthropic.com; ChatGPT
+            keys from platform.openai.com. Keys are stored encrypted on this machine, and you can
+            save both and switch anytime.
           </p>
         </header>
         <div className="settings-body">
+          <div className="mode-toggle view-toggle" role="radiogroup" aria-label="AI service">
+            <button
+              className={settings.aiProvider === 'claude' ? 'active' : ''}
+              role="radio"
+              aria-checked={settings.aiProvider === 'claude'}
+              onClick={async () =>
+                onChange(await window.scribe.settings.update({ aiProvider: 'claude' }))
+              }
+            >
+              Claude
+            </button>
+            <button
+              className={settings.aiProvider === 'openai' ? 'active' : ''}
+              role="radio"
+              aria-checked={settings.aiProvider === 'openai'}
+              onClick={async () =>
+                onChange(await window.scribe.settings.update({ aiProvider: 'openai' }))
+              }
+            >
+              ChatGPT
+            </button>
+          </div>
+          {settings.aiProvider === 'openai' && !settings.hasOpenaiKey && (
+            <p className="field-note error">ChatGPT is selected but has no key yet — add one below.</p>
+          )}
+
+          <div className="card-subhead">Claude API key</div>
           {settings.hasApiKey ? (
             <div className="field-row">
               <span className="badge badge-quiet">API key saved ✓</span>
@@ -386,28 +494,107 @@ export function SettingsView({
               {keyStatus.msg}
             </p>
           )}
+
+          <div className="card-subhead">ChatGPT API key</div>
+          {settings.hasOpenaiKey ? (
+            <div className="field-row">
+              <span className="badge badge-quiet">API key saved ✓</span>
+              <button className="btn btn-ghost btn-danger" onClick={removeOpenaiKey}>
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="field-row">
+              <input
+                className="text-input"
+                type="password"
+                placeholder="sk-…"
+                value={okDraft}
+                onChange={(e) => setOkDraft(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && saveOpenaiKey()}
+                aria-label="ChatGPT API key"
+              />
+              <button
+                className="btn btn-primary"
+                onClick={saveOpenaiKey}
+                disabled={savingOKey || !okDraft.trim()}
+              >
+                {savingOKey ? 'Checking…' : 'Save'}
+              </button>
+            </div>
+          )}
+          {okStatus && (
+            <p className={`field-note ${okStatus.ok ? 'ok' : 'error'}`} role="status">
+              {okStatus.msg}
+            </p>
+          )}
+
           {usage && (usage.thisMonth.calls > 0 || usage.lastMonth) && (
             <p className="opt-desc">
-              {formatUsd(usage.thisMonth.costUsd)} in Claude usage this month
+              {formatUsd(usage.thisMonth.costUsd)} in AI usage this month
               {usage.lastMonth ? ` · ${formatUsd(usage.lastMonth.costUsd)} last month` : ''} —
               estimated from token counts, tracked on this machine.
             </p>
           )}
 
-          <div className="card-subhead">Default model</div>
-          <div className="opt-list" role="radiogroup" aria-label="Default summary model">
-            {CLAUDE_MODELS.map((m) => (
-              <OptRow
-                key={m.id}
-                title={m.title}
-                desc={m.desc}
-                selected={settings.claudeModel === m.id}
-                onSelect={async () =>
-                  onChange(await window.scribe.settings.update({ claudeModel: m.id }))
-                }
-              />
-            ))}
+          <div className="card-subhead">
+            Default model · {settings.aiProvider === 'openai' ? 'ChatGPT' : 'Claude'}
           </div>
+          {settings.aiProvider === 'claude' ? (
+            <div className="opt-list" role="radiogroup" aria-label="Default summary model">
+              {CLAUDE_MODELS.map((m) => (
+                <OptRow
+                  key={m.id}
+                  title={m.title}
+                  desc={m.desc}
+                  selected={settings.claudeModel === m.id}
+                  onSelect={async () =>
+                    onChange(await window.scribe.settings.update({ claudeModel: m.id }))
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="opt-list" role="radiogroup" aria-label="Default summary model">
+                {OPENAI_MODELS.map((m) => (
+                  <OptRow
+                    key={m.id}
+                    title={m.title}
+                    desc={m.desc}
+                    selected={settings.openaiModel === m.id}
+                    onSelect={async () =>
+                      onChange(await window.scribe.settings.update({ openaiModel: m.id }))
+                    }
+                  />
+                ))}
+              </div>
+              <div className="field-row">
+                <input
+                  className="text-input"
+                  placeholder="Custom model id (for newer releases)"
+                  value={customModelDraft}
+                  onChange={(e) => setCustomModelDraft(e.target.value)}
+                  aria-label="Custom ChatGPT model id"
+                />
+                <button
+                  className="btn"
+                  disabled={!customModelDraft.trim()}
+                  onClick={async () => {
+                    onChange(
+                      await window.scribe.settings.update({ openaiModel: customModelDraft.trim() })
+                    )
+                    setCustomModelDraft('')
+                  }}
+                >
+                  Use
+                </button>
+              </div>
+              {!OPENAI_MODELS.some((m) => m.id === settings.openaiModel) && (
+                <p className="opt-desc">Using custom model: {settings.openaiModel}</p>
+              )}
+            </>
+          )}
 
           <div className="switch-row">
             <span className="switch-label">
@@ -952,6 +1139,7 @@ export function SettingsView({
           </p>
         </div>
       </section>
+      </div>
     </div>
   )
 }

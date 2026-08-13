@@ -40,7 +40,8 @@ import {
   addPerson,
   addPersonAlias,
   removePerson,
-  renamePerson
+  renamePerson,
+  setOpenaiKey
 } from './settings'
 import { mergeDetails, removeDetails, setDetails } from './directory'
 import { applyDirectoryImport, scanDirectoryCsv } from './directoryImport'
@@ -99,6 +100,7 @@ import { runBackup, startAutoBackup } from './backup'
 import { actionRollup, identityContext } from './identity'
 import { claudeConnectionStatus, connectClaude, disconnectClaude } from './claudeConnect'
 import { engineStatus, setupEngine } from './whisper'
+import { activeAiModel, testOpenaiKey } from './ai'
 import { processMeeting, summarizeMeeting } from './pipeline'
 import { askAboutMeeting, testApiKey } from './summarize'
 import { askLibrary, clearAskHistory, readAskHistory } from './ask'
@@ -338,6 +340,8 @@ function registerIpc(): void {
   })
   ipcMain.handle('settings:setApiKey', (_e, key: string | null) => setApiKey(key))
   ipcMain.handle('settings:testApiKey', (_e, key: string) => testApiKey(key))
+  ipcMain.handle('settings:setOpenaiKey', (_e, key: string | null) => setOpenaiKey(key))
+  ipcMain.handle('settings:testOpenaiKey', (_e, key: string) => testOpenaiKey(key))
   ipcMain.handle('usage:get', () => getUsage())
 
   // --- transcription engine ---
@@ -589,7 +593,7 @@ function registerIpc(): void {
   ipcMain.handle('meetings:ask', async (_e, id: string, question: string): Promise<string> => {
     const meeting = readMeeting(id)
     if (!meeting) throw new Error('Meeting not found')
-    const answer = await askAboutMeeting(meeting, question, getSettings().claudeModel)
+    const answer = await askAboutMeeting(meeting, question, activeAiModel())
     meeting.qa = [...(meeting.qa ?? []), { q: question, a: answer }]
     writeMeeting(meeting)
     return answer
@@ -648,7 +652,7 @@ function registerIpc(): void {
   // --- library-wide Q&A ---
   ipcMain.handle('ask:history', () => readAskHistory())
   ipcMain.handle('ask:ask', (_e, question: string) =>
-    askLibrary(question, getSettings().claudeModel)
+    askLibrary(question, activeAiModel())
   )
   ipcMain.handle('ask:clear', () => clearAskHistory())
 

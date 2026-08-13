@@ -54,6 +54,10 @@ const api = {
       ipcRenderer.invoke('settings:update', patch),
     setApiKey: (key: string | null): Promise<AppSettings> =>
       ipcRenderer.invoke('settings:setApiKey', key),
+    setOpenaiKey: (key: string | null): Promise<AppSettings> =>
+      ipcRenderer.invoke('settings:setOpenaiKey', key),
+    testOpenaiKey: (key: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('settings:testOpenaiKey', key),
     testApiKey: (key: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('settings:testApiKey', key)
   },

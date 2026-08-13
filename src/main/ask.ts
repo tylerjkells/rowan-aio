@@ -1,9 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { app } from 'electron'
 import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { getApiKey } from './settings'
-import { recordUsage } from './usage'
+import { aiChat } from './ai'
 import { listMeetings, readMeeting } from './store'
 import { transcriptToText } from './summarize'
 import type { AskSource, LibraryQA, Meeting } from '../shared/types'
@@ -208,16 +206,11 @@ function recentHistoryMessages(): { role: 'user' | 'assistant'; content: string 
 
 /** Answer a question across the whole meeting library, with citations. */
 export async function askLibrary(question: string, model: string): Promise<LibraryQA> {
-  const apiKey = getApiKey()
-  if (!apiKey) {
-    throw new Error('No Claude API key set. Add one in Settings first.')
-  }
   const meetings = loadAskableMeetings()
   if (meetings.length === 0) {
     throw new Error('No meetings to ask about yet. Record or import one first.')
   }
 
-  const client = new Anthropic({ apiKey })
   const aliases = new Map<string, Meeting>()
   meetings.forEach((m, i) => aliases.set(`m${i + 1}`, m))
   const catalog = [...aliases.entries()].map(([alias, m]) => catalogEntry(alias, m)).join('\n\n')
@@ -230,27 +223,21 @@ export async function askLibrary(question: string, model: string): Promise<Libra
   if (withTranscripts.length <= MAX_SELECTED) {
     selected = withTranscripts
   } else {
-    const sel = await client.messages.create({
+    const sel = await aiChat({
       model,
-      max_tokens: 1024,
+      maxTokens: 1024,
+      schema: SELECT_SCHEMA as unknown as Record<string, unknown>,
+      schemaName: 'meeting_selection',
       system:
         'You route questions over a personal library of meeting notes. Given the catalog below and a question, ' +
         'pick which meetings\' full transcripts are needed to answer it well. Prefer fewer, more relevant meetings. ' +
         `Catalog entries marked "transcript only" still have transcripts available.\n\n<catalog>\n${catalog}\n</catalog>`,
-      output_config: {
-        format: {
-          type: 'json_schema',
-          schema: SELECT_SCHEMA as unknown as Record<string, unknown>
-        }
-      },
       messages: [...history, { role: 'user', content: question }]
     })
-    recordUsage(model, sel.usage)
-    if (sel.stop_reason === 'refusal') {
+    if (sel.stop === 'refusal') {
       throw new Error('The request was declined by the model.')
     }
-    const text = sel.content.find((b) => b.type === 'text')?.text
-    const ids = text ? (JSON.parse(text) as { meetingIds: string[] }).meetingIds : []
+    const ids = sel.text ? (JSON.parse(sel.text) as { meetingIds: string[] }).meetingIds : []
     selected = ids
       .filter((id) => aliases.has(id) && (aliases.get(id)!.transcript?.length ?? 0) > 0)
       .slice(0, MAX_SELECTED)
@@ -266,9 +253,11 @@ export async function askLibrary(question: string, model: string): Promise<Libra
     )
     .join('\n\n')
 
-  const response = await client.messages.create({
+  const response = await aiChat({
     model,
-    max_tokens: 4096,
+    maxTokens: 4096,
+    schema: ANSWER_SCHEMA as unknown as Record<string, unknown>,
+    schemaName: 'library_answer',
     system:
       'You answer questions across a personal library of meeting recordings for the person who attended them. ' +
       'Ground every answer in the catalog and transcripts below; when they do not contain the answer, say so plainly instead of guessing. ' +
@@ -278,22 +267,14 @@ export async function askLibrary(question: string, model: string): Promise<Libra
       'When several meetings touch the topic over time, prefer the most recent position and note how it evolved.\n\n' +
       `<catalog>\n${catalog}\n</catalog>` +
       (transcriptBlocks ? `\n\nFull transcripts of the most relevant meetings:\n\n${transcriptBlocks}` : ''),
-    output_config: {
-      format: {
-        type: 'json_schema',
-        schema: ANSWER_SCHEMA as unknown as Record<string, unknown>
-      }
-    },
     messages: [...history, { role: 'user', content: question }]
   })
-  recordUsage(model, response.usage)
 
-  if (response.stop_reason === 'refusal') {
+  if (response.stop === 'refusal') {
     throw new Error('The request was declined by the model.')
   }
-  const text = response.content.find((b) => b.type === 'text')?.text
-  if (!text) throw new Error('Empty response from Claude')
-  const parsed = JSON.parse(text) as {
+  if (!response.text) throw new Error('Empty response from the model')
+  const parsed = JSON.parse(response.text) as {
     answer: string
     sources: { ref: number; meetingId: string; quote: string | null; timestampMs: number | null }[]
   }

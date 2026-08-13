@@ -194,6 +194,7 @@ export function MeetingView({
   const [emailDraft, setEmailDraft] = useState<{ subject: string; body: string } | null>(null)
   const [knownOwners, setKnownOwners] = useState<string[]>([])
   const [hasApiKey, setHasApiKey] = useState(false)
+  const [aiProvider, setAiProvider] = useState<'claude' | 'openai'>('claude')
   const [hasClickup, setHasClickup] = useState(false)
   const [pushIdx, setPushIdx] = useState<number | null>(null)
   const [identifying, setIdentifying] = useState(false)
@@ -219,7 +220,8 @@ export function MeetingView({
         // resolved canonical names, not the raw strings meetings arrived with
         const seen = items.flatMap((i) => i.owners).filter((o) => o !== 'Me')
         setKnownOwners(['Me', ...[...new Set([...settings.people, ...seen])].sort()])
-        setHasApiKey(settings.hasApiKey)
+        setHasApiKey(settings.aiReady)
+        setAiProvider(settings.aiProvider)
         setHasClickup(settings.hasClickup)
       }
     )
@@ -436,6 +438,7 @@ export function MeetingView({
             </button>
             {meeting.summary && meeting.transcript && meeting.transcript.length > 0 && (
               <RegenerateButton
+                provider={aiProvider}
                 onRegenerate={async (model, label) => {
                   const sure = await confirm({
                     title: 'Rewrite the summary from the transcript?',
@@ -644,7 +647,7 @@ export function MeetingView({
                   <button
                     className="btn transcript-identify"
                     disabled={identifying}
-                    title="Attribute lines to named speakers from conversational context (uses Claude, costs a few cents)"
+                    title="Attribute lines to named speakers from conversational context (uses your AI provider, costs a few cents)"
                     onClick={async () => {
                       setIdentifying(true)
                       setIdentifyError(null)
@@ -916,11 +919,17 @@ function NotesEditor({
   )
 }
 
-const REGEN_MODELS = [
-  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-  { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
-  { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' }
-]
+const REGEN_MODELS: Record<'claude' | 'openai', { id: string; label: string }[]> = {
+  claude: [
+    { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+    { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
+    { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' }
+  ],
+  openai: [
+    { id: 'gpt-5.1', label: 'GPT-5.1' },
+    { id: 'gpt-5.1-mini', label: 'GPT-5.1 mini' }
+  ]
+}
 
 /**
  * Split button: the main half regenerates with the default model from
@@ -928,9 +937,11 @@ const REGEN_MODELS = [
  * (usually stronger) model without changing the default.
  */
 function RegenerateButton({
-  onRegenerate
+  onRegenerate,
+  provider
 }: {
   onRegenerate: (model?: string, label?: string) => void
+  provider: 'claude' | 'openai'
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLSpanElement>(null)
@@ -966,7 +977,7 @@ function RegenerateButton({
       </button>
       {open && (
         <div className="split-menu" role="menu">
-          {REGEN_MODELS.map((m) => (
+          {REGEN_MODELS[provider].map((m) => (
             <button
               key={m.id}
               className="split-menu-item"

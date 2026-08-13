@@ -2299,7 +2299,59 @@ select.text-input {
    axis for every control and a predictable top-to-bottom scan order. */
 
 .settings-wrap {
-  max-width: 900px;
+  max-width: 1060px;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 900px);
+  column-gap: var(--s6);
+}
+
+.settings-wrap .page-head {
+  grid-column: 1 / -1;
+}
+
+/* jump nav: discovered from the section headings, highlights on scroll */
+.settings-toc {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: var(--s1);
+}
+
+.settings-toc button {
+  text-align: left;
+  padding: 5px var(--s3);
+  border-radius: var(--r-ctl);
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
+}
+
+.settings-toc button:hover {
+  color: var(--ink);
+  background: var(--bg-raised);
+}
+
+.settings-toc button.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.settings-sections {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .settings-wrap {
+    grid-template-columns: 1fr;
+  }
+  .settings-toc {
+    display: none;
+  }
 }
 
 .settings-section {

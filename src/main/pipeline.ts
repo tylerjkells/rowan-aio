@@ -3,6 +3,7 @@ import { existsSync, rmSync } from 'fs'
 import { readMeeting, writeMeeting, wavPath, labelSpeakers } from './store'
 import { transcribe, vocabularyPrompt } from './whisper'
 import { summarizeTranscript } from './summarize'
+import { activeAiModel } from './ai'
 import { getSettings } from './settings'
 import type { Meeting } from '../shared/types'
 
@@ -64,7 +65,7 @@ export async function processMeeting(id: string): Promise<void> {
       }
     }
 
-    if (!settings.autoSummarize || !settings.hasApiKey) {
+    if (!settings.autoSummarize || !settings.aiReady) {
       update(meeting, { stage: 'transcript-only', progress: undefined })
       return
     }
@@ -89,7 +90,7 @@ export async function summarizeMeeting(id: string, modelOverride?: string): Prom
       .slice(0, 40)
     const summary = await summarizeTranscript(
       transcript,
-      modelOverride ?? settings.claudeModel,
+      modelOverride ?? activeAiModel(),
       knownNames,
       settings.vocabulary,
       meeting.notes,

@@ -408,9 +408,15 @@ export type AppTheme = 'studio' | 'rowan' | 'slate' | 'paper' | 'notion' | 'ios'
 
 export interface AppSettings {
   whisperModel: WhisperModel
+  /** which AI service powers summaries, Ask, and speaker identification */
+  aiProvider: 'claude' | 'openai'
   claudeModel: string
+  openaiModel: string
   autoSummarize: boolean
   hasApiKey: boolean
+  hasOpenaiKey: boolean
+  /** the active provider has a key saved (AI features work) */
+  aiReady: boolean
   /** a calendar feed URL is connected */
   hasCalendar: boolean
   /** a ClickUp personal API token is connected */
