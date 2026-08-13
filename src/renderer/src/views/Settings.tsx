@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type {
   AppSettings,
   AppTheme,
@@ -191,6 +191,7 @@ export function SettingsView({
   const [customModelDraft, setCustomModelDraft] = useState('')
   const [toc, setToc] = useState<{ id: string; label: string }[]>([])
   const [activeToc, setActiveToc] = useState('')
+  const tocLockUntil = useRef(0)
 
   // the jump-nav discovers sections from the DOM, so new sections join it
   // automatically
@@ -206,6 +207,10 @@ export function SettingsView({
     const root = document.querySelector('.main')
     const obs = new IntersectionObserver(
       (entries) => {
+        // a just-clicked entry owns the highlight until its scroll settles —
+        // bottom sections can never reach the observation band, and without
+        // this the section above them would steal the highlight back
+        if (Date.now() < tocLockUntil.current) return
         const hit = entries.find((e) => e.isIntersecting)
         if (hit) setActiveToc(hit.target.id)
       },
@@ -389,9 +394,11 @@ export function SettingsView({
           <button
             key={s.id}
             className={activeToc === s.id ? 'active' : ''}
-            onClick={() =>
+            onClick={() => {
+              setActiveToc(s.id)
+              tocLockUntil.current = Date.now() + 1000
               document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }
+            }}
           >
             {s.label}
           </button>

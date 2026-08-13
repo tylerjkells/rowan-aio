@@ -2387,6 +2387,11 @@ select.text-input {
   min-width: 0;
 }
 
+/* toggles size to their labels instead of stretching across the column */
+.settings-body .mode-toggle {
+  align-self: flex-start;
+}
+
 .settings-body .hint {
   color: var(--ink-soft);
   font-size: 13px;

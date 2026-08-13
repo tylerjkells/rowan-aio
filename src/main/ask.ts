@@ -3,6 +3,9 @@ import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { aiChat } from './ai'
 import { listMeetings, readMeeting } from './store'
+import { listPeople } from './people'
+import { listLinks } from './links'
+import { getBrand } from './brand'
 import { transcriptToText } from './summarize'
 import type { AskSource, LibraryQA, Meeting } from '../shared/types'
 
@@ -204,11 +207,79 @@ function recentHistoryMessages(): { role: 'user' | 'assistant'; content: string 
     ])
 }
 
-/** Answer a question across the whole meeting library, with citations. */
+/**
+ * Everything the app knows outside of meetings — the org directory, saved
+ * links, brand colors, and the last-refreshed ClickUp task snapshot — as one
+ * compact context block. Each source degrades to absent on any failure.
+ */
+function workspaceContext(): string {
+  const parts: string[] = []
+  try {
+    const people = listPeople()
+    if (people.length > 0) {
+      const lines = people.map((p) => {
+        const d = p.details
+        const bits = [
+          d?.title,
+          d?.department,
+          d?.email,
+          d?.phone,
+          d?.office,
+          d?.reportsTo ? `reports to ${d.reportsTo}` : null
+        ]
+          .filter(Boolean)
+          .join(' · ')
+        return `${p.name}${bits ? ` — ${bits}` : ''}`
+      })
+      parts.push(`<directory>\n${lines.join('\n')}\n</directory>`)
+    }
+  } catch {
+    // directory unavailable
+  }
+  try {
+    const links = listLinks()
+    if (links.length > 0) {
+      const lines = links.map((l) => `${l.name} (${l.category}): ${l.url}${l.note ? ` — ${l.note}` : ''}`)
+      parts.push(`<links>\n${lines.join('\n')}\n</links>`)
+    }
+  } catch {
+    // links unavailable
+  }
+  try {
+    const brand = getBrand()
+    const lines = brand.palettes.map(
+      (p) =>
+        `${p.name}: ${p.colors.map((c) => `${c.name}${c.hex ? ` ${c.hex}` : ''}`).join(', ')}`
+    )
+    parts.push(`<brand_colors>\n${lines.join('\n')}\n</brand_colors>`)
+  } catch {
+    // brand guide unavailable
+  }
+  try {
+    const activity = JSON.parse(
+      readFileSync(join(app.getPath('userData'), 'clickup-activity.json'), 'utf8')
+    ) as { snapshot?: Record<string, { name: string; status: string; dueDate: string | null }> }
+    const tasks = Object.values(activity.snapshot ?? {})
+    if (tasks.length > 0) {
+      const lines = tasks.map(
+        (t) => `${t.name} — ${t.status}${t.dueDate ? `, due ${t.dueDate}` : ''}`
+      )
+      parts.push(
+        `<clickup_tasks note="the user's open ClickUp tasks as of the last Projects refresh">\n${lines.join('\n')}\n</clickup_tasks>`
+      )
+    }
+  } catch {
+    // ClickUp not connected or never refreshed
+  }
+  return parts.join('\n\n')
+}
+
+/** Answer a question across the whole meeting library and workspace, with citations. */
 export async function askLibrary(question: string, model: string): Promise<LibraryQA> {
   const meetings = loadAskableMeetings()
-  if (meetings.length === 0) {
-    throw new Error('No meetings to ask about yet. Record or import one first.')
+  const workspace = workspaceContext()
+  if (meetings.length === 0 && !workspace) {
+    throw new Error('Nothing to ask about yet. Record a meeting or add workspace data first.')
   }
 
   const aliases = new Map<string, Meeting>()
@@ -259,13 +330,15 @@ export async function askLibrary(question: string, model: string): Promise<Libra
     schema: ANSWER_SCHEMA as unknown as Record<string, unknown>,
     schemaName: 'library_answer',
     system:
-      'You answer questions across a personal library of meeting recordings for the person who attended them. ' +
-      'Ground every answer in the catalog and transcripts below; when they do not contain the answer, say so plainly instead of guessing. ' +
-      'Transcripts are automatic speech recognition output and may contain errors. ' +
+      'You answer questions across a personal work hub for the person using it: their meeting library plus their workspace data (org directory, saved links, brand colors, open ClickUp tasks). ' +
+      'Ground every answer in the material below; when it does not contain the answer, say so plainly instead of guessing. ' +
+      'Meeting transcripts are automatic speech recognition output and may contain errors. ' +
       'In transcripts, speaker labels mark audio sources: the first-named label (often "Me") is the person asking you questions now; the other label is everyone else on that call. ' +
-      'Answer concisely in plain prose. Cite the meetings that support each part of the answer with inline markers like [1], and list each cited meeting in sources with its id. ' +
+      'Answer concisely in plain prose. Cite the meetings that support meeting-based parts of the answer with inline markers like [1], and list each cited meeting in sources with its id. ' +
+      'Answers drawn from workspace data (a phone number, a link, a color, a task) need no citations — leave sources empty when nothing came from a meeting. ' +
       'When several meetings touch the topic over time, prefer the most recent position and note how it evolved.\n\n' +
-      `<catalog>\n${catalog}\n</catalog>` +
+      `<catalog>\n${catalog || '(no meetings yet)'}\n</catalog>` +
+      (workspace ? `\n\n${workspace}` : '') +
       (transcriptBlocks ? `\n\nFull transcripts of the most relevant meetings:\n\n${transcriptBlocks}` : ''),
     messages: [...history, { role: 'user', content: question }]
   })
