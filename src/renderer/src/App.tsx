@@ -123,11 +123,19 @@ export default function App(): React.JSX.Element {
         >
           <TodayIcon /> Today
         </button>
+        <div className="nav-section">Meetings</div>
         <button
-          className={`nav-btn ${view.name === 'library' || view.name === 'meeting' ? 'active' : ''}`}
+          className={`nav-btn ${
+            view.name === 'library' ||
+            view.name === 'meeting' ||
+            view.name === 'series' ||
+            view.name === 'import'
+              ? 'active'
+              : ''
+          }`}
           onClick={() => setView({ name: 'library' })}
         >
-          <ListIcon /> Meetings
+          <ListIcon /> Library
         </button>
         <button
           className={`nav-btn ${view.name === 'actions' ? 'active' : ''}`}
@@ -135,19 +143,20 @@ export default function App(): React.JSX.Element {
         >
           <CheckIcon /> Action items
         </button>
+        <div className="nav-section">Workspace</div>
         <button
           className={`nav-btn ${view.name === 'people' || view.name === 'person' ? 'active' : ''}`}
           onClick={() => setView({ name: 'people' })}
         >
           <UsersIcon /> People
         </button>
+        <div className="sidebar-spacer" />
         <button
           className={`nav-btn ${view.name === 'settings' ? 'active' : ''}`}
           onClick={() => setView({ name: 'settings' })}
         >
           <GearIcon /> Settings
         </button>
-        <div className="sidebar-spacer" />
         {updateVersion && !rec && (
           <button
             className="update-chip"
