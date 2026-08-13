@@ -197,6 +197,8 @@ const api = {
     setDetails: (name: string, details: PersonDetails): Promise<PersonSummary[]> =>
       ipcRenderer.invoke('people:setDetails', name, details),
     remove: (name: string): Promise<PersonSummary[]> => ipcRenderer.invoke('people:remove', name),
+    rename: (from: string, to: string): Promise<PersonSummary[]> =>
+      ipcRenderer.invoke('people:rename', from, to),
     importScan: (): Promise<DirectoryImportScan | null> => ipcRenderer.invoke('people:importScan'),
     importApply: (rows: DirectoryImportRow[]): Promise<PersonSummary[]> =>
       ipcRenderer.invoke('people:importApply', rows)

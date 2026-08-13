@@ -51,8 +51,11 @@ function PersonEditDialog({
 
   async function save(e: React.FormEvent): Promise<void> {
     e.preventDefault()
-    const target = (person?.name ?? name).trim()
+    const target = name.trim()
     if (!target) return
+    if (person && target !== person.name) {
+      await window.scribe.people.rename(person.name, target)
+    }
     await window.scribe.people.setDetails(target, {
       title,
       department,
@@ -98,18 +101,21 @@ function PersonEditDialog({
     >
       <form onSubmit={save}>
         <h3>{person ? person.name : 'Add person'}</h3>
-        {!person && (
-          <label className="pd-field">
-            <span>Name</span>
-            <input
-              className="text-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-              required
-            />
-          </label>
-        )}
+        <label className="pd-field">
+          <span>Name</span>
+          <input
+            className="text-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus={!person}
+            required
+            title={
+              person
+                ? 'Renaming keeps their meeting history; renaming to an existing person merges them.'
+                : undefined
+            }
+          />
+        </label>
         <div className="pd-grid">
           {field('Title', title, setTitle)}
           {field('Department', department, setDepartment)}
@@ -271,33 +277,51 @@ function OrgChart({
   }
 
   const rendered = new Set<string>()
+  const card = (p: PersonSummary): React.JSX.Element => (
+    <button className="org-card" onClick={() => onOpen(p.name)}>
+      <span className="org-name">{p.name}</span>
+      {roleLine(p.details) && <span className="org-role">{roleLine(p.details)}</span>}
+    </button>
+  )
   const node = (p: PersonSummary): React.JSX.Element | null => {
     if (rendered.has(keyOf(p.name))) return null // reporting-line cycle guard
     rendered.add(keyOf(p.name))
     const kids = (children.get(keyOf(p.name)) ?? []).sort(byName)
     return (
       <div className="org-node" key={p.name}>
-        <button className="org-card" onClick={() => onOpen(p.name)}>
-          <span className="org-name">{p.name}</span>
-          {roleLine(p.details) && <span className="org-role">{roleLine(p.details)}</span>}
-        </button>
+        {card(p)}
         {kids.length > 0 && <div className="org-children">{kids.map(node)}</div>}
       </div>
     )
   }
 
-  const trees = roots.sort(byName).map(node)
-  // anyone trapped in a cycle still gets drawn, as a root
-  const leftovers = people.filter((p) => !rendered.has(keyOf(p.name))).map(node)
+  // real trees first; loose people (nobody above or below them) go to a
+  // compact grid at the end instead of stretching the chart
+  const hasReports = (p: PersonSummary): boolean =>
+    (children.get(keyOf(p.name)) ?? []).length > 0
+  const treeRoots = roots.filter(hasReports).sort(byName)
+  const unplaced = roots.filter((p) => !hasReports(p)).sort(byName)
+  const trees = treeRoots.map(node)
+  // anyone trapped in a reporting-line cycle still gets drawn, as a root
+  const leftovers = people
+    .filter((p) => !rendered.has(keyOf(p.name)) && !unplaced.includes(p))
+    .map(node)
 
   return (
     <div className="org-chart">
       {trees}
       {leftovers}
-      {people.some((p) => !p.details?.reportsTo) && people.length > 1 && (
-        <p className="today-quiet org-hint">
-          Set “Reports to” on a person to place them in the chart.
-        </p>
+      {unplaced.length > 0 && (
+        <div className="org-unplaced-block">
+          <div className="card-subhead">
+            Not placed in the chart · set “Reports to” to place them
+          </div>
+          <div className="org-unplaced">
+            {unplaced.map((p) => (
+              <span key={p.name}>{card(p)}</span>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )

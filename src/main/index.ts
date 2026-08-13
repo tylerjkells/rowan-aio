@@ -39,7 +39,8 @@ import {
   setCalendarUrl,
   addPerson,
   addPersonAlias,
-  removePerson
+  removePerson,
+  renamePerson
 } from './settings'
 import { mergeDetails, removeDetails, setDetails } from './directory'
 import { applyDirectoryImport, scanDirectoryCsv } from './directoryImport'
@@ -658,6 +659,11 @@ function registerIpc(): void {
     return listPeople()
   })
 
+  ipcMain.handle('people:rename', (_e, from: string, to: string) => {
+    renamePerson(from, to)
+    mergeDetails(from, to)
+    return listPeople()
+  })
   ipcMain.handle('people:importScan', () => scanDirectoryCsv())
   ipcMain.handle('people:importApply', (_e, rows: DirectoryImportRow[]) => {
     applyDirectoryImport(rows)

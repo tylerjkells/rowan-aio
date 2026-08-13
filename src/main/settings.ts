@@ -210,6 +210,23 @@ export function addPerson(name: string): void {
   persist()
 }
 
+/**
+ * Rename someone. A casing-only change just fixes the roster spelling; a real
+ * rename records an alias so their meeting history follows the new name.
+ */
+export function renamePerson(from: string, to: string): void {
+  const fromKey = from.trim().toLowerCase()
+  const target = to.trim()
+  if (!fromKey || !target) return
+  if (fromKey === target.toLowerCase()) {
+    const s = load()
+    s.people = (s.people ?? []).map((p) => (p.toLowerCase() === fromKey ? target : p))
+    persist()
+    return
+  }
+  addPersonAlias(from, target)
+}
+
 /** Remove someone from the team directory (their meeting history is untouched). */
 export function removePerson(name: string): void {
   const key = name.trim().toLowerCase()
