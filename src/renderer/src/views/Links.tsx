@@ -13,6 +13,9 @@ function hostOf(url: string): string {
 // Add/edit dialog
 // ---------------------------------------------------------------------------
 
+const thumbSrc = (l: LinkEntry): string | null =>
+  l.thumb ? `scribe-media://thumb/${encodeURIComponent(l.thumb)}` : null
+
 function LinkEditDialog({
   link,
   categories,
@@ -30,6 +33,24 @@ function LinkEditDialog({
   const [note, setNote] = useState(link?.note ?? '')
   const [pinned, setPinned] = useState(link?.pinned ?? false)
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [thumb, setThumb] = useState(link?.thumb)
+  const [thumbChanged, setThumbChanged] = useState(false)
+
+  async function chooseThumb(): Promise<void> {
+    if (!link) return
+    const updated = await window.scribe.links.pickThumb(link.id)
+    if (updated) {
+      setThumb(updated.find((l) => l.id === link.id)?.thumb)
+      setThumbChanged(true)
+    }
+  }
+
+  async function removeThumb(): Promise<void> {
+    if (!link) return
+    await window.scribe.links.clearThumb(link.id)
+    setThumb(undefined)
+    setThumbChanged(true)
+  }
 
   useEffect(() => {
     ref.current?.showModal()
@@ -61,13 +82,18 @@ function LinkEditDialog({
     onClose(true)
   }
 
+  function cancel(): void {
+    // thumbnail edits are applied immediately, so a cancel still refreshes
+    onClose(thumbChanged)
+  }
+
   return (
     <dialog
       ref={ref}
       className="confirm person-edit"
-      onClose={() => onClose(false)}
+      onClose={cancel}
       onClick={(e) => {
-        if (e.target === ref.current) onClose(false)
+        if (e.target === ref.current) cancel()
       }}
     >
       <form onSubmit={save}>
@@ -117,13 +143,37 @@ function LinkEditDialog({
           <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} />
           Pin to the top (and to Today)
         </label>
+        {link && (
+          <div className="thumb-row">
+            {thumb ? (
+              <img
+                className="thumb-preview"
+                src={`scribe-media://thumb/${encodeURIComponent(thumb)}`}
+                alt=""
+              />
+            ) : (
+              <span className="thumb-none">No thumbnail</span>
+            )}
+            <button type="button" className="btn btn-ghost" onClick={chooseThumb}>
+              {thumb ? 'Change image…' : 'Choose image…'}
+            </button>
+            {thumb && (
+              <button type="button" className="btn btn-ghost" onClick={removeThumb}>
+                Remove image
+              </button>
+            )}
+          </div>
+        )}
+        {!link && (
+          <p className="thumb-hint">Save the link first, then edit it to add a card thumbnail.</p>
+        )}
         <div className="confirm-actions">
           {link && (
             <button type="button" className="btn btn-danger pd-remove" onClick={remove}>
               {confirmRemove ? 'Really remove?' : 'Remove'}
             </button>
           )}
-          <button type="button" className="btn" onClick={() => onClose(false)}>
+          <button type="button" className="btn" onClick={cancel}>
             Cancel
           </button>
           <button type="submit" className="btn btn-primary">
@@ -144,6 +194,9 @@ export function LinksView(): React.JSX.Element {
   const [loaded, setLoaded] = useState(false)
   const [editing, setEditing] = useState<LinkEntry | 'new' | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [mode, setMode] = useState<'list' | 'cards'>(
+    () => (localStorage.getItem('linksLayout') as 'list' | 'cards') || 'list'
+  )
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
       return new Set(JSON.parse(localStorage.getItem('linksCollapsed') ?? '[]'))
@@ -233,6 +286,55 @@ export function LinksView(): React.JSX.Element {
     </div>
   )
 
+  function switchMode(m: 'list' | 'cards'): void {
+    setMode(m)
+    localStorage.setItem('linksLayout', m)
+  }
+
+  const card = (l: LinkEntry): React.JSX.Element => {
+    const src = thumbSrc(l)
+    return (
+      <div key={l.id} className="link-card">
+        <a className="link-card-media" href={l.url} target="_blank" rel="noreferrer" title={l.url}>
+          {src ? (
+            <img src={src} alt="" loading="lazy" />
+          ) : (
+            <span className="link-card-letter" aria-hidden="true">
+              {l.name.charAt(0).toUpperCase()}
+            </span>
+          )}
+        </a>
+        <div className="link-card-foot">
+          <a className="link-card-name" href={l.url} target="_blank" rel="noreferrer">
+            {l.name}
+          </a>
+          <span className="link-card-tools">
+            <button className="btn btn-ghost" onClick={() => copy(l)}>
+              {copiedId === l.id ? 'Copied' : 'Copy'}
+            </button>
+            <button
+              className={`btn btn-ghost link-pin ${l.pinned ? 'pinned' : ''}`}
+              onClick={() => togglePin(l)}
+              title={l.pinned ? 'Unpin' : 'Pin to the top (and to Today)'}
+            >
+              {l.pinned ? '★' : '☆'}
+            </button>
+            <button className="btn btn-ghost" onClick={() => setEditing(l)}>
+              Edit
+            </button>
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  const render = (items: LinkEntry[]): React.JSX.Element =>
+    mode === 'cards' ? (
+      <div className="link-cards">{items.map(card)}</div>
+    ) : (
+      <div className="link-list">{items.map(row)}</div>
+    )
+
   const pinned = links.filter((l) => l.pinned).sort((a, b) => a.name.localeCompare(b.name))
   const categories = [...new Set(links.map((l) => l.category))].sort()
 
@@ -245,6 +347,24 @@ export function LinksView(): React.JSX.Element {
           <span className="count-note">
             {links.length} {links.length === 1 ? 'link' : 'links'}
           </span>
+          <div className="mode-toggle view-toggle" role="radiogroup" aria-label="Layout">
+            <button
+              className={mode === 'list' ? 'active' : ''}
+              role="radio"
+              aria-checked={mode === 'list'}
+              onClick={() => switchMode('list')}
+            >
+              Compact
+            </button>
+            <button
+              className={mode === 'cards' ? 'active' : ''}
+              role="radio"
+              aria-checked={mode === 'cards'}
+              onClick={() => switchMode('cards')}
+            >
+              Cards
+            </button>
+          </div>
           <button className="btn" onClick={() => setEditing('new')}>
             Add link
           </button>
@@ -256,7 +376,7 @@ export function LinksView(): React.JSX.Element {
             <span className={`cu-section-chevron ${collapsed.has('Pinned') ? '' : 'open'}`}>›</span>
             <span className="card-subhead">Pinned · {pinned.length}</span>
           </button>
-          {!collapsed.has('Pinned') && <div className="link-list">{pinned.map(row)}</div>}
+          {!collapsed.has('Pinned') && render(pinned)}
         </section>
       )}
       {categories.map((c) => {
@@ -271,7 +391,7 @@ export function LinksView(): React.JSX.Element {
                 {c} · {inCategory.length}
               </span>
             </button>
-            {!collapsed.has(c) && <div className="link-list">{inCategory.map(row)}</div>}
+            {!collapsed.has(c) && render(inCategory)}
           </section>
         )
       })}

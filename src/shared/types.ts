@@ -271,6 +271,8 @@ export interface LinkEntry {
   category: string
   note?: string
   pinned?: boolean
+  /** thumbnail filename under userData/link-thumbs (card view) */
+  thumb?: string
 }
 
 /** one color in the brand guide */

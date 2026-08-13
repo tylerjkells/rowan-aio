@@ -44,7 +44,15 @@ import {
 } from './settings'
 import { mergeDetails, removeDetails, setDetails } from './directory'
 import { applyDirectoryImport, scanDirectoryCsv } from './directoryImport'
-import { listLinks, removeLink, saveLink, toggleLinkPin } from './links'
+import {
+  clearLinkThumb,
+  listLinks,
+  pickLinkThumb,
+  removeLink,
+  saveLink,
+  thumbsDir,
+  toggleLinkPin
+} from './links'
 import { getBrand, saveBrand } from './brand'
 import {
   clickupLists,
@@ -202,7 +210,31 @@ app.whenReady().then(() => {
   // filesystem. Range support matters: without it the media player cannot
   // probe the end of a file for its duration or seek within long recordings.
   session.defaultSession.protocol.handle('scribe-media', (request) => {
-    const id = decodeURIComponent(new URL(request.url).hostname)
+    const parsed = new URL(request.url)
+    const id = decodeURIComponent(parsed.hostname)
+
+    // scribe-media://thumb/<filename> serves link-card thumbnails
+    if (id === 'thumb') {
+      const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''))
+      if (!/^[\w.-]+$/.test(name) || name.includes('..')) {
+        return new Response('bad name', { status: 400 })
+      }
+      const file = join(thumbsDir(), name)
+      if (!existsSync(file)) return new Response('not found', { status: 404 })
+      const ext = name.split('.').pop()!.toLowerCase()
+      const mime =
+        ext === 'png'
+          ? 'image/png'
+          : ext === 'webp'
+            ? 'image/webp'
+            : ext === 'gif'
+              ? 'image/gif'
+              : 'image/jpeg'
+      return new Response(Readable.toWeb(createReadStream(file)) as never, {
+        headers: { 'Content-Type': mime, 'Cache-Control': 'max-age=31536000, immutable' }
+      })
+    }
+
     if (!/^[\w-]+$/.test(id)) return new Response('bad id', { status: 400 })
     const file = findAudio(id)
     if (!file) return new Response('not found', { status: 404 })
@@ -690,6 +722,8 @@ function registerIpc(): void {
   )
   ipcMain.handle('links:remove', (_e, id: string) => removeLink(id))
   ipcMain.handle('links:togglePin', (_e, id: string) => toggleLinkPin(id))
+  ipcMain.handle('links:pickThumb', (_e, id: string) => pickLinkThumb(id))
+  ipcMain.handle('links:clearThumb', (_e, id: string) => clearLinkThumb(id))
 
   ipcMain.handle('brand:get', () => getBrand())
   ipcMain.handle('brand:save', (_e, data: BrandData) => saveBrand(data))

@@ -214,7 +214,10 @@ const api = {
     save: (entry: Partial<LinkEntry> & Omit<LinkEntry, 'id'>): Promise<LinkEntry[]> =>
       ipcRenderer.invoke('links:save', entry),
     remove: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:remove', id),
-    togglePin: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:togglePin', id)
+    togglePin: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:togglePin', id),
+    pickThumb: (id: string): Promise<LinkEntry[] | null> =>
+      ipcRenderer.invoke('links:pickThumb', id),
+    clearThumb: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:clearThumb', id)
   },
   brand: {
     get: (): Promise<BrandData> => ipcRenderer.invoke('brand:get'),

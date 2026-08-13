@@ -1,6 +1,6 @@
-import { app } from 'electron'
-import { mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { app, dialog } from 'electron'
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { extname, join } from 'path'
 import { randomUUID } from 'crypto'
 import type { LinkEntry } from '../shared/types'
 
@@ -39,9 +39,11 @@ export function saveLink(entry: Partial<LinkEntry> & Omit<LinkEntry, 'id'>): Lin
 }
 
 export function removeLink(id: string): LinkEntry[] {
-  const links = listLinks().filter((l) => l.id !== id)
-  write(links)
-  return links
+  const links = listLinks()
+  deleteThumbFile(links.find((l) => l.id === id)?.thumb)
+  const kept = links.filter((l) => l.id !== id)
+  write(kept)
+  return kept
 }
 
 export function toggleLinkPin(id: string): LinkEntry[] {
@@ -49,5 +51,52 @@ export function toggleLinkPin(id: string): LinkEntry[] {
   const link = links.find((l) => l.id === id)
   if (link) link.pinned = !link.pinned
   write(links)
+  return links
+}
+
+export function thumbsDir(): string {
+  return join(app.getPath('userData'), 'link-thumbs')
+}
+
+function deleteThumbFile(name: string | undefined): void {
+  if (!name) return
+  try {
+    rmSync(join(thumbsDir(), name), { force: true })
+  } catch {
+    // best effort
+  }
+}
+
+/** Pick an image and store it as the link's card thumbnail. Null = canceled. */
+export async function pickLinkThumb(id: string): Promise<LinkEntry[] | null> {
+  const links = listLinks()
+  const link = links.find((l) => l.id === id)
+  if (!link) return links
+  const res = await dialog.showOpenDialog({
+    title: 'Choose a thumbnail image',
+    properties: ['openFile'],
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
+  })
+  if (res.canceled || !res.filePaths[0]) return null
+  const src = res.filePaths[0]
+  const ext = extname(src).toLowerCase() || '.png'
+  // timestamped name so a replaced image never fights the renderer cache
+  const name = `${id}-${Date.now()}${ext}`
+  mkdirSync(thumbsDir(), { recursive: true })
+  copyFileSync(src, join(thumbsDir(), name))
+  deleteThumbFile(link.thumb)
+  link.thumb = name
+  write(links)
+  return links
+}
+
+export function clearLinkThumb(id: string): LinkEntry[] {
+  const links = listLinks()
+  const link = links.find((l) => l.id === id)
+  if (link) {
+    deleteThumbFile(link.thumb)
+    delete link.thumb
+    write(links)
+  }
   return links
 }

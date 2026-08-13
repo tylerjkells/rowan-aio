@@ -478,6 +478,107 @@ button:disabled {
   color: var(--accent);
 }
 
+/* card layout: thumbnail launcher tiles */
+.link-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--s3);
+}
+
+.link-card {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-card);
+  background: var(--bg-raised);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.link-card:hover {
+  border-color: var(--accent);
+}
+
+.link-card-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  background: var(--bg-overlay);
+  overflow: hidden;
+}
+
+.link-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.link-card-letter {
+  font-size: 34px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  color: var(--ink-faint);
+}
+
+.link-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+}
+
+.link-card-name {
+  font-weight: 550;
+  color: var(--ink);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-card-name:hover {
+  color: var(--accent);
+}
+
+.link-card-tools {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.link-card-tools .btn {
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+/* thumbnail row in the edit dialog */
+.thumb-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin: var(--s3) 0;
+}
+
+.thumb-preview {
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--line-soft);
+}
+
+.thumb-none {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+
+.thumb-hint {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  margin: var(--s2) 0;
+}
+
 .pd-check {
   display: flex;
   align-items: center;
@@ -655,6 +756,8 @@ button:disabled {
   background: none;
   border: none;
   cursor: pointer;
+  text-align: left;
+  align-items: flex-start;
 }
 
 .cu-section-head {
