@@ -264,7 +264,17 @@ export function addPersonAlias(from: string, to: string): void {
   const target = to.trim()
   if (!key || !target || key === target.toLowerCase()) return
   const s = load()
-  s.personAliases = { ...(s.personAliases ?? {}), [key]: target }
+  const aliases = { ...(s.personAliases ?? {}) }
+  // the target must be canonical: if it was itself merged away earlier, that
+  // stale alias would turn this merge into a cycle (A→B and B→A) — drop it
+  delete aliases[target.toLowerCase()]
+  aliases[key] = target
+  // flatten chains: anything that pointed at the merged-away name now points
+  // straight at the new target
+  for (const [k, v] of Object.entries(aliases)) {
+    if (v.trim().toLowerCase() === key) aliases[k] = target
+  }
+  s.personAliases = aliases
   // the merged-away spelling should no longer be offered in the directory
   s.people = (s.people ?? []).filter((p) => p.toLowerCase() !== key)
   if (target.toLowerCase() !== 'me') {

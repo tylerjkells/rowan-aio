@@ -174,18 +174,46 @@ export function OwnerEditor({
     )
   }
 
-  // full list until the user types; then filter by what they typed
-  const query = draft.trim().toLowerCase()
-  const options =
-    typed && query ? suggestions.filter((s) => s.toLowerCase().includes(query)) : suggestions
+  // comma-aware: complete only the segment being typed, so shared items can
+  // list several people ("Carol Primas-Young, Andrew Bunoza")
+  const lastComma = draft.lastIndexOf(',')
+  const head = lastComma >= 0 ? draft.slice(0, lastComma + 1) : ''
+  const tail = draft.slice(lastComma + 1).trim()
+  const already = new Set(
+    head
+      .split(',')
+      .map((p) => p.trim().toLowerCase())
+      .filter(Boolean)
+  )
+  const query = tail.toLowerCase()
+  const options = suggestions
+    .filter((s) => !already.has(s.toLowerCase()))
+    .filter((s) => (typed && query ? s.toLowerCase().includes(query) : true))
+
+  /** trim segments, drop empties and duplicates, join back "A, B" */
+  function normalize(value: string): string | null {
+    const seen = new Set<string>()
+    const parts = value
+      .split(',')
+      .map((p) => p.trim())
+      .filter((p) => {
+        if (!p || seen.has(p.toLowerCase())) return false
+        seen.add(p.toLowerCase())
+        return true
+      })
+    return parts.length > 0 ? parts.join(', ') : null
+  }
 
   function pick(next: string | null): void {
     setEditing(false)
-    if (next !== owner) onSave(next)
+    const final = next === null ? null : normalize(head ? `${head} ${next}` : next)
+    if (final !== owner) onSave(final)
   }
 
   function commitTyped(): void {
-    pick(draft.trim() || null)
+    setEditing(false)
+    const final = normalize(draft)
+    if (final !== owner) onSave(final)
   }
 
   return (
@@ -193,7 +221,7 @@ export function OwnerEditor({
       <input
         autoFocus
         className="text-input owner-input"
-        placeholder="Name"
+        placeholder="Name (comma for several)"
         value={draft}
         onFocus={(e) => e.target.select()}
         onChange={(e) => {
