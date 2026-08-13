@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.19.2': [
+    'Action-item due chips no longer say the date twice: “August 24 · Aug 24” collapses to just “Aug 24”, while relative phrasings like “before Monday · Sep 9” keep both halves.'
+  ],
   '0.19.1': [
     'The meeting header’s info line keeps its shape with a long participant list: items wrap between chips instead of squeezing each one into a two-line smear.'
   ],

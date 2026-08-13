@@ -299,6 +299,34 @@ export function formatDueLabel(isoDate: string): string {
  * with the date it resolved to ("before Monday · Jul 21"); once the user sets
  * a date explicitly, the date alone is the truth.
  */
+/**
+ * "August 24 · Aug 24" says nothing twice: when the summary's free-text due
+ * is itself just the date the chip already shows, drop the text and keep the
+ * label. Relative phrasings ("before Monday · Sep 9") still show both.
+ */
+function dueTextRedundant(due: string, dueDate: string): boolean {
+  const d = new Date(`${dueDate}T12:00:00`)
+  const day = d.getDate()
+  const year = d.getFullYear()
+  const long = d.toLocaleDateString('en-US', { month: 'long' })
+  const short = d.toLocaleDateString('en-US', { month: 'short' })
+  const clean = due
+    .toLowerCase()
+    .replace(/^(due|by|on)\s+/g, '')
+    .replace(/(\d)(st|nd|rd|th)\b/g, '$1')
+    .replace(/[.,]/g, '')
+    .trim()
+  return [
+    `${long} ${day}`,
+    `${short} ${day}`,
+    `${long} ${day} ${year}`,
+    `${short} ${day} ${year}`,
+    `${d.getMonth() + 1}/${day}`,
+    `${d.getMonth() + 1}/${day}/${year}`,
+    dueDate
+  ].some((f) => f.toLowerCase() === clean)
+}
+
 export function DueEditor({
   due,
   dueDate,
@@ -323,7 +351,9 @@ export function DueEditor({
       ? formatDueLabel(dueDate)
       : due
         ? dueDate
-          ? `${due} · ${formatDueLabel(dueDate)}`
+          ? dueTextRedundant(due, dueDate)
+            ? formatDueLabel(dueDate)
+            : `${due} · ${formatDueLabel(dueDate)}`
           : due
         : dueDate
           ? formatDueLabel(dueDate)
