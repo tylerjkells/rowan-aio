@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.18.0': [
+    'Rowan AIO has a real icon now — Rowan Brown badge, gold R — and it finally shows up in the Windows taskbar instead of the stock Electron logo (the old icon lacked the 256px frame Windows wants).',
+    'The window titlebar follows your theme: pick Paper, Notion, or iOS and the frame goes light instead of staying dark.',
+    'Set who was in a meeting: click the “with …” chip in a meeting’s header (or “+ participants” when empty) to add people with directory suggestions, remove them, or pull the list straight from the matching Outlook calendar invite. Participants help speaker identification and summaries get names right.',
+    'The SQL query editor opens near-full-width with a taller editing area — no more squinting at 60-character lines.'
+  ],
   '0.17.0': [
     'Toolbox gains a SQL tab: save the queries you reuse (name, notes, and the SQL itself), expand one to read it, and copy it with a click.',
     'Completing a ClickUp task now asks for a short closing note first — it posts to the task’s thread as a comment, then the task moves to done. “Done without comment” stays available for the rare exception.',
