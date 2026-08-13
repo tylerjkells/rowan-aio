@@ -588,6 +588,16 @@ button:disabled {
   margin: var(--s3) 0;
 }
 
+/* ClickUp task rows on Today: the task name links out */
+a.rollup-task {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a.rollup-task:hover {
+  color: var(--accent);
+}
+
 /* pinned links strip on Today */
 .today-links {
   display: flex;
