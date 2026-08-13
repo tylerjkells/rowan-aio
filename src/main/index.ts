@@ -6,7 +6,8 @@ import {
   session,
   desktopCapturer,
   protocol,
-  dialog
+  dialog,
+  nativeTheme
 } from 'electron'
 import { writeFileSync } from 'fs'
 import { join } from 'path'
@@ -150,7 +151,18 @@ const WINDOW_BG: Record<string, string> = {
   ios: '#f2f2f7'
 }
 
+/**
+ * The OS draws the window frame, and by default it follows the system
+ * dark-mode setting — so a light app theme kept a dark titlebar. Steer the
+ * frame to match the chosen theme instead.
+ */
+function applyFrameTheme(): void {
+  const light = new Set(['paper', 'notion', 'ios'])
+  nativeTheme.themeSource = light.has(getSettings().theme) ? 'light' : 'dark'
+}
+
 function createWindow(): BrowserWindow {
+  applyFrameTheme()
   const win = new BrowserWindow({
     width: 1120,
     height: 760,
@@ -363,6 +375,7 @@ function registerIpc(): void {
   ipcMain.handle('settings:update', (_e, patch: Partial<AppSettings>) => {
     const next = updateSettings(patch)
     applySystemSettings()
+    if (patch.theme) applyFrameTheme()
     return next
   })
   ipcMain.handle('settings:setApiKey', (_e, key: string | null) => setApiKey(key))
@@ -597,6 +610,28 @@ function registerIpc(): void {
     m.notes = String(text).trim() || undefined
     writeMeeting(m)
     return m
+  })
+
+  ipcMain.handle('meetings:setAttendees', (_e, id: string, names: string[]) => {
+    const m = readMeeting(id)
+    if (!m) return null
+    const clean = [...new Set(names.map((n) => String(n).trim()).filter(Boolean))]
+    m.attendees = clean.length > 0 ? clean : undefined
+    writeMeeting(m)
+    return m
+  })
+
+  // attendees of the calendar event this meeting was recorded during, if the
+  // subscribed calendar still carries the event
+  ipcMain.handle('meetings:attendeesFromCalendar', async (_e, id: string): Promise<string[] | null> => {
+    const m = readMeeting(id)
+    if (!m) return null
+    try {
+      const event = await findLiveEvent(m.createdAt)
+      return event && event.attendees.length > 0 ? event.attendees : null
+    } catch {
+      return null
+    }
   })
 
   ipcMain.handle('meetings:identifySpeakers', async (_e, id: string): Promise<Meeting | null> => {

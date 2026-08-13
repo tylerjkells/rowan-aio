@@ -15,6 +15,142 @@ import { parseDueDate } from '../../../shared/dates'
 import { ClickupPushDialog } from '../ClickupPush'
 import { exportFilename, followUpEmail, meetingToMarkdown, summaryToMarkdown } from '../markdown'
 
+/**
+ * Who was in the room: edit the meeting's participant list by hand (directory
+ * names suggested) or pull it from the calendar event the recording matched.
+ */
+function AttendeesDialog({
+  meeting,
+  suggestions,
+  onSaved,
+  onClose
+}: {
+  meeting: Meeting
+  suggestions: string[]
+  onSaved: (m: Meeting) => void
+  onClose: () => void
+}): React.JSX.Element {
+  const ref = useRef<HTMLDialogElement>(null)
+  const [names, setNames] = useState<string[]>(meeting.attendees ?? [])
+  const [draft, setDraft] = useState('')
+  const [pulling, setPulling] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+
+  useEffect(() => {
+    ref.current?.showModal()
+  }, [])
+
+  const has = (n: string): boolean => names.some((x) => x.toLowerCase() === n.toLowerCase())
+  const options = suggestions.filter((s) => s !== 'Me' && !has(s))
+
+  function add(raw: string): void {
+    const fresh = raw
+      .split(',')
+      .map((n) => n.trim())
+      .filter((n) => n && !has(n))
+    if (fresh.length > 0) setNames([...names, ...fresh])
+    setDraft('')
+  }
+
+  async function pullFromCalendar(): Promise<void> {
+    setPulling(true)
+    setNote(null)
+    const found = await window.scribe.meetings.attendeesFromCalendar(meeting.id)
+    setPulling(false)
+    if (!found) {
+      setNote('No calendar event with attendees matches this meeting’s time.')
+      return
+    }
+    const fresh = found.filter((n) => !has(n))
+    setNames([...names, ...fresh])
+    setNote(fresh.length > 0 ? `Added ${fresh.length} from the invite.` : 'Already all listed.')
+  }
+
+  async function save(): Promise<void> {
+    const pending = draft.trim() // typed but not yet added still counts
+    const final = pending ? [...names, ...pending.split(',').map((n) => n.trim())] : names
+    const updated = await window.scribe.meetings.setAttendees(meeting.id, final)
+    if (updated) onSaved(updated)
+    onClose()
+  }
+
+  return (
+    <dialog
+      ref={ref}
+      className="confirm person-edit"
+      onClose={onClose}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose()
+      }}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          save()
+        }}
+      >
+        <h3>Participants</h3>
+        {names.length > 0 && (
+          <div className="att-chips">
+            {names.map((n) => (
+              <span className="att-chip" key={n}>
+                {n}
+                <button
+                  type="button"
+                  className="att-chip-x"
+                  onClick={() => setNames(names.filter((x) => x !== n))}
+                  aria-label={`Remove ${n}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <label className="pd-field">
+          <span>Add a person (comma for several)</span>
+          <input
+            className="text-input"
+            list="att-people"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && draft.trim()) {
+                e.preventDefault()
+                add(draft)
+              }
+            }}
+            placeholder="Start typing a directory name…"
+            autoFocus
+          />
+          <datalist id="att-people">
+            {options.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        </label>
+        {note && <p className="field-note">{note}</p>}
+        <div className="confirm-actions">
+          <button
+            type="button"
+            className="btn btn-ghost pd-remove"
+            onClick={pullFromCalendar}
+            disabled={pulling}
+          >
+            {pulling ? 'Checking…' : 'From calendar invite'}
+          </button>
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary">
+            Save
+          </button>
+        </div>
+      </form>
+    </dialog>
+  )
+}
+
 function Collapse({
   label,
   meta,
@@ -199,6 +335,7 @@ export function MeetingView({
   const [pushIdx, setPushIdx] = useState<number | null>(null)
   const [identifying, setIdentifying] = useState(false)
   const [identifyError, setIdentifyError] = useState<string | null>(null)
+  const [editingAttendees, setEditingAttendees] = useState(false)
   const [playheadMs, setPlayheadMs] = useState(-1)
   const [editIdx, setEditIdx] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState('')
@@ -400,12 +537,24 @@ export function MeetingView({
                 ? 'imported'
                 : 'in person'}
           </span>
-          {meeting.attendees && meeting.attendees.length > 0 && (
-            <span title={meeting.attendees.join(', ')}>
-              with {meeting.attendees.slice(0, 3).join(', ')}
-              {meeting.attendees.length > 3 ? ` +${meeting.attendees.length - 3}` : ''}
-            </span>
-          )}
+          <button
+            className="att-edit"
+            onClick={() => setEditingAttendees(true)}
+            title={
+              meeting.attendees && meeting.attendees.length > 0
+                ? `${meeting.attendees.join(', ')} — click to edit`
+                : 'Set who was in this meeting'
+            }
+          >
+            {meeting.attendees && meeting.attendees.length > 0 ? (
+              <>
+                with {meeting.attendees.slice(0, 3).join(', ')}
+                {meeting.attendees.length > 3 ? ` +${meeting.attendees.length - 3}` : ''}
+              </>
+            ) : (
+              <>+ participants</>
+            )}
+          </button>
           {seriesCount > 0 && (
             <button
               className="series-chip"
@@ -817,6 +966,14 @@ export function MeetingView({
             setPushIdx(null)
           }}
           onClose={() => setPushIdx(null)}
+        />
+      )}
+      {editingAttendees && (
+        <AttendeesDialog
+          meeting={meeting}
+          suggestions={speakerChoices}
+          onSaved={setMeeting}
+          onClose={() => setEditingAttendees(false)}
         />
       )}
     </div>

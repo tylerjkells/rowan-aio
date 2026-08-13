@@ -131,6 +131,10 @@ const api = {
       ipcRenderer.invoke('meetings:setNotes', id, text),
     setSpeakers: (id: string, names: { me: string; them: string }): Promise<Meeting | null> =>
       ipcRenderer.invoke('meetings:setSpeakers', id, names),
+    setAttendees: (id: string, names: string[]): Promise<Meeting | null> =>
+      ipcRenderer.invoke('meetings:setAttendees', id, names),
+    attendeesFromCalendar: (id: string): Promise<string[] | null> =>
+      ipcRenderer.invoke('meetings:attendeesFromCalendar', id),
     import: (title: string, dateIso: string, text: string): Promise<Meeting> =>
       ipcRenderer.invoke('meetings:import', title, dateIso, text),
     bulkPick: (kind: 'zip' | 'folder'): Promise<BulkScan | null> =>
