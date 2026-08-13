@@ -111,17 +111,33 @@ export async function autoLinkThumb(
       contextIsolation: true,
       nodeIntegration: false,
       // its own cookie jar, fully separate from the app
-      partition: 'thumb-capture'
+      partition: 'thumb-capture',
+      // hidden windows never paint; offscreen rendering does
+      offscreen: true,
+      backgroundThrottling: false
     }
   })
   try {
-    await Promise.race([
-      win.loadURL(link.url),
-      new Promise((_r, reject) => setTimeout(() => reject(new Error('Page took too long')), 20_000))
-    ])
-    // let late-rendering pages (charts, dashboards) settle
-    await new Promise((r) => setTimeout(r, 2000))
+    try {
+      await Promise.race([
+        win.loadURL(link.url),
+        new Promise((_r, reject) =>
+          setTimeout(() => reject(new Error('Page took too long')), 20_000)
+        )
+      ])
+    } catch {
+      // script-heavy pages (Tableau embeds and friends) routinely abort or
+      // error during load; whatever did render is still worth capturing
+    }
+    // let late-rendering pages (charts, dashboards, login redirects) settle
+    await new Promise((r) => setTimeout(r, 3500))
     const image = await win.webContents.capturePage()
+    if (image.isEmpty() || isBlank(image)) {
+      return {
+        error:
+          'Captured a blank page — it may need a login or render too slowly. Use “Choose image…” with your own screenshot instead.'
+      }
+    }
     const jpeg = image.resize({ width: 800 }).toJPEG(82)
     const name = `${id}-${Date.now()}.jpg`
     mkdirSync(thumbsDir(), { recursive: true })
@@ -135,6 +151,21 @@ export async function autoLinkThumb(
   } finally {
     win.destroy()
   }
+}
+
+/** true when a capture is one flat color (unpainted page or blank redirect) */
+function isBlank(image: Electron.NativeImage): boolean {
+  const bmp = image.resize({ width: 64 }).toBitmap()
+  let min = 255
+  let max = 0
+  for (let i = 0; i < bmp.length; i += 4) {
+    // BGRA; a quick luma spread across the whole frame is enough
+    const luma = (bmp[i] + bmp[i + 1] + bmp[i + 2]) / 3
+    if (luma < min) min = luma
+    if (luma > max) max = luma
+    if (max - min > 12) return false
+  }
+  return true
 }
 
 export function clearLinkThumb(id: string): LinkEntry[] {
