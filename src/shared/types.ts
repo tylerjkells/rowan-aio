@@ -240,6 +240,23 @@ export interface PersonDetails {
   notes?: string
 }
 
+/** one parsed row of a directory CSV import */
+export interface DirectoryImportRow {
+  name: string
+  details: PersonDetails
+}
+
+/** result of scanning a CSV file chosen for directory import */
+export interface DirectoryImportScan {
+  file: string
+  rows: DirectoryImportRow[]
+  /** rows dropped for missing/invalid names */
+  skipped: number
+  /** which directory field was read from which CSV column */
+  mapped: Record<string, string>
+  error?: string
+}
+
 /** one row on the People page */
 export interface PersonSummary {
   name: string

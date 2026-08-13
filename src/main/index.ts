@@ -42,6 +42,7 @@ import {
   removePerson
 } from './settings'
 import { mergeDetails, removeDetails, setDetails } from './directory'
+import { applyDirectoryImport, scanDirectoryCsv } from './directoryImport'
 import { listLinks, removeLink, saveLink, toggleLinkPin } from './links'
 import { getBrand, saveBrand } from './brand'
 import {
@@ -88,6 +89,7 @@ import type {
   AutoEndReason,
   BrandData,
   BulkSelection,
+  DirectoryImportRow,
   EnergySample,
   LinkEntry,
   Meeting,
@@ -653,6 +655,12 @@ function registerIpc(): void {
   ipcMain.handle('people:remove', (_e, name: string) => {
     removePerson(name)
     removeDetails(name)
+    return listPeople()
+  })
+
+  ipcMain.handle('people:importScan', () => scanDirectoryCsv())
+  ipcMain.handle('people:importApply', (_e, rows: DirectoryImportRow[]) => {
+    applyDirectoryImport(rows)
     return listPeople()
   })
 

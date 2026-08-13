@@ -8,6 +8,8 @@ import type {
   BulkScan,
   BulkSelection,
   CalendarEvent,
+  DirectoryImportRow,
+  DirectoryImportScan,
   EnergySample,
   EngineProgress,
   EngineStatus,
@@ -194,7 +196,10 @@ const api = {
       ipcRenderer.invoke('people:merge', from, to),
     setDetails: (name: string, details: PersonDetails): Promise<PersonSummary[]> =>
       ipcRenderer.invoke('people:setDetails', name, details),
-    remove: (name: string): Promise<PersonSummary[]> => ipcRenderer.invoke('people:remove', name)
+    remove: (name: string): Promise<PersonSummary[]> => ipcRenderer.invoke('people:remove', name),
+    importScan: (): Promise<DirectoryImportScan | null> => ipcRenderer.invoke('people:importScan'),
+    importApply: (rows: DirectoryImportRow[]): Promise<PersonSummary[]> =>
+      ipcRenderer.invoke('people:importApply', rows)
   },
   links: {
     list: (): Promise<LinkEntry[]> => ipcRenderer.invoke('links:list'),

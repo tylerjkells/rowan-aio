@@ -594,6 +594,65 @@ button:disabled {
   margin-right: auto;
 }
 
+/* CSV import preview */
+.import-mapping {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  margin-bottom: var(--s3);
+}
+
+.import-map-chip {
+  padding: 1px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  padding: var(--s2) var(--s3);
+  margin-bottom: var(--s2);
+}
+
+.import-preview-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+}
+
+.import-preview-name {
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.import-preview-sub {
+  font-size: 12px;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-preview-more {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+.empty-state-actions {
+  display: flex;
+  gap: var(--s2);
+  justify-content: center;
+}
+
 /* org chart: nested reporting lines */
 .org-chart {
   display: flex;

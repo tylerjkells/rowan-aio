@@ -70,6 +70,18 @@ export function mergeDetails(from: string, to: string): void {
   writeDirectory(dir)
 }
 
+/** Batch-merge imported details; fields present in the import win. */
+export function bulkMergeDetails(entries: { name: string; details: PersonDetails }[]): void {
+  const dir = readDirectory()
+  for (const { name, details } of entries) {
+    const key = name.trim().toLowerCase()
+    const pruned = prune(details)
+    if (Object.keys(pruned).length === 0) continue
+    dir[key] = { ...(dir[key] ?? {}), ...pruned }
+  }
+  writeDirectory(dir)
+}
+
 export function removeDetails(name: string): void {
   const dir = readDirectory()
   const key = name.trim().toLowerCase()

@@ -605,7 +605,8 @@ export function SettingsView({
           <h2>Team directory</h2>
           <p className="hint">
             Offered when assigning action items. Assigning a new name or naming a speaker adds
-            people here automatically.
+            people here automatically. The People page is the full directory — titles, contact
+            info, reporting lines, and CSV import live there.
           </p>
         </header>
         <div className="settings-body">

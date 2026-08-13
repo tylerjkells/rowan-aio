@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PersonDetails, PersonProfile, PersonSummary } from '../../../shared/types'
+import type {
+  DirectoryImportScan,
+  PersonDetails,
+  PersonProfile,
+  PersonSummary
+} from '../../../shared/types'
 import { BackIcon, DueEditor, formatWhen, isOverdue, useConfirm } from '../ui'
 
 const keyOf = (name: string): string => name.trim().toLowerCase()
@@ -158,6 +163,89 @@ function PersonEditDialog({
 }
 
 // ---------------------------------------------------------------------------
+// CSV import preview
+// ---------------------------------------------------------------------------
+
+function ImportDialog({
+  scan,
+  onClose
+}: {
+  scan: DirectoryImportScan
+  onClose: (imported: boolean) => void
+}): React.JSX.Element {
+  const ref = useRef<HTMLDialogElement>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    ref.current?.showModal()
+  }, [])
+
+  async function apply(): Promise<void> {
+    setBusy(true)
+    await window.scribe.people.importApply(scan.rows)
+    onClose(true)
+  }
+
+  const preview = scan.rows.slice(0, 8)
+
+  return (
+    <dialog
+      ref={ref}
+      className="confirm person-edit"
+      onClose={() => onClose(false)}
+      onClick={(e) => {
+        if (e.target === ref.current && !busy) onClose(false)
+      }}
+    >
+      <h3>Import from {scan.file}</h3>
+      {scan.error ? (
+        <p>{scan.error}</p>
+      ) : (
+        <>
+          <p>
+            {scan.rows.length} {scan.rows.length === 1 ? 'person' : 'people'} found
+            {scan.skipped > 0 && <> · {scan.skipped} rows skipped (missing or unusable name)</>}.
+            Fields in the file update existing people; everything else is kept.
+          </p>
+          <div className="import-mapping">
+            {Object.entries(scan.mapped).map(([field, header]) => (
+              <span className="import-map-chip" key={field}>
+                {field} ← {header}
+              </span>
+            ))}
+          </div>
+          <div className="import-preview">
+            {preview.map((r) => (
+              <div className="import-preview-row" key={r.name}>
+                <span className="import-preview-name">{r.name}</span>
+                <span className="import-preview-sub">
+                  {[r.details.title, r.details.department, r.details.reportsTo && `→ ${r.details.reportsTo}`]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </div>
+            ))}
+            {scan.rows.length > preview.length && (
+              <div className="import-preview-more">…and {scan.rows.length - preview.length} more</div>
+            )}
+          </div>
+        </>
+      )}
+      <div className="confirm-actions">
+        <button className="btn" onClick={() => onClose(false)} disabled={busy}>
+          Cancel
+        </button>
+        {!scan.error && scan.rows.length > 0 && (
+          <button className="btn btn-primary" onClick={apply} disabled={busy}>
+            {busy ? 'Importing…' : `Import ${scan.rows.length}`}
+          </button>
+        )}
+      </div>
+    </dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Org chart
 // ---------------------------------------------------------------------------
 
@@ -232,6 +320,7 @@ export function PeopleView({
     () => (localStorage.getItem('peopleView') as PeopleMode) || 'list'
   )
   const [editing, setEditing] = useState<PersonSummary | 'new' | null>(null)
+  const [importScan, setImportScan] = useState<DirectoryImportScan | null>(null)
 
   function load(): void {
     window.scribe.people.list().then((list) => {
@@ -240,6 +329,11 @@ export function PeopleView({
     })
   }
   useEffect(load, [])
+
+  async function startImport(): Promise<void> {
+    const scan = await window.scribe.people.importScan()
+    if (scan) setImportScan(scan)
+  }
 
   function switchMode(m: PeopleMode): void {
     setMode(m)
@@ -256,6 +350,14 @@ export function PeopleView({
           if (changed) load()
         }}
       />
+    ) : importScan !== null ? (
+      <ImportDialog
+        scan={importScan}
+        onClose={(imported) => {
+          setImportScan(null)
+          if (imported) load()
+        }}
+      />
     ) : null
 
   if (loaded && people.length === 0) {
@@ -268,9 +370,14 @@ export function PeopleView({
             People collect here from your meetings — action-item owners, named speakers, calendar
             attendees — or add them yourself to build the org directory.
           </p>
-          <button className="btn btn-primary" onClick={() => setEditing('new')}>
-            Add person
-          </button>
+          <div className="empty-state-actions">
+            <button className="btn btn-primary" onClick={() => setEditing('new')}>
+              Add person
+            </button>
+            <button className="btn" onClick={startImport}>
+              Import CSV
+            </button>
+          </div>
         </div>
       </>
     )
@@ -326,6 +433,9 @@ export function PeopleView({
           </div>
           <button className="btn" onClick={() => setEditing('new')}>
             Add person
+          </button>
+          <button className="btn btn-ghost" onClick={startImport} title="Populate the directory from a CSV export (SQL, Excel, HR system)">
+            Import CSV
           </button>
         </div>
       </div>
