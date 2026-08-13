@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.16.1': [
+    'Action items can be assigned to several people from the owner picker: type a comma and pick the next name — already-listed people are filtered out, and the result reads “Carol Primas-Young, Andrew Bunoza”.',
+    'Person merges can no longer tangle: merging A into B after B had been merged into A used to corrupt the identity map (cards opening under the wrong name); merges now flatten cleanly, and a wrong-direction merge is fixed by simply merging back.',
+    'The auto-updater and the About link now point at the renamed rowan-aio repository directly instead of relying on GitHub’s redirect.'
+  ],
   '0.16.0': [
     'MeetingScribe is now Rowan AIO — one app for your work at Rowan, with meetings as one module among several. Your library, settings, and updates carry over untouched.',
     'People is a full org directory now: titles, contact info, and reporting lines; an Outlook-style org chart you click through; a one-time CSV import that loads the whole org; renames that keep meeting history; and search.',
