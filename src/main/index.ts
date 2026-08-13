@@ -13,6 +13,9 @@ import { join } from 'path'
 import { Readable } from 'stream'
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, createReadStream } from 'fs'
 import { autoUpdater } from 'electron-updater'
+// imported first: redirects userData for dev/test channels before any other
+// module resolves a path under it
+import { channel } from './channel'
 import {
   listMeetings,
   readMeeting,
@@ -35,8 +38,49 @@ import {
   setApiKey,
   setCalendarUrl,
   addPerson,
-  addPersonAlias
+  addPersonAlias,
+  removePerson,
+  renamePerson,
+  setOpenaiKey
 } from './settings'
+import { mergeDetails, removeDetails, setDetails } from './directory'
+import { applyDirectoryImport, scanDirectoryCsv } from './directoryImport'
+import {
+  autoLinkThumb,
+  clearLinkThumb,
+  listLinks,
+  pickLinkThumb,
+  removeLink,
+  saveLink,
+  thumbsDir,
+  toggleLinkPin
+} from './links'
+import { getBrand, saveBrand } from './brand'
+import {
+  addToolboxFiles,
+  addToolboxGuide,
+  addToolboxImages,
+  copyToolboxImage,
+  getGuideHtml,
+  readToolbox,
+  removeToolboxFile,
+  removeToolboxGuide,
+  removeToolboxImage,
+  updateToolboxGuide,
+  saveToolboxFileCopy,
+  toolboxImagesDir
+} from './toolbox'
+import {
+  clickupLists,
+  clickupStatus,
+  commentClickupTask,
+  completeClickupTask,
+  connectClickup,
+  disconnectClickup,
+  pushClickupTask,
+  refreshClickup,
+  setClickupTaskDue
+} from './clickup'
 import {
   refreshCalendar,
   getTodayEvents,
@@ -70,6 +114,7 @@ import { runBackup, startAutoBackup } from './backup'
 import { actionRollup, identityContext } from './identity'
 import { claudeConnectionStatus, connectClaude, disconnectClaude } from './claudeConnect'
 import { engineStatus, setupEngine } from './whisper'
+import { activeAiModel, testOpenaiKey } from './ai'
 import { processMeeting, summarizeMeeting } from './pipeline'
 import { askAboutMeeting, testApiKey } from './summarize'
 import { askLibrary, clearAskHistory, readAskHistory } from './ask'
@@ -79,9 +124,14 @@ import type {
   ActionRollupItem,
   AppSettings,
   AutoEndReason,
+  BrandData,
   BulkSelection,
+  ClickupPushInput,
+  DirectoryImportRow,
   EnergySample,
+  LinkEntry,
   Meeting,
+  PersonDetails,
   RecordingMode,
   WhisperModel
 } from '../shared/types'
@@ -91,7 +141,9 @@ const WINDOW_BG: Record<string, string> = {
   studio: '#101013',
   rowan: '#17120a',
   slate: '#101318',
-  paper: '#f8f6f3'
+  paper: '#f8f6f3',
+  notion: '#ffffff',
+  ios: '#f2f2f7'
 }
 
 function createWindow(): BrowserWindow {
@@ -103,7 +155,7 @@ function createWindow(): BrowserWindow {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: WINDOW_BG[getSettings().theme] ?? '#101013',
-    title: 'MeetingScribe',
+    title: 'Rowan AIO',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -141,7 +193,9 @@ function createWindow(): BrowserWindow {
 }
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'scribe-media', privileges: { stream: true, supportFetchAPI: true } }
+  // corsEnabled lets the renderer draw toolbox images to a canvas untainted,
+  // which is how images get onto the clipboard in every format
+  { scheme: 'scribe-media', privileges: { stream: true, supportFetchAPI: true, corsEnabled: true } }
 ])
 
 // Windows toasts need the app identity to match the installed shortcut
@@ -175,7 +229,38 @@ app.whenReady().then(() => {
   // filesystem. Range support matters: without it the media player cannot
   // probe the end of a file for its duration or seek within long recordings.
   session.defaultSession.protocol.handle('scribe-media', (request) => {
-    const id = decodeURIComponent(new URL(request.url).hostname)
+    const parsed = new URL(request.url)
+    const id = decodeURIComponent(parsed.hostname)
+
+    // scribe-media://thumb/<filename> serves link-card thumbnails;
+    // scribe-media://toolbox/<filename> serves toolbox images
+    if (id === 'thumb' || id === 'toolbox') {
+      const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''))
+      if (!/^[\w.-]+$/.test(name) || name.includes('..')) {
+        return new Response('bad name', { status: 400 })
+      }
+      const file = join(id === 'thumb' ? thumbsDir() : toolboxImagesDir(), name)
+      if (!existsSync(file)) return new Response('not found', { status: 404 })
+      const ext = name.split('.').pop()!.toLowerCase()
+      const mime =
+        ext === 'png'
+          ? 'image/png'
+          : ext === 'webp'
+            ? 'image/webp'
+            : ext === 'gif'
+              ? 'image/gif'
+              : ext === 'svg'
+                ? 'image/svg+xml'
+                : 'image/jpeg'
+      return new Response(Readable.toWeb(createReadStream(file)) as never, {
+        headers: {
+          'Content-Type': mime,
+          'Cache-Control': 'max-age=31536000, immutable',
+          'Access-Control-Allow-Origin': '*'
+        }
+      })
+    }
+
     if (!/^[\w-]+$/.test(id)) return new Response('bad id', { status: 400 })
     const file = findAudio(id)
     if (!file) return new Response('not found', { status: 404 })
@@ -251,7 +336,9 @@ app.on('window-all-closed', () => {
 })
 
 function setupAutoUpdate(): void {
-  if (!app.isPackaged) return
+  // only the installed release self-updates; a test build finding the GitHub
+  // releases feed would replace itself with the production app
+  if (channel !== 'stable') return
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.on('update-downloaded', (info) => {
@@ -276,6 +363,8 @@ function registerIpc(): void {
   })
   ipcMain.handle('settings:setApiKey', (_e, key: string | null) => setApiKey(key))
   ipcMain.handle('settings:testApiKey', (_e, key: string) => testApiKey(key))
+  ipcMain.handle('settings:setOpenaiKey', (_e, key: string | null) => setOpenaiKey(key))
+  ipcMain.handle('settings:testOpenaiKey', (_e, key: string) => testOpenaiKey(key))
   ipcMain.handle('usage:get', () => getUsage())
 
   // --- transcription engine ---
@@ -359,6 +448,7 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('app:version', () => app.getVersion())
+  ipcMain.handle('app:channel', () => channel)
 
   // full-text search across titles, summaries, and transcripts
   ipcMain.handle('meetings:search', (_e, query: string): { id: string; snippet: string }[] => {
@@ -526,7 +616,7 @@ function registerIpc(): void {
   ipcMain.handle('meetings:ask', async (_e, id: string, question: string): Promise<string> => {
     const meeting = readMeeting(id)
     if (!meeting) throw new Error('Meeting not found')
-    const answer = await askAboutMeeting(meeting, question, getSettings().claudeModel)
+    const answer = await askAboutMeeting(meeting, question, activeAiModel())
     meeting.qa = [...(meeting.qa ?? []), { q: question, a: answer }]
     writeMeeting(meeting)
     return answer
@@ -585,7 +675,7 @@ function registerIpc(): void {
   // --- library-wide Q&A ---
   ipcMain.handle('ask:history', () => readAskHistory())
   ipcMain.handle('ask:ask', (_e, question: string) =>
-    askLibrary(question, getSettings().claudeModel)
+    askLibrary(question, activeAiModel())
   )
   ipcMain.handle('ask:clear', () => clearAskHistory())
 
@@ -603,7 +693,7 @@ function registerIpc(): void {
       title: 'Back up library',
       defaultPath: join(
         app.getPath('documents'),
-        `MeetingScribe-backup-${new Date().toISOString().slice(0, 10)}.zip`
+        `RowanAIO-backup-${new Date().toISOString().slice(0, 10)}.zip`
       ),
       filters: [{ name: 'Zip archive', extensions: ['zip'] }]
     })
@@ -629,8 +719,96 @@ function registerIpc(): void {
   ipcMain.handle('people:profile', (_e, name: string) => personProfile(name))
   ipcMain.handle('people:merge', (_e, from: string, to: string) => {
     addPersonAlias(from, to)
+    mergeDetails(from, to)
     return listPeople()
   })
+  ipcMain.handle('people:setDetails', (_e, name: string, details: PersonDetails) => {
+    addPerson(name) // no-op if already in the roster
+    setDetails(name, details)
+    return listPeople()
+  })
+  ipcMain.handle('people:remove', (_e, name: string) => {
+    removePerson(name)
+    removeDetails(name)
+    return listPeople()
+  })
+
+  ipcMain.handle('people:rename', (_e, from: string, to: string) => {
+    renamePerson(from, to)
+    mergeDetails(from, to)
+    return listPeople()
+  })
+  ipcMain.handle('people:importScan', () => scanDirectoryCsv())
+  ipcMain.handle('people:importApply', (_e, rows: DirectoryImportRow[]) => {
+    applyDirectoryImport(rows)
+    return listPeople()
+  })
+
+  ipcMain.handle('links:list', () => listLinks())
+  ipcMain.handle('links:save', (_e, entry: Partial<LinkEntry> & Omit<LinkEntry, 'id'>) =>
+    saveLink(entry)
+  )
+  ipcMain.handle('links:remove', (_e, id: string) => removeLink(id))
+  ipcMain.handle('links:togglePin', (_e, id: string) => toggleLinkPin(id))
+  ipcMain.handle('links:pickThumb', (_e, id: string) => pickLinkThumb(id))
+  ipcMain.handle('links:autoThumb', (_e, id: string) => autoLinkThumb(id))
+  ipcMain.handle('links:clearThumb', (_e, id: string) => clearLinkThumb(id))
+
+  ipcMain.handle('brand:get', () => getBrand())
+  ipcMain.handle('brand:save', (_e, data: BrandData) => saveBrand(data))
+
+  ipcMain.handle('toolbox:get', () => readToolbox())
+  ipcMain.handle('toolbox:addGuide', () => addToolboxGuide())
+  ipcMain.handle('toolbox:guideHtml', (_e, id: string) => getGuideHtml(id))
+  ipcMain.handle('toolbox:removeGuide', (_e, id: string) => removeToolboxGuide(id))
+  ipcMain.handle('toolbox:updateGuide', (_e, id: string, patch: { title?: string; html?: string }) =>
+    updateToolboxGuide(id, patch)
+  )
+  ipcMain.handle('toolbox:addImages', () => addToolboxImages())
+  ipcMain.handle('toolbox:copyImage', (_e, id: string) => copyToolboxImage(id))
+  ipcMain.handle('toolbox:removeImage', (_e, id: string) => removeToolboxImage(id))
+  ipcMain.handle('toolbox:addFiles', () => addToolboxFiles())
+  ipcMain.handle('toolbox:saveFileCopy', (_e, id: string) => saveToolboxFileCopy(id))
+  ipcMain.handle('toolbox:removeFile', (_e, id: string) => removeToolboxFile(id))
+
+  ipcMain.handle('clickup:status', () => clickupStatus())
+  ipcMain.handle('clickup:connect', (_e, token: string) => connectClickup(token))
+  ipcMain.handle('clickup:disconnect', () => {
+    disconnectClickup()
+    return getSettings()
+  })
+  ipcMain.handle('clickup:refresh', (_e, scope: 'mine' | 'all' = 'mine') => refreshClickup(scope))
+  ipcMain.handle('clickup:lists', () => clickupLists())
+  ipcMain.handle('clickup:push', (_e, input: ClickupPushInput) => pushClickupTask(input))
+  ipcMain.handle(
+    'clickup:complete',
+    (_e, taskId: string, listId: string, name: string, url?: string) =>
+      completeClickupTask(taskId, listId, name, url)
+  )
+  ipcMain.handle(
+    'clickup:setTaskDue',
+    (_e, taskId: string, iso: string | null, name: string, url?: string) =>
+      setClickupTaskDue(taskId, iso, name, url)
+  )
+  ipcMain.handle(
+    'clickup:comment',
+    (_e, taskId: string, text: string, name: string, url?: string) =>
+      commentClickupTask(taskId, text, name, url)
+  )
+  ipcMain.handle(
+    'actions:setClickupUrl',
+    (_e, meetingId: string, index: number, url: string | null) => {
+      const m = readMeeting(meetingId)
+      const item = m?.summary?.actionItems[index]
+      if (!m || !item) return null
+      item.clickupUrl = url || undefined
+      writeMeeting(m)
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send('meeting:updated', m)
+      }
+      return m
+    }
+  )
 
   ipcMain.handle('actions:list', (): ActionRollupItem[] => {
     const ctx = identityContext()

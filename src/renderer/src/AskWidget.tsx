@@ -5,8 +5,8 @@ import { formatDuration, formatWhen, SparkIcon, useConfirm } from './ui'
 const EXAMPLES = [
   'What did we decide about…',
   'What is still open from my meetings this month?',
-  'When did we last discuss…',
-  'What has everyone committed to this week?'
+  'What is the email for…',
+  'Which of my ClickUp tasks are overdue?'
 ]
 
 type AskMode = 'library' | 'meeting'
@@ -171,7 +171,7 @@ export function AskWidget({
                 <p className="today-quiet">
                   {inMeeting
                     ? 'Ask anything about this meeting — grounded in its transcript.'
-                    : 'Ask across every meeting in your library, with cited sources.'}
+                    : 'Ask across your meetings, people, links, brand colors, and tasks — meeting answers come with cited sources.'}
                 </p>
                 {!inMeeting && (
                   <div className="ask-examples">
@@ -245,7 +245,7 @@ export function AskWidget({
               ref={inputRef}
               className="text-input"
               type="text"
-              placeholder={inMeeting ? 'What did we decide about…' : 'Ask across all your meetings…'}
+              placeholder={inMeeting ? 'What did we decide about…' : 'Ask across your workspace…'}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && ask()}
@@ -264,7 +264,7 @@ export function AskWidget({
         onClick={() => setOpen(!open)}
         aria-label={open ? 'Close Ask' : 'Ask your meetings'}
         aria-expanded={open}
-        title="Ask your meetings"
+        title="Ask your workspace"
       >
         <SparkIcon />
       </button>

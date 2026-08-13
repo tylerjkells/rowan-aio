@@ -1,6 +1,38 @@
-# MeetingScribe
+# Rowan AIO
 
-Record, transcribe, and AI-summarize your meetings — locally, privately, and without a subscription.
+The all-in-one work hub: meeting capture and memory, an org directory with an
+org chart, ClickUp-connected projects, an org link hub, the brand guide, and a
+toolbox of guides, images, and templates — local-first, private, no
+subscription. (Formerly MeetingScribe; the meeting companion below is now one
+module of several.)
+
+## The workspace
+
+- **People** — a full org directory: titles, departments, contact info, and
+  reporting lines, browsable as an Outlook-style org chart. Load the whole org
+  from a CSV export in one import; every person is auto-enriched with their
+  meeting history, what they own, and what you owe them.
+- **Projects** — a ClickUp companion (personal API token, stored encrypted):
+  every open task assigned to you grouped by due date or project, complete /
+  re-date / comment in place, a Mine/Everyone scope, and an Activity changelog
+  built by diffing refreshes. Meeting action items push to real ClickUp tasks
+  with assignee and due date mapped.
+- **Links** — the org link hub, grouped by category with pinned favorites that
+  also appear on Today; compact list or thumbnail cards (upload a screenshot
+  or auto-capture the page).
+- **Brand** — the Rowan brand standards built in: every palette with hex, RGB,
+  and Pantone, click-to-copy swatches, editable and extendable.
+- **Toolbox** — Word-doc guides rendered in-app with click-to-copy steps (and
+  in-place editing), reusable dashboard images that copy straight to the
+  clipboard for Tableau, and stored templates you can save fresh copies of.
+- **Ask everywhere** — the floating assistant answers across meetings, the
+  directory, links, brand colors, and your ClickUp tasks.
+- **Choose your AI** — Claude or ChatGPT power summaries and Ask; both keys
+  storable, per-provider model picks.
+- **Six themes** — including Notion and iOS looks that restyle components,
+  not just colors.
+
+## The meeting companion
 
 - **Record** in-person meetings (your mic) or virtual meetings (your mic **plus** system audio — whatever comes through your speakers/headset from Webex, Teams, Zoom, anything).
 - **Transcribe** on your own machine with [whisper.cpp](https://github.com/ggml-org/whisper.cpp). Audio never leaves your PC. $0, forever.
@@ -47,11 +79,16 @@ Produces a Windows installer and a portable `.exe` under `release/`.
 
 ## Where your data lives
 
-Everything is stored locally under `%APPDATA%\meeting-scribe\`:
+Everything is stored locally under `%APPDATA%\meeting-scribe\` (the folder
+keeps the app's original internal name so updates and existing libraries
+carry over):
 
 - `meetings\<id>\meeting.json` — metadata, transcript, summary
 - `meetings\<id>\audio.webm` — compressed audio for playback
 - `engine\` — whisper.cpp binary and models
+- `directory.json`, `links.json`, `brand.json`, `link-thumbs\`, `toolbox\` —
+  the workspace modules
+- `clickup-activity.json` — the local ClickUp changelog snapshot
 
 Delete a meeting in the app (or delete its folder) and it's gone. There is no cloud copy.
 

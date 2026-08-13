@@ -5,7 +5,9 @@ import type { AppSettings, AppTheme, WhisperModel } from '../shared/types'
 
 interface StoredSettings {
   whisperModel: WhisperModel
+  aiProvider: 'claude' | 'openai'
   claudeModel: string
+  openaiModel: string
   autoSummarize: boolean
   recordNudge: boolean
   autoEndSilence: boolean
@@ -30,11 +32,17 @@ interface StoredSettings {
   apiKeyEncrypted: string | null
   /** base64 of safeStorage-encrypted iCal feed URL (the URL is a secret) */
   calendarUrlEncrypted: string | null
+  /** base64 of safeStorage-encrypted ClickUp personal API token */
+  clickupTokenEncrypted: string | null
+  /** base64 of safeStorage-encrypted OpenAI API key */
+  openaiKeyEncrypted: string | null
 }
 
 const DEFAULTS: StoredSettings = {
   whisperModel: 'small.en',
+  aiProvider: 'claude',
   claudeModel: 'claude-haiku-4-5',
+  openaiModel: 'gpt-5.1',
   autoSummarize: true,
   recordNudge: true,
   autoEndSilence: true,
@@ -53,7 +61,9 @@ const DEFAULTS: StoredSettings = {
   yourName: '',
   personAliases: {},
   apiKeyEncrypted: null,
-  calendarUrlEncrypted: null
+  calendarUrlEncrypted: null,
+  clickupTokenEncrypted: null,
+  openaiKeyEncrypted: null
 }
 
 function settingsPath(): string {
@@ -85,7 +95,9 @@ export function getSettings(): AppSettings {
   const s = load()
   return {
     whisperModel: s.whisperModel,
+    aiProvider: s.aiProvider === 'openai' ? 'openai' : 'claude',
     claudeModel: s.claudeModel,
+    openaiModel: s.openaiModel ?? 'gpt-5.1',
     autoSummarize: s.autoSummarize,
     recordNudge: s.recordNudge !== false,
     autoEndSilence: s.autoEndSilence !== false,
@@ -103,7 +115,10 @@ export function getSettings(): AppSettings {
     yourName: s.yourName ?? '',
     personAliases: s.personAliases ?? {},
     hasApiKey: !!s.apiKeyEncrypted,
-    hasCalendar: !!s.calendarUrlEncrypted
+    hasOpenaiKey: !!s.openaiKeyEncrypted,
+    aiReady: s.aiProvider === 'openai' ? !!s.openaiKeyEncrypted : !!s.apiKeyEncrypted,
+    hasCalendar: !!s.calendarUrlEncrypted,
+    hasClickup: !!s.clickupTokenEncrypted
   }
 }
 
@@ -122,7 +137,9 @@ export function updateSettings(
     Pick<
       AppSettings,
       | 'whisperModel'
+      | 'aiProvider'
       | 'claudeModel'
+      | 'openaiModel'
       | 'autoSummarize'
       | 'recordNudge'
       | 'autoEndSilence'
@@ -143,7 +160,9 @@ export function updateSettings(
 ): AppSettings {
   const s = load()
   if (patch.whisperModel) s.whisperModel = patch.whisperModel
+  if (patch.aiProvider === 'claude' || patch.aiProvider === 'openai') s.aiProvider = patch.aiProvider
   if (patch.claudeModel) s.claudeModel = patch.claudeModel
+  if (patch.openaiModel) s.openaiModel = patch.openaiModel.trim()
   if (typeof patch.autoSummarize === 'boolean') s.autoSummarize = patch.autoSummarize
   if (typeof patch.recordNudge === 'boolean') s.recordNudge = patch.recordNudge
   if (typeof patch.autoEndSilence === 'boolean') s.autoEndSilence = patch.autoEndSilence
@@ -211,6 +230,32 @@ export function addPerson(name: string): void {
 }
 
 /**
+ * Rename someone. A casing-only change just fixes the roster spelling; a real
+ * rename records an alias so their meeting history follows the new name.
+ */
+export function renamePerson(from: string, to: string): void {
+  const fromKey = from.trim().toLowerCase()
+  const target = to.trim()
+  if (!fromKey || !target) return
+  if (fromKey === target.toLowerCase()) {
+    const s = load()
+    s.people = (s.people ?? []).map((p) => (p.toLowerCase() === fromKey ? target : p))
+    persist()
+    return
+  }
+  addPersonAlias(from, target)
+}
+
+/** Remove someone from the team directory (their meeting history is untouched). */
+export function removePerson(name: string): void {
+  const key = name.trim().toLowerCase()
+  if (!key) return
+  const s = load()
+  s.people = (s.people ?? []).filter((p) => p.toLowerCase() !== key)
+  persist()
+}
+
+/**
  * Record that one name is really another person (a merge from the People
  * page). The alias applies at read time everywhere identities are resolved.
  */
@@ -266,6 +311,42 @@ export function setCalendarUrl(url: string | null): AppSettings {
 export function getCalendarUrl(): string | null {
   const s = load()
   return decryptStored(s.calendarUrlEncrypted)
+}
+
+export function setOpenaiKey(key: string | null): AppSettings {
+  const s = load()
+  if (!key) {
+    s.openaiKeyEncrypted = null
+  } else if (safeStorage.isEncryptionAvailable()) {
+    s.openaiKeyEncrypted = safeStorage.encryptString(key.trim()).toString('base64')
+  } else {
+    s.openaiKeyEncrypted = 'plain:' + Buffer.from(key.trim()).toString('base64')
+  }
+  persist()
+  return getSettings()
+}
+
+export function getOpenaiKey(): string | null {
+  const s = load()
+  return decryptStored(s.openaiKeyEncrypted)
+}
+
+export function setClickupToken(token: string | null): AppSettings {
+  const s = load()
+  if (!token) {
+    s.clickupTokenEncrypted = null
+  } else if (safeStorage.isEncryptionAvailable()) {
+    s.clickupTokenEncrypted = safeStorage.encryptString(token.trim()).toString('base64')
+  } else {
+    s.clickupTokenEncrypted = 'plain:' + Buffer.from(token.trim()).toString('base64')
+  }
+  persist()
+  return getSettings()
+}
+
+export function getClickupToken(): string | null {
+  const s = load()
+  return decryptStored(s.clickupTokenEncrypted)
 }
 
 function decryptStored(value: string | null): string | null {

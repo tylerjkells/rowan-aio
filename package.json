@@ -1,7 +1,7 @@
 {
   "name": "meeting-scribe",
-  "version": "0.15.0",
-  "description": "Record, transcribe, and AI-summarize your meetings. Locally, privately, no subscription.",
+  "version": "0.16.0",
+  "description": "Rowan AIO: the all-in-one work hub — meetings, org directory, projects, links, brand, and toolbox. Local-first.",
   "main": "out/main/index.js",
   "author": "Tyler Kells",
   "license": "MIT",
@@ -12,12 +12,14 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "predist": "node -e \"const fs=require('fs');for(const d of ['dist-installer/win-unpacked','dist-installer/win-unpacked.tmp'])fs.rmSync(d,{recursive:true,force:true});try{for(const f of fs.readdirSync('dist-installer'))if(/\\.(exe|blockmap|7z)$/.test(f))fs.rmSync('dist-installer/'+f,{force:true})}catch{}\"",
-    "dist": "electron-vite build && node scripts/build-mcp.js && node scripts/package.js"
+    "dist": "electron-vite build && node scripts/build-mcp.js && node scripts/package.js",
+    "dist:test": "npm run predist && electron-vite build && node scripts/build-mcp.js && node scripts/package.js --test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
     "electron-updater": "^6.8.9",
     "fix-webm-duration": "^1.0.6",
+    "mammoth": "^1.12.1",
     "node-ical": "^0.26.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

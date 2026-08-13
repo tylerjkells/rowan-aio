@@ -3,7 +3,9 @@ import type {
   ActionRollupItem,
   AppSettings,
   CalendarEvent,
+  ClickupTask,
   EventBrief,
+  LinkEntry,
   MeetingListItem
 } from '../../../shared/types'
 import { ChevronIcon, formatDuration, formatWhen, isOverdue, MicIcon, StageBadge } from '../ui'
@@ -126,7 +128,8 @@ export function TodayView({
   onRecord,
   onSettings,
   onActions,
-  onDigest
+  onDigest,
+  onProjects
 }: {
   meetings: MeetingListItem[]
   onOpen: (id: string) => void
@@ -134,6 +137,7 @@ export function TodayView({
   onSettings: () => void
   onActions: () => void
   onDigest: () => void
+  onProjects: () => void
 }): React.JSX.Element {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [events, setEvents] = useState<CalendarEvent[]>([])
@@ -141,6 +145,8 @@ export function TodayView({
   const [calLoaded, setCalLoaded] = useState(false)
   const [actions, setActions] = useState<ActionRollupItem[]>([])
   const [briefs, setBriefs] = useState<Map<string, EventBrief>>(new Map())
+  const [pinnedLinks, setPinnedLinks] = useState<LinkEntry[]>([])
+  const [cuDue, setCuDue] = useState<ClickupTask[] | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const autoExpanded = useRef(false)
   // re-render every minute so the "Now" marker tracks the clock
@@ -149,6 +155,23 @@ export function TodayView({
   useEffect(() => {
     window.scribe.settings.get().then(setSettings)
     window.scribe.actions.list().then(setActions)
+    window.scribe.links.list().then((ls) => setPinnedLinks(ls.filter((l) => l.pinned)))
+    // ClickUp tasks that need attention today fill in once fetched
+    window.scribe.clickup.status().then((st) => {
+      if (!st.connected) return
+      window.scribe.clickup
+        .refresh('mine')
+        .then((r) => {
+          const cutoff = new Date()
+          const iso = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`
+          setCuDue(
+            r.tasks
+              .filter((t) => t.dueDate && t.dueDate <= iso)
+              .sort((a, b) => ((a.dueDate ?? '') < (b.dueDate ?? '') ? -1 : 1))
+          )
+        })
+        .catch(() => {})
+    })
     window.scribe.calendar.today().then((r) => {
       setEvents(r.events)
       setCalError(r.error ?? null)
@@ -227,6 +250,23 @@ export function TodayView({
           <span className="count-note">{dateLabel}</span>
         </div>
       </div>
+
+      {pinnedLinks.length > 0 && (
+        <div className="today-links">
+          {pinnedLinks.map((l) => (
+            <a
+              key={l.id}
+              className="today-link-chip"
+              href={l.url}
+              target="_blank"
+              rel="noreferrer"
+              title={l.url}
+            >
+              {l.name}
+            </a>
+          ))}
+        </div>
+      )}
 
       <div className="today-col">
         <section className="today-section">
@@ -399,6 +439,50 @@ export function TodayView({
             </>
           )}
         </section>
+
+        {cuDue !== null && cuDue.length > 0 && (
+          <section className="today-section">
+            <div className="card-subhead">Due in ClickUp</div>
+            <div className="rollup-list">
+              {cuDue.slice(0, 6).map((t) => (
+                <div className="rollup-item" key={t.id}>
+                  <input
+                    type="checkbox"
+                    className="rollup-check"
+                    checked={false}
+                    onChange={async () => {
+                      const r = await window.scribe.clickup.complete(t.id, t.listId, t.name, t.url)
+                      if (r.ok) setCuDue((prev) => prev?.filter((x) => x.id !== t.id) ?? null)
+                    }}
+                    aria-label={`Mark "${t.name}" done in ClickUp`}
+                    title="Mark done in ClickUp"
+                  />
+                  <div className="rollup-body">
+                    <a className="rollup-task" href={t.url} target="_blank" rel="noreferrer">
+                      {t.name}
+                    </a>
+                    <span className="rollup-meta">
+                      {t.dueDate && (
+                        <span className={`action-due ${t.dueDate < new Date().toISOString().slice(0, 10) ? 'overdue' : ''}`}>
+                          {new Date(`${t.dueDate}T12:00:00`).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </span>
+                      )}
+                      <span>{t.listName}</span>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {cuDue.length > 6 && (
+              <button className="link-btn today-more" onClick={onProjects}>
+                All {cuDue.length} due tasks in Projects
+              </button>
+            )}
+          </section>
+        )}
       </div>
     </>
   )

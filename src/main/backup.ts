@@ -13,7 +13,7 @@ import { getSettings, getLastBackupAt, setLastBackupAt } from './settings'
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const KEEP_AUTO_BACKUPS = 8
-const AUTO_PREFIX = 'MeetingScribe-backup-'
+const AUTO_PREFIX = 'RowanAIO-backup-'
 
 export interface BackupResult {
   path: string
@@ -22,7 +22,16 @@ export interface BackupResult {
 
 export async function runBackup(destZip: string, skipAudio: boolean): Promise<BackupResult> {
   const userData = app.getPath('userData')
-  const targets = ['meetings', 'settings.json', 'ask.json'].filter((t) =>
+  const targets = [
+    'meetings',
+    'settings.json',
+    'ask.json',
+    'directory.json',
+    'links.json',
+    'link-thumbs',
+    'brand.json',
+    'toolbox'
+  ].filter((t) =>
     existsSync(join(userData, t))
   )
   if (!targets.includes('meetings')) {

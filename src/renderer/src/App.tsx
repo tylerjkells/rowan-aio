@@ -15,11 +15,27 @@ import { ImportView } from './views/Import'
 import { AutoEndWatch } from './AutoEnd'
 import { TodayView } from './views/Today'
 import { PeopleView, PersonView } from './views/People'
+import { LinksView } from './views/Links'
+import { BrandView } from './views/Brand'
+import { ProjectsView } from './views/Projects'
+import { ToolboxView } from './views/Toolbox'
 import { SeriesView } from './views/Series'
 import { AskWidget } from './AskWidget'
 import { Digest } from './Digest'
 import { WhatsNew } from './WhatsNew'
-import { MicIcon, ListIcon, GearIcon, CheckIcon, TodayIcon, UsersIcon, formatDuration } from './ui'
+import {
+  MicIcon,
+  ListIcon,
+  GearIcon,
+  CheckIcon,
+  TodayIcon,
+  UsersIcon,
+  LinkIcon,
+  PaletteIcon,
+  BoardIcon,
+  WrenchIcon,
+  formatDuration
+} from './ui'
 
 export type View =
   | { name: 'today' }
@@ -29,6 +45,10 @@ export type View =
   | { name: 'actions' }
   | { name: 'people' }
   | { name: 'person'; person: string }
+  | { name: 'links' }
+  | { name: 'brand' }
+  | { name: 'projects' }
+  | { name: 'toolbox' }
   | { name: 'series'; title: string }
   | { name: 'import' }
   | { name: 'settings' }
@@ -53,12 +73,17 @@ export default function App(): React.JSX.Element {
   const [paused, setPaused] = useState(false)
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
   const [digestRequested, setDigestRequested] = useState(false)
+  const [channel, setChannel] = useState<'stable' | 'test' | 'dev'>('stable')
   // finishing state lives here because a recording can also be stopped by the
   // auto-end watchdog while the user is on some other page
   const [finishing, setFinishing] = useState(false)
   const [stopError, setStopError] = useState<string | null>(null)
 
   useEffect(() => window.scribe.update.onReady(setUpdateVersion), [])
+
+  useEffect(() => {
+    window.scribe.appChannel().then(setChannel)
+  }, [])
 
   // record-nudge notification clicked: land on the Record page
   useEffect(() => window.scribe.nudge.onOpenRecord(() => setView({ name: 'record' })), [])
@@ -115,7 +140,8 @@ export default function App(): React.JSX.Element {
       <nav className="sidebar">
         <div className="brand">
           <span className="brand-dot" aria-hidden="true" />
-          MeetingScribe
+          Rowan AIO
+          {channel !== 'stable' && <span className="channel-chip">{channel}</span>}
         </div>
         <button
           className={`nav-btn ${view.name === 'today' ? 'active' : ''}`}
@@ -123,11 +149,19 @@ export default function App(): React.JSX.Element {
         >
           <TodayIcon /> Today
         </button>
+        <div className="nav-section">Meetings</div>
         <button
-          className={`nav-btn ${view.name === 'library' || view.name === 'meeting' ? 'active' : ''}`}
+          className={`nav-btn ${
+            view.name === 'library' ||
+            view.name === 'meeting' ||
+            view.name === 'series' ||
+            view.name === 'import'
+              ? 'active'
+              : ''
+          }`}
           onClick={() => setView({ name: 'library' })}
         >
-          <ListIcon /> Meetings
+          <ListIcon /> Library
         </button>
         <button
           className={`nav-btn ${view.name === 'actions' ? 'active' : ''}`}
@@ -135,6 +169,7 @@ export default function App(): React.JSX.Element {
         >
           <CheckIcon /> Action items
         </button>
+        <div className="nav-section">Workspace</div>
         <button
           className={`nav-btn ${view.name === 'people' || view.name === 'person' ? 'active' : ''}`}
           onClick={() => setView({ name: 'people' })}
@@ -142,12 +177,36 @@ export default function App(): React.JSX.Element {
           <UsersIcon /> People
         </button>
         <button
+          className={`nav-btn ${view.name === 'projects' ? 'active' : ''}`}
+          onClick={() => setView({ name: 'projects' })}
+        >
+          <BoardIcon /> Projects
+        </button>
+        <button
+          className={`nav-btn ${view.name === 'links' ? 'active' : ''}`}
+          onClick={() => setView({ name: 'links' })}
+        >
+          <LinkIcon /> Links
+        </button>
+        <button
+          className={`nav-btn ${view.name === 'brand' ? 'active' : ''}`}
+          onClick={() => setView({ name: 'brand' })}
+        >
+          <PaletteIcon /> Brand
+        </button>
+        <button
+          className={`nav-btn ${view.name === 'toolbox' ? 'active' : ''}`}
+          onClick={() => setView({ name: 'toolbox' })}
+        >
+          <WrenchIcon /> Toolbox
+        </button>
+        <div className="sidebar-spacer" />
+        <button
           className={`nav-btn ${view.name === 'settings' ? 'active' : ''}`}
           onClick={() => setView({ name: 'settings' })}
         >
           <GearIcon /> Settings
         </button>
-        <div className="sidebar-spacer" />
         {updateVersion && !rec && (
           <button
             className="update-chip"
@@ -195,6 +254,7 @@ export default function App(): React.JSX.Element {
               onSettings={() => setView({ name: 'settings' })}
               onActions={() => setView({ name: 'actions' })}
               onDigest={() => setDigestRequested(true)}
+              onProjects={() => setView({ name: 'projects' })}
             />
           )}
           {view.name === 'library' && (
@@ -247,8 +307,15 @@ export default function App(): React.JSX.Element {
               name={view.person}
               onBack={() => setView({ name: 'people' })}
               onOpenMeeting={openMeeting}
+              onOpenPerson={(person) => setView({ name: 'person', person })}
             />
           )}
+          {view.name === 'links' && <LinksView />}
+          {view.name === 'brand' && <BrandView />}
+          {view.name === 'projects' && (
+            <ProjectsView onSettings={() => setView({ name: 'settings' })} />
+          )}
+          {view.name === 'toolbox' && <ToolboxView />}
           {view.name === 'import' && (
             <ImportView
               onDone={(m) => {

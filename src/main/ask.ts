@@ -1,10 +1,11 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { app } from 'electron'
 import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { getApiKey } from './settings'
-import { recordUsage } from './usage'
+import { aiChat } from './ai'
 import { listMeetings, readMeeting } from './store'
+import { listPeople } from './people'
+import { listLinks } from './links'
+import { getBrand } from './brand'
 import { transcriptToText } from './summarize'
 import type { AskSource, LibraryQA, Meeting } from '../shared/types'
 
@@ -206,18 +207,81 @@ function recentHistoryMessages(): { role: 'user' | 'assistant'; content: string 
     ])
 }
 
-/** Answer a question across the whole meeting library, with citations. */
-export async function askLibrary(question: string, model: string): Promise<LibraryQA> {
-  const apiKey = getApiKey()
-  if (!apiKey) {
-    throw new Error('No Claude API key set. Add one in Settings first.')
+/**
+ * Everything the app knows outside of meetings — the org directory, saved
+ * links, brand colors, and the last-refreshed ClickUp task snapshot — as one
+ * compact context block. Each source degrades to absent on any failure.
+ */
+function workspaceContext(): string {
+  const parts: string[] = []
+  try {
+    const people = listPeople()
+    if (people.length > 0) {
+      const lines = people.map((p) => {
+        const d = p.details
+        const bits = [
+          d?.title,
+          d?.department,
+          d?.email,
+          d?.phone,
+          d?.office,
+          d?.reportsTo ? `reports to ${d.reportsTo}` : null
+        ]
+          .filter(Boolean)
+          .join(' · ')
+        return `${p.name}${bits ? ` — ${bits}` : ''}`
+      })
+      parts.push(`<directory>\n${lines.join('\n')}\n</directory>`)
+    }
+  } catch {
+    // directory unavailable
   }
+  try {
+    const links = listLinks()
+    if (links.length > 0) {
+      const lines = links.map((l) => `${l.name} (${l.category}): ${l.url}${l.note ? ` — ${l.note}` : ''}`)
+      parts.push(`<links>\n${lines.join('\n')}\n</links>`)
+    }
+  } catch {
+    // links unavailable
+  }
+  try {
+    const brand = getBrand()
+    const lines = brand.palettes.map(
+      (p) =>
+        `${p.name}: ${p.colors.map((c) => `${c.name}${c.hex ? ` ${c.hex}` : ''}`).join(', ')}`
+    )
+    parts.push(`<brand_colors>\n${lines.join('\n')}\n</brand_colors>`)
+  } catch {
+    // brand guide unavailable
+  }
+  try {
+    const activity = JSON.parse(
+      readFileSync(join(app.getPath('userData'), 'clickup-activity.json'), 'utf8')
+    ) as { snapshot?: Record<string, { name: string; status: string; dueDate: string | null }> }
+    const tasks = Object.values(activity.snapshot ?? {})
+    if (tasks.length > 0) {
+      const lines = tasks.map(
+        (t) => `${t.name} — ${t.status}${t.dueDate ? `, due ${t.dueDate}` : ''}`
+      )
+      parts.push(
+        `<clickup_tasks note="the user's open ClickUp tasks as of the last Projects refresh">\n${lines.join('\n')}\n</clickup_tasks>`
+      )
+    }
+  } catch {
+    // ClickUp not connected or never refreshed
+  }
+  return parts.join('\n\n')
+}
+
+/** Answer a question across the whole meeting library and workspace, with citations. */
+export async function askLibrary(question: string, model: string): Promise<LibraryQA> {
   const meetings = loadAskableMeetings()
-  if (meetings.length === 0) {
-    throw new Error('No meetings to ask about yet. Record or import one first.')
+  const workspace = workspaceContext()
+  if (meetings.length === 0 && !workspace) {
+    throw new Error('Nothing to ask about yet. Record a meeting or add workspace data first.')
   }
 
-  const client = new Anthropic({ apiKey })
   const aliases = new Map<string, Meeting>()
   meetings.forEach((m, i) => aliases.set(`m${i + 1}`, m))
   const catalog = [...aliases.entries()].map(([alias, m]) => catalogEntry(alias, m)).join('\n\n')
@@ -230,27 +294,21 @@ export async function askLibrary(question: string, model: string): Promise<Libra
   if (withTranscripts.length <= MAX_SELECTED) {
     selected = withTranscripts
   } else {
-    const sel = await client.messages.create({
+    const sel = await aiChat({
       model,
-      max_tokens: 1024,
+      maxTokens: 1024,
+      schema: SELECT_SCHEMA as unknown as Record<string, unknown>,
+      schemaName: 'meeting_selection',
       system:
         'You route questions over a personal library of meeting notes. Given the catalog below and a question, ' +
         'pick which meetings\' full transcripts are needed to answer it well. Prefer fewer, more relevant meetings. ' +
         `Catalog entries marked "transcript only" still have transcripts available.\n\n<catalog>\n${catalog}\n</catalog>`,
-      output_config: {
-        format: {
-          type: 'json_schema',
-          schema: SELECT_SCHEMA as unknown as Record<string, unknown>
-        }
-      },
       messages: [...history, { role: 'user', content: question }]
     })
-    recordUsage(model, sel.usage)
-    if (sel.stop_reason === 'refusal') {
+    if (sel.stop === 'refusal') {
       throw new Error('The request was declined by the model.')
     }
-    const text = sel.content.find((b) => b.type === 'text')?.text
-    const ids = text ? (JSON.parse(text) as { meetingIds: string[] }).meetingIds : []
+    const ids = sel.text ? (JSON.parse(sel.text) as { meetingIds: string[] }).meetingIds : []
     selected = ids
       .filter((id) => aliases.has(id) && (aliases.get(id)!.transcript?.length ?? 0) > 0)
       .slice(0, MAX_SELECTED)
@@ -266,34 +324,30 @@ export async function askLibrary(question: string, model: string): Promise<Libra
     )
     .join('\n\n')
 
-  const response = await client.messages.create({
+  const response = await aiChat({
     model,
-    max_tokens: 4096,
+    maxTokens: 4096,
+    schema: ANSWER_SCHEMA as unknown as Record<string, unknown>,
+    schemaName: 'library_answer',
     system:
-      'You answer questions across a personal library of meeting recordings for the person who attended them. ' +
-      'Ground every answer in the catalog and transcripts below; when they do not contain the answer, say so plainly instead of guessing. ' +
-      'Transcripts are automatic speech recognition output and may contain errors. ' +
+      'You answer questions across a personal work hub for the person using it: their meeting library plus their workspace data (org directory, saved links, brand colors, open ClickUp tasks). ' +
+      'Ground every answer in the material below; when it does not contain the answer, say so plainly instead of guessing. ' +
+      'Meeting transcripts are automatic speech recognition output and may contain errors. ' +
       'In transcripts, speaker labels mark audio sources: the first-named label (often "Me") is the person asking you questions now; the other label is everyone else on that call. ' +
-      'Answer concisely in plain prose. Cite the meetings that support each part of the answer with inline markers like [1], and list each cited meeting in sources with its id. ' +
+      'Answer concisely in plain prose. Cite the meetings that support meeting-based parts of the answer with inline markers like [1], and list each cited meeting in sources with its id. ' +
+      'Answers drawn from workspace data (a phone number, a link, a color, a task) need no citations — leave sources empty when nothing came from a meeting. ' +
       'When several meetings touch the topic over time, prefer the most recent position and note how it evolved.\n\n' +
-      `<catalog>\n${catalog}\n</catalog>` +
+      `<catalog>\n${catalog || '(no meetings yet)'}\n</catalog>` +
+      (workspace ? `\n\n${workspace}` : '') +
       (transcriptBlocks ? `\n\nFull transcripts of the most relevant meetings:\n\n${transcriptBlocks}` : ''),
-    output_config: {
-      format: {
-        type: 'json_schema',
-        schema: ANSWER_SCHEMA as unknown as Record<string, unknown>
-      }
-    },
     messages: [...history, { role: 'user', content: question }]
   })
-  recordUsage(model, response.usage)
 
-  if (response.stop_reason === 'refusal') {
+  if (response.stop === 'refusal') {
     throw new Error('The request was declined by the model.')
   }
-  const text = response.content.find((b) => b.type === 'text')?.text
-  if (!text) throw new Error('Empty response from Claude')
-  const parsed = JSON.parse(text) as {
+  if (!response.text) throw new Error('Empty response from the model')
+  const parsed = JSON.parse(response.text) as {
     answer: string
     sources: { ref: number; meetingId: string; quote: string | null; timestampMs: number | null }[]
   }

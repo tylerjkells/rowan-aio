@@ -1,6 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk'
-import { getApiKey, getSettings } from './settings'
-import { recordUsage } from './usage'
+import { getSettings } from './settings'
+import { aiChat } from './ai'
 import type { Meeting, TranscriptSegment } from '../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -61,8 +60,6 @@ function numberedTranscript(segments: TranscriptSegment[], names: { me: string; 
  * segments. Returns the updated segments (does not persist).
  */
 export async function identifySpeakers(meeting: Meeting): Promise<TranscriptSegment[]> {
-  const apiKey = getApiKey()
-  if (!apiKey) throw new Error('No Claude API key set. Add one in Settings first.')
   const segments = meeting.transcript
   if (!segments || segments.length === 0) {
     throw new Error('This meeting has no transcript yet.')
@@ -77,10 +74,10 @@ export async function identifySpeakers(meeting: Meeting): Promise<TranscriptSegm
     ...new Set([...(meeting.attendees ?? []), ...settings.people])
   ]
 
-  const client = new Anthropic({ apiKey })
-  const response = await client.messages.create({
-    model: settings.claudeModel,
-    max_tokens: 8192,
+  const response = await aiChat({
+    maxTokens: 8192,
+    schema: IDENTIFY_SCHEMA as unknown as Record<string, unknown>,
+    schemaName: 'speaker_turns',
     system:
       'You attribute speakers in a meeting transcript produced by automatic speech recognition. ' +
       'Work from conversational context: people address each other by name, refer to their own work, answer questions directed at them. ' +
@@ -91,12 +88,6 @@ export async function identifySpeakers(meeting: Meeting): Promise<TranscriptSegm
         : '') +
       'Only use a real name when the context genuinely supports it; otherwise use "Speaker 1", "Speaker 2", numbering consistently for the same voice throughout. ' +
       'Return the complete turn map covering every segment from 0 to the end.',
-    output_config: {
-      format: {
-        type: 'json_schema',
-        schema: IDENTIFY_SCHEMA as unknown as Record<string, unknown>
-      }
-    },
     messages: [
       {
         role: 'user',
@@ -105,13 +96,13 @@ export async function identifySpeakers(meeting: Meeting): Promise<TranscriptSegm
     ]
   })
 
-  recordUsage(settings.claudeModel, response.usage)
-  if (response.stop_reason === 'refusal') {
+  if (response.stop === 'refusal') {
     throw new Error('The request was declined by the model.')
   }
-  const text = response.content.find((b) => b.type === 'text')?.text
-  if (!text) throw new Error('Empty response from Claude')
-  const parsed = JSON.parse(text) as { turns: { startSegment: number; speaker: string }[] }
+  if (!response.text) throw new Error('Empty response from the model')
+  const parsed = JSON.parse(response.text) as {
+    turns: { startSegment: number; speaker: string }[]
+  }
 
   const turns = parsed.turns
     .filter((t) => Number.isInteger(t.startSegment) && t.startSegment >= 0 && t.speaker.trim())

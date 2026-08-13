@@ -3,21 +3,33 @@ import type {
   ActionRollupItem,
   AppSettings,
   AutoEndReason,
+  BrandData,
   BulkProgress,
   BulkScan,
   BulkSelection,
   CalendarEvent,
+  ClickupActivityEvent,
+  ClickupList,
+  ClickupPushInput,
+  ClickupPushResult,
+  ClickupStatus,
+  ClickupTask,
+  DirectoryImportRow,
+  DirectoryImportScan,
   EnergySample,
   EngineProgress,
   EngineStatus,
   EventBrief,
   LibraryQA,
+  LinkEntry,
   Meeting,
   MeetingListItem,
+  PersonDetails,
   PersonProfile,
   PersonSummary,
   RecordingMode,
   SeriesData,
+  ToolboxData,
   TranscriptSegment,
   UsageSummary,
   WeeklyDigest,
@@ -43,6 +55,10 @@ const api = {
       ipcRenderer.invoke('settings:update', patch),
     setApiKey: (key: string | null): Promise<AppSettings> =>
       ipcRenderer.invoke('settings:setApiKey', key),
+    setOpenaiKey: (key: string | null): Promise<AppSettings> =>
+      ipcRenderer.invoke('settings:setOpenaiKey', key),
+    testOpenaiKey: (key: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('settings:testOpenaiKey', key),
     testApiKey: (key: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('settings:testApiKey', key)
   },
@@ -80,6 +96,7 @@ const api = {
     }
   },
   appVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
+  appChannel: (): Promise<'stable' | 'test' | 'dev'> => ipcRenderer.invoke('app:channel'),
   update: {
     onReady: (cb: (version: string) => void): (() => void) => {
       const handler = (_e: unknown, v: string): void => cb(v)
@@ -187,7 +204,83 @@ const api = {
     profile: (name: string): Promise<PersonProfile | null> =>
       ipcRenderer.invoke('people:profile', name),
     merge: (from: string, to: string): Promise<PersonSummary[]> =>
-      ipcRenderer.invoke('people:merge', from, to)
+      ipcRenderer.invoke('people:merge', from, to),
+    setDetails: (name: string, details: PersonDetails): Promise<PersonSummary[]> =>
+      ipcRenderer.invoke('people:setDetails', name, details),
+    remove: (name: string): Promise<PersonSummary[]> => ipcRenderer.invoke('people:remove', name),
+    rename: (from: string, to: string): Promise<PersonSummary[]> =>
+      ipcRenderer.invoke('people:rename', from, to),
+    importScan: (): Promise<DirectoryImportScan | null> => ipcRenderer.invoke('people:importScan'),
+    importApply: (rows: DirectoryImportRow[]): Promise<PersonSummary[]> =>
+      ipcRenderer.invoke('people:importApply', rows)
+  },
+  links: {
+    list: (): Promise<LinkEntry[]> => ipcRenderer.invoke('links:list'),
+    save: (entry: Partial<LinkEntry> & Omit<LinkEntry, 'id'>): Promise<LinkEntry[]> =>
+      ipcRenderer.invoke('links:save', entry),
+    remove: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:remove', id),
+    togglePin: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:togglePin', id),
+    pickThumb: (id: string): Promise<LinkEntry[] | null> =>
+      ipcRenderer.invoke('links:pickThumb', id),
+    autoThumb: (id: string): Promise<{ links?: LinkEntry[]; error?: string }> =>
+      ipcRenderer.invoke('links:autoThumb', id),
+    clearThumb: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:clearThumb', id)
+  },
+  brand: {
+    get: (): Promise<BrandData> => ipcRenderer.invoke('brand:get'),
+    save: (data: BrandData): Promise<BrandData> => ipcRenderer.invoke('brand:save', data)
+  },
+  toolbox: {
+    get: (): Promise<ToolboxData> => ipcRenderer.invoke('toolbox:get'),
+    addGuide: (): Promise<ToolboxData | { error: string } | null> =>
+      ipcRenderer.invoke('toolbox:addGuide'),
+    guideHtml: (id: string): Promise<string | null> => ipcRenderer.invoke('toolbox:guideHtml', id),
+    removeGuide: (id: string): Promise<ToolboxData> =>
+      ipcRenderer.invoke('toolbox:removeGuide', id),
+    updateGuide: (id: string, patch: { title?: string; html?: string }): Promise<ToolboxData> =>
+      ipcRenderer.invoke('toolbox:updateGuide', id, patch),
+    addImages: (): Promise<ToolboxData | null> => ipcRenderer.invoke('toolbox:addImages'),
+    copyImage: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('toolbox:copyImage', id),
+    removeImage: (id: string): Promise<ToolboxData> =>
+      ipcRenderer.invoke('toolbox:removeImage', id),
+    addFiles: (): Promise<ToolboxData | null> => ipcRenderer.invoke('toolbox:addFiles'),
+    saveFileCopy: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('toolbox:saveFileCopy', id),
+    removeFile: (id: string): Promise<ToolboxData> => ipcRenderer.invoke('toolbox:removeFile', id)
+  },
+  clickup: {
+    status: (): Promise<ClickupStatus> => ipcRenderer.invoke('clickup:status'),
+    connect: (token: string): Promise<ClickupStatus> => ipcRenderer.invoke('clickup:connect', token),
+    disconnect: (): Promise<AppSettings> => ipcRenderer.invoke('clickup:disconnect'),
+    refresh: (
+      scope: 'mine' | 'all'
+    ): Promise<{ tasks: ClickupTask[]; events: ClickupActivityEvent[] }> =>
+      ipcRenderer.invoke('clickup:refresh', scope),
+    lists: (): Promise<ClickupList[]> => ipcRenderer.invoke('clickup:lists'),
+    push: (input: ClickupPushInput): Promise<ClickupPushResult> =>
+      ipcRenderer.invoke('clickup:push', input),
+    complete: (
+      taskId: string,
+      listId: string,
+      name: string,
+      url?: string
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('clickup:complete', taskId, listId, name, url),
+    setTaskDue: (
+      taskId: string,
+      iso: string | null,
+      name: string,
+      url?: string
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('clickup:setTaskDue', taskId, iso, name, url),
+    comment: (
+      taskId: string,
+      text: string,
+      name: string,
+      url?: string
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('clickup:comment', taskId, text, name, url)
   },
   actions: {
     list: (): Promise<ActionRollupItem[]> => ipcRenderer.invoke('actions:list'),
@@ -196,7 +289,9 @@ const api = {
     setOwner: (meetingId: string, index: number, owner: string | null): Promise<Meeting | null> =>
       ipcRenderer.invoke('actions:setOwner', meetingId, index, owner),
     setDue: (meetingId: string, index: number, isoDate: string | null): Promise<Meeting | null> =>
-      ipcRenderer.invoke('actions:setDue', meetingId, index, isoDate)
+      ipcRenderer.invoke('actions:setDue', meetingId, index, isoDate),
+    setClickupUrl: (meetingId: string, index: number, url: string | null): Promise<Meeting | null> =>
+      ipcRenderer.invoke('actions:setClickupUrl', meetingId, index, url)
   }
 }
 

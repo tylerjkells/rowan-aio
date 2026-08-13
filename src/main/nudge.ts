@@ -49,8 +49,8 @@ export function notifyAutoEnd(title: string, reason: AutoEndReason): void {
   notify(
     'Recording ended automatically',
     reason === 'silence'
-      ? `“${title}” went quiet, so MeetingScribe stopped and is transcribing it.`
-      : `“${title}” ran past its scheduled end, so MeetingScribe stopped and is transcribing it.`,
+      ? `“${title}” went quiet, so Rowan AIO stopped and is transcribing it.`
+      : `“${title}” ran past its scheduled end, so Rowan AIO stopped and is transcribing it.`,
     () => showMainWindow()
   )
 }
@@ -80,7 +80,7 @@ async function check(): Promise<void> {
 
     notify(
       'Meeting started — record it?',
-      `${e.title} is on now and nothing is recording. Click to open MeetingScribe.`,
+      `${e.title} is on now and nothing is recording. Click to open Rowan AIO.`,
       () => showMainWindow('record')
     )
     return // one nudge at a time; overlapping events wait for the next tick

@@ -1,5 +1,15 @@
 # Notes for Claude Code sessions
 
+## Test builds before merging
+
+Feature work is tested before it reaches main. Every push to a `claude/*`
+branch triggers the Test Build workflow, which produces a portable test exe
+as a workflow artifact (isolated data folder, no self-update, TEST badge —
+see docs/TESTING.md). After pushing a feature, tell Tyler a test build is
+ready in the Actions tab so he can try it; only merge to main once he's
+happy with it. Claude sessions cannot dispatch workflows themselves (403),
+but the push trigger makes that unnecessary.
+
 ## Release process
 
 When Tyler asks to merge work to main so he can cut a release, merging alone is

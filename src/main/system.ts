@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, Tray, globalShortcut, nativeImage } from 'electron'
+import { channel } from './channel'
 import { join } from 'path'
 import { getSettings } from './settings'
 
@@ -62,10 +63,10 @@ function ensureTray(): void {
   if (tray) return
   const image = nativeImage.createFromPath(iconPath())
   tray = new Tray(image)
-  tray.setToolTip('MeetingScribe')
+  tray.setToolTip('Rowan AIO')
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Open MeetingScribe', click: () => showMainWindow() },
+      { label: 'Open Rowan AIO', click: () => showMainWindow() },
       { label: 'Start recording', click: () => showMainWindow('record') },
       { type: 'separator' },
       {
@@ -92,8 +93,9 @@ export function applySystemSettings(): void {
   if (s.closeToTray) ensureTray()
   else destroyTray()
 
-  if (app.isPackaged) {
-    // dev builds must not register the dev electron.exe as a login item
+  if (channel === 'stable') {
+    // neither the dev electron.exe nor a portable test build may register
+    // itself as a login item
     app.setLoginItemSettings({
       openAtLogin: s.launchAtLogin,
       args: ['--hidden']

@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { getApiKey } from './settings'
+import { aiChat } from './ai'
 import { recordUsage } from './usage'
 import type { MeetingSummary, TranscriptSegment } from '../shared/types'
 
@@ -166,12 +166,6 @@ export async function summarizeTranscript(
   userNotes?: string,
   meetingDate?: string
 ): Promise<MeetingSummary> {
-  const apiKey = getApiKey()
-  if (!apiKey) {
-    throw new Error('No Claude API key set. Add one in Settings to enable summaries.')
-  }
-
-  const client = new Anthropic({ apiKey })
   const transcript = transcriptToText(segments)
   const attendeeNote =
     attendees && attendees.length > 0
@@ -186,9 +180,11 @@ export async function summarizeTranscript(
       ? ` The meeting took place on ${parsedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Use this only to make sense of relative time references — do not repeat it in the summary.`
       : ''
 
-  const draftPromise = client.messages.create({
+  const draftPromise = aiChat({
     model,
-    max_tokens: 16000,
+    maxTokens: 16000,
+    schema: SUMMARY_SCHEMA as unknown as Record<string, unknown>,
+    schemaName: 'meeting_summary',
     system:
       'You summarize meeting transcripts produced by automatic speech recognition. ' +
       'The transcript comes from automatic speech recognition and may contain errors; infer meaning from context and do not invent facts that are not supported by the transcript. ' +
@@ -205,12 +201,6 @@ export async function summarizeTranscript(
       attendeeNote +
       vocabNote +
       dateNote,
-    output_config: {
-      format: {
-        type: 'json_schema',
-        schema: SUMMARY_SCHEMA as unknown as Record<string, unknown>
-      }
-    },
     messages: [
       {
         role: 'user',
@@ -224,25 +214,23 @@ export async function summarizeTranscript(
   })
 
   // the fact sheet needs only the transcript, so it extracts while the draft generates
-  const [response, factSheet] = await Promise.all([draftPromise, extractFacts(client, model, transcript)])
-  recordUsage(model, response.usage)
+  const [response, factSheet] = await Promise.all([draftPromise, extractFacts(model, transcript)])
 
-  if (response.stop_reason === 'refusal') {
+  if (response.stop === 'refusal') {
     throw new Error('The summary request was declined by the model.')
   }
-  const text = response.content.find((b) => b.type === 'text')?.text
-  if (!text) throw new Error('Empty response from Claude')
+  if (!response.text) throw new Error('Empty response from the model')
   let draft: MeetingSummary
   try {
-    draft = JSON.parse(text) as MeetingSummary
+    draft = JSON.parse(response.text) as MeetingSummary
   } catch {
     throw new Error(
-      response.stop_reason === 'max_tokens'
+      response.stop === 'max_tokens'
         ? 'The summary ran past the output limit — usually a very long or repetitive transcript. Try trimming stray segments from the end of the transcript, then regenerate.'
-        : 'Claude returned a malformed summary. Regenerating usually fixes this.'
+        : 'The model returned a malformed summary. Regenerating usually fixes this.'
     )
   }
-  return verifySummary(client, model, transcript, draft, dateNote, factSheet)
+  return verifySummary(model, transcript, draft, dateNote, factSheet)
 }
 
 /**
@@ -250,33 +238,22 @@ export async function summarizeTranscript(
  * Runs concurrently with draft generation; returns null on any failure so
  * the checking pass can still run unanchored.
  */
-async function extractFacts(
-  client: Anthropic,
-  model: string,
-  transcript: string
-): Promise<string | null> {
+async function extractFacts(model: string, transcript: string): Promise<string | null> {
   try {
-    const response = await client.messages.create({
+    const response = await aiChat({
       model,
-      max_tokens: 16000,
+      maxTokens: 16000,
+      schema: FACTS_SCHEMA as unknown as Record<string, unknown>,
+      schemaName: 'fact_sheet',
       system:
         'You extract hard facts from a meeting transcript produced by automatic speech recognition. ' +
         'List every figure, date/deadline/timeframe, threshold, and task-or-role assignment stated in the transcript — each as a precise claim with the verbatim quote it comes from. ' +
         'Scope matters: a figure carries the filter/view/timeframe it was measured under; a date carries the specific event the speaker tied it to (look at the surrounding lines — a date near a topic is not necessarily about that topic); an assignment carries the exact task. ' +
         'Extract only what is actually said. Do not interpret, reconcile, or summarize.',
-      output_config: {
-        format: {
-          type: 'json_schema',
-          schema: FACTS_SCHEMA as unknown as Record<string, unknown>
-        }
-      },
       messages: [{ role: 'user', content: `Extract the facts from this transcript:\n\n${transcript}` }]
     })
-    recordUsage(model, response.usage)
-    if (response.stop_reason === 'refusal') return null
-    const text = response.content.find((b) => b.type === 'text')?.text
-    if (!text) return null
-    const parsed = JSON.parse(text) as {
+    if (response.stop === 'refusal' || !response.text) return null
+    const parsed = JSON.parse(response.text) as {
       facts: { kind: string; claim: string; quote: string }[]
     }
     if (!parsed.facts?.length) return null
@@ -295,7 +272,6 @@ async function extractFacts(
  * Falls back to the draft on any failure so summaries never break here.
  */
 async function verifySummary(
-  client: Anthropic,
   model: string,
   transcript: string,
   draft: MeetingSummary,
@@ -303,9 +279,11 @@ async function verifySummary(
   factSheet: string | null
 ): Promise<MeetingSummary> {
   try {
-    const response = await client.messages.create({
+    const response = await aiChat({
       model,
-      max_tokens: 16000,
+      maxTokens: 16000,
+      schema: SUMMARY_SCHEMA as unknown as Record<string, unknown>,
+      schemaName: 'meeting_summary',
       system:
         'You are fact-checking a draft meeting summary against the source transcript. The draft\'s structure, coverage, and wording are already good — reproduce it faithfully and change ONLY what is factually unsupported. ' +
         (factSheet
@@ -322,12 +300,6 @@ async function verifySummary(
         '(8) Action items duplicated per person for the same task: collapse to one item whose owner field lists every participant, comma-separated ("Caroline, Andrew, Brian") — never lose a person. Every owner in the draft must still appear as an owner in the result. ' +
         'Do NOT shorten, condense, or drop anything else: reproduce every section, every note, and every action item at full length — your output must be the complete summary with only the corrections applied. Anything you cannot verify either way, leave exactly as the draft has it.' +
         dateNote,
-      output_config: {
-        format: {
-          type: 'json_schema',
-          schema: SUMMARY_SCHEMA as unknown as Record<string, unknown>
-        }
-      },
       messages: [
         {
           role: 'user',
@@ -338,11 +310,8 @@ async function verifySummary(
         }
       ]
     })
-    recordUsage(model, response.usage)
-    if (response.stop_reason === 'refusal') return draft
-    const text = response.content.find((b) => b.type === 'text')?.text
-    if (!text) return draft
-    const checked = JSON.parse(text) as MeetingSummary
+    if (response.stop === 'refusal' || !response.text) return draft
+    const checked = JSON.parse(response.text) as MeetingSummary
     // Smaller models sometimes abbreviate when asked to reproduce a document,
     // silently dropping whole sections. A fact-check should barely change the
     // summary's size — if it shrank substantially, trust the draft instead.
@@ -365,23 +334,18 @@ export async function askAboutMeeting(
   question: string,
   model: string
 ): Promise<string> {
-  const apiKey = getApiKey()
-  if (!apiKey) {
-    throw new Error('No Claude API key set. Add one in Settings first.')
-  }
   if (!meeting.transcript?.length) {
     throw new Error('This meeting has no transcript to ask about yet.')
   }
 
-  const client = new Anthropic({ apiKey })
   const history = (meeting.qa ?? []).flatMap((x) => [
     { role: 'user' as const, content: x.q },
     { role: 'assistant' as const, content: x.a }
   ])
 
-  const response = await client.messages.create({
+  const response = await aiChat({
     model,
-    max_tokens: 2048,
+    maxTokens: 2048,
     system:
       `You answer questions about one specific meeting for a participant reviewing it later. ` +
       `Meeting: "${meeting.title}" on ${meeting.createdAt.slice(0, 10)}. ` +
@@ -391,14 +355,12 @@ export async function askAboutMeeting(
       `Answer concisely in plain prose.\n\n<transcript>\n${transcriptToText(meeting.transcript, meeting.speakerNames)}\n</transcript>`,
     messages: [...history, { role: 'user', content: question }]
   })
-  recordUsage(model, response.usage)
 
-  if (response.stop_reason === 'refusal') {
+  if (response.stop === 'refusal') {
     throw new Error('The request was declined by the model.')
   }
-  const text = response.content.find((b) => b.type === 'text')?.text
-  if (!text) throw new Error('Empty response from Claude')
-  return text
+  if (!response.text) throw new Error('Empty response from the model')
+  return response.text
 }
 
 /** Cheap round-trip to validate a key when the user saves it in Settings. */

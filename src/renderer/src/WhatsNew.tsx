@@ -2,6 +2,19 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.16.0': [
+    'MeetingScribe is now Rowan AIO — one app for your work at Rowan, with meetings as one module among several. Your library, settings, and updates carry over untouched.',
+    'People is a full org directory now: titles, contact info, and reporting lines; an Outlook-style org chart you click through; a one-time CSV import that loads the whole org; renames that keep meeting history; and search.',
+    'Projects connects to ClickUp (Settings → ClickUp, personal API token): every open task assigned to you grouped by due date or by project, complete/re-date/comment without leaving the app, a Mine/Everyone view, and an Activity changelog of what changed since you last looked.',
+    'Meeting action items gain a “→ ClickUp” button — pick a list and the item becomes a real ClickUp task with assignee and due date mapped, then shows “In ClickUp ↗” so nothing gets pushed twice.',
+    'Links: your org link hub, grouped by collapsible category, with pins that also appear on Today — as a compact list or as cards with thumbnails (upload a screenshot, or auto-capture the page).',
+    'Brand: the Rowan brand guide built in — every palette with hex, RGB, and Pantone, click-to-copy swatches, and add/edit for colors of your own.',
+    'Toolbox: upload the Word-doc guides you work from (every step is click-to-copy, so LOD calcs and formulas lift right out — and guides are editable in place), keep reusable dashboard images that copy straight to the clipboard for Tableau, and store templates you can save fresh copies of anytime.',
+    'Ask now answers across everything: meetings, the directory, links, brand colors, and your ClickUp tasks.',
+    'Today is the full hub: your schedule with briefs, pinned links, today’s recordings, open action items, and ClickUp tasks due.',
+    'Choose your AI service: Claude or ChatGPT, with both keys storable side by side and per-provider model picks (Settings → AI provider).',
+    'Two new themes — Notion (flat white, hover-reveal rows) and iOS (grouped cards, pill buttons, green switches) — plus a jump nav on the Settings page.'
+  ],
   '0.15.0': [
     'Fix the transcript itself: hover any line to edit it in place, delete it, or delete everything from that line to the end — perfect for cleaning up a recording you forgot to stop. Then hit Regenerate summary and the notes catch up.'
   ],
