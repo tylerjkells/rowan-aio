@@ -1,6 +1,84 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ToolboxData, ToolboxGuide } from '../../../shared/types'
+import type { ToolboxData, ToolboxGuide, ToolboxQuery } from '../../../shared/types'
 import { BackIcon, useConfirm } from '../ui'
+
+// ---------------------------------------------------------------------------
+// SQL query editor dialog
+// ---------------------------------------------------------------------------
+
+function QueryEditDialog({
+  query,
+  onClose
+}: {
+  /** null = adding a new query */
+  query: ToolboxQuery | null
+  onClose: (data: ToolboxData | null) => void
+}): React.JSX.Element {
+  const ref = useRef<HTMLDialogElement>(null)
+  const [name, setName] = useState(query?.name ?? '')
+  const [note, setNote] = useState(query?.note ?? '')
+  const [sql, setSql] = useState(query?.sql ?? '')
+
+  useEffect(() => {
+    ref.current?.showModal()
+  }, [])
+
+  async function save(e: React.FormEvent): Promise<void> {
+    e.preventDefault()
+    if (!name.trim() || !sql.trim()) return
+    onClose(await window.scribe.toolbox.saveQuery({ id: query?.id, name, sql, note }))
+  }
+
+  return (
+    <dialog
+      ref={ref}
+      className="confirm person-edit sql-edit"
+      onClose={() => onClose(null)}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose(null)
+      }}
+    >
+      <form onSubmit={save}>
+        <h3>{query ? 'Edit query' : 'Add query'}</h3>
+        <div className="pd-grid">
+          <label className="pd-field">
+            <span>Name</span>
+            <input
+              className="text-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus={!query}
+              required
+            />
+          </label>
+          <label className="pd-field">
+            <span>Note (optional)</span>
+            <input className="text-input" value={note} onChange={(e) => setNote(e.target.value)} />
+          </label>
+        </div>
+        <label className="pd-field">
+          <span>SQL</span>
+          <textarea
+            className="text-input sql-input"
+            value={sql}
+            onChange={(e) => setSql(e.target.value)}
+            rows={14}
+            spellCheck={false}
+            required
+          />
+        </label>
+        <div className="confirm-actions">
+          <button type="button" className="btn" onClick={() => onClose(null)}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary">
+            Save
+          </button>
+        </div>
+      </form>
+    </dialog>
+  )
+}
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -125,7 +203,7 @@ function GuideReader({
 // Toolbox page
 // ---------------------------------------------------------------------------
 
-type ToolboxTab = 'guides' | 'images' | 'files'
+type ToolboxTab = 'guides' | 'images' | 'files' | 'queries'
 
 export function ToolboxView(): React.JSX.Element {
   const [data, setData] = useState<ToolboxData | null>(null)
@@ -135,7 +213,15 @@ export function ToolboxView(): React.JSX.Element {
   const [reading, setReading] = useState<ToolboxGuide | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [editingQuery, setEditingQuery] = useState<ToolboxQuery | 'new' | null>(null)
+  const [openQueryId, setOpenQueryId] = useState<string | null>(null)
   const [confirmDialog, confirm] = useConfirm()
+
+  async function copyQuery(q: ToolboxQuery): Promise<void> {
+    await navigator.clipboard.writeText(q.sql)
+    setCopiedId(q.id)
+    setTimeout(() => setCopiedId((c) => (c === q.id ? null : c)), 1200)
+  }
 
   useEffect(() => {
     window.scribe.toolbox.get().then(setData)
@@ -243,6 +329,14 @@ export function ToolboxView(): React.JSX.Element {
             >
               Files
             </button>
+            <button
+              className={tab === 'queries' ? 'active' : ''}
+              role="radio"
+              aria-checked={tab === 'queries'}
+              onClick={() => switchTab('queries')}
+            >
+              SQL
+            </button>
           </div>
           {tab === 'guides' && (
             <button className="btn" onClick={addGuide}>
@@ -271,8 +365,22 @@ export function ToolboxView(): React.JSX.Element {
               Add files
             </button>
           )}
+          {tab === 'queries' && (
+            <button className="btn" onClick={() => setEditingQuery('new')}>
+              Add query
+            </button>
+          )}
         </div>
       </div>
+      {editingQuery !== null && (
+        <QueryEditDialog
+          query={editingQuery === 'new' ? null : editingQuery}
+          onClose={(next) => {
+            setEditingQuery(null)
+            if (next) setData(next)
+          }}
+        />
+      )}
       {error && <p className="field-note error">{error}</p>}
 
       {tab === 'guides' &&
@@ -415,6 +523,57 @@ export function ToolboxView(): React.JSX.Element {
                 </button>
               </div>
             ))}
+          </div>
+        ))}
+
+      {tab === 'queries' &&
+        (data.queries.length === 0 ? (
+          <div className="empty-state">
+            <h2>No queries yet</h2>
+            <p>
+              Save the SQL you keep reaching for — extracts, joins, the directory export — named
+              and noted, with the whole statement one click from your clipboard.
+            </p>
+            <button className="btn btn-primary" onClick={() => setEditingQuery('new')}>
+              Add query
+            </button>
+          </div>
+        ) : (
+          <div className="guide-list">
+            {data.queries.map((q) => {
+              const open = openQueryId === q.id
+              return (
+                <div key={q.id} className={`guide-row sql-row ${open ? 'open' : ''}`}>
+                  <div className="sql-row-head">
+                    <button
+                      className="guide-open"
+                      onClick={() => setOpenQueryId(open ? null : q.id)}
+                      title={open ? 'Collapse' : 'Show the SQL'}
+                    >
+                      <span className="guide-title">{q.name}</span>
+                      {q.note && <span className="guide-sub">{q.note}</span>}
+                    </button>
+                    <button className="btn btn-ghost" onClick={() => copyQuery(q)}>
+                      {copiedId === q.id ? 'Copied ✓' : 'Copy'}
+                    </button>
+                    <button className="btn btn-ghost" onClick={() => setEditingQuery(q)}>
+                      Edit
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() =>
+                        removeWithConfirm('query', q.name, () =>
+                          window.scribe.toolbox.removeQuery(q.id)
+                        )
+                      }
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {open && <pre className="sql-block">{q.sql}</pre>}
+                </div>
+              )
+            })}
           </div>
         ))}
     </>

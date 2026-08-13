@@ -28,9 +28,16 @@ function dataFile(): string {
 
 export function readToolbox(): ToolboxData {
   try {
-    return JSON.parse(readFileSync(dataFile(), 'utf8'))
+    const raw = JSON.parse(readFileSync(dataFile(), 'utf8')) as Partial<ToolboxData>
+    // stores written before a section existed simply lack its key
+    return {
+      guides: raw.guides ?? [],
+      images: raw.images ?? [],
+      files: raw.files ?? [],
+      queries: raw.queries ?? []
+    }
   } catch {
-    return { guides: [], images: [], files: [] }
+    return { guides: [], images: [], files: [], queries: [] }
   }
 }
 
@@ -225,6 +232,47 @@ export function removeToolboxFile(id: string): ToolboxData {
     }
   }
   data.files = data.files.filter((f) => f.id !== id)
+  write(data)
+  return data
+}
+
+// ---- queries ----
+
+/** Add (no id) or update (with id) a saved SQL query. */
+export function saveToolboxQuery(input: {
+  id?: string
+  name: string
+  sql: string
+  note?: string
+}): ToolboxData {
+  const data = readToolbox()
+  const name = input.name.trim().slice(0, 120)
+  const sql = input.sql.trim()
+  const note = input.note?.trim() || undefined
+  if (!name || !sql) return data
+  if (input.id) {
+    const q = data.queries.find((x) => x.id === input.id)
+    if (q) {
+      q.name = name
+      q.sql = sql
+      q.note = note
+    }
+  } else {
+    data.queries.unshift({
+      id: randomUUID(),
+      name,
+      sql,
+      note,
+      addedAt: new Date().toISOString()
+    })
+  }
+  write(data)
+  return data
+}
+
+export function removeToolboxQuery(id: string): ToolboxData {
+  const data = readToolbox()
+  data.queries = data.queries.filter((q) => q.id !== id)
   write(data)
   return data
 }

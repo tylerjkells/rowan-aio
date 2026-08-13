@@ -66,6 +66,8 @@ import {
   removeToolboxFile,
   removeToolboxGuide,
   removeToolboxImage,
+  removeToolboxQuery,
+  saveToolboxQuery,
   updateToolboxGuide,
   saveToolboxFileCopy,
   toolboxImagesDir
@@ -767,6 +769,12 @@ function registerIpc(): void {
   ipcMain.handle('toolbox:addImages', () => addToolboxImages())
   ipcMain.handle('toolbox:copyImage', (_e, id: string) => copyToolboxImage(id))
   ipcMain.handle('toolbox:removeImage', (_e, id: string) => removeToolboxImage(id))
+  ipcMain.handle(
+    'toolbox:saveQuery',
+    (_e, input: { id?: string; name: string; sql: string; note?: string }) =>
+      saveToolboxQuery(input)
+  )
+  ipcMain.handle('toolbox:removeQuery', (_e, id: string) => removeToolboxQuery(id))
   ipcMain.handle('toolbox:addFiles', () => addToolboxFiles())
   ipcMain.handle('toolbox:saveFileCopy', (_e, id: string) => saveToolboxFileCopy(id))
   ipcMain.handle('toolbox:removeFile', (_e, id: string) => removeToolboxFile(id))

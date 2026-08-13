@@ -292,10 +292,20 @@ export interface ToolboxFile {
   addedAt: string
 }
 
+/** one saved SQL query in the Toolbox */
+export interface ToolboxQuery {
+  id: string
+  name: string
+  sql: string
+  note?: string
+  addedAt: string
+}
+
 export interface ToolboxData {
   guides: ToolboxGuide[]
   images: ToolboxImage[]
   files: ToolboxFile[]
+  queries: ToolboxQuery[]
 }
 
 /** one saved link in the link hub */

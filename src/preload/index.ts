@@ -244,6 +244,14 @@ const api = {
       ipcRenderer.invoke('toolbox:copyImage', id),
     removeImage: (id: string): Promise<ToolboxData> =>
       ipcRenderer.invoke('toolbox:removeImage', id),
+    saveQuery: (input: {
+      id?: string
+      name: string
+      sql: string
+      note?: string
+    }): Promise<ToolboxData> => ipcRenderer.invoke('toolbox:saveQuery', input),
+    removeQuery: (id: string): Promise<ToolboxData> =>
+      ipcRenderer.invoke('toolbox:removeQuery', id),
     addFiles: (): Promise<ToolboxData | null> => ipcRenderer.invoke('toolbox:addFiles'),
     saveFileCopy: (id: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('toolbox:saveFileCopy', id),

@@ -1150,6 +1150,43 @@ a.rollup-task:hover {
   pointer-events: none;
 }
 
+/* saved SQL queries */
+.sql-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.sql-row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.sql-block {
+  margin-top: var(--s2);
+  padding: var(--s3);
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  user-select: text;
+  color: var(--ink-soft);
+}
+
+.sql-edit {
+  width: min(680px, 94vw);
+}
+
+.sql-input {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  resize: vertical;
+  white-space: pre;
+}
+
 /* image assets */
 .tbx-image-grid {
   display: grid;
