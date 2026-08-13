@@ -973,7 +973,8 @@ button:disabled {
   margin: 0 auto;
 }
 
-.empty-state .btn-primary {
+.empty-state .btn-primary,
+.empty-state-actions .btn {
   margin-top: var(--s5);
   padding: 10px 22px;
 }
