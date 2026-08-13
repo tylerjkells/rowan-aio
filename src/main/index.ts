@@ -116,7 +116,9 @@ const WINDOW_BG: Record<string, string> = {
   studio: '#101013',
   rowan: '#17120a',
   slate: '#101318',
-  paper: '#f8f6f3'
+  paper: '#f8f6f3',
+  notion: '#ffffff',
+  ios: '#f2f2f7'
 }
 
 function createWindow(): BrowserWindow {

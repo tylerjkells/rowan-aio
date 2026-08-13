@@ -130,6 +130,135 @@
   --warn: oklch(0.55 0.11 80);
 }
 
+:root[data-theme='notion'] {
+  /* flat white and calm grays, for Notion muscle memory */
+  --ink: #37352f;
+  --ink-soft: #73726e;
+  --ink-faint: #9b9a97;
+  --bg: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-overlay: #f1f1ef;
+  --line: #e3e2e0;
+  --line-soft: #ededec;
+  --bg-sidebar: #f7f7f5;
+  --line-strong: #d3d1cb;
+  --accent: #2383e2;
+  --accent-strong: #1b6ec2;
+  --accent-dim: #8fc1ef;
+  --accent-tint: rgba(35, 131, 226, 0.1);
+  --accent-tint-strong: rgba(35, 131, 226, 0.18);
+  --accent-flash: rgba(35, 131, 226, 0.28);
+  --accent-glow: rgba(35, 131, 226, 0.3);
+  --on-accent: #ffffff;
+  --knob-on: #ffffff;
+  --ok: #0f7b6c;
+  --warn: #cb912f;
+  --r-ctl: 6px;
+  --r-card: 8px;
+}
+
+:root[data-theme='ios'] {
+  /* grouped white cards on gray, Apple blue */
+  --ink: #1c1c1e;
+  --ink-soft: #6c6c70;
+  --ink-faint: #aeaeb2;
+  --bg: #f2f2f7;
+  --bg-raised: #ffffff;
+  --bg-overlay: #e9e9ee;
+  --line: #d1d1d6;
+  --line-soft: #e5e5ea;
+  --bg-sidebar: #ebebf0;
+  --line-strong: #c7c7cc;
+  --accent: #007aff;
+  --accent-strong: #005ecb;
+  --accent-dim: #7ab8ff;
+  --accent-tint: rgba(0, 122, 255, 0.1);
+  --accent-tint-strong: rgba(0, 122, 255, 0.18);
+  --accent-flash: rgba(0, 122, 255, 0.28);
+  --accent-glow: rgba(0, 122, 255, 0.3);
+  --on-accent: #ffffff;
+  --knob-on: #ffffff;
+  --ok: #34c759;
+  --warn: #ff9500;
+  --r-ctl: 10px;
+  --r-card: 14px;
+  --font-ui: 'SF Pro Text', 'Helvetica Neue', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'SF Pro Display', 'Helvetica Neue', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ---------- theme component restyles ----------
+   Notion and iOS change shapes and behaviors, not just colors. */
+
+/* Notion: rows sit flat on the page and reveal on hover */
+[data-theme='notion'] .meeting-row,
+[data-theme='notion'] .link-row,
+[data-theme='notion'] .cu-item,
+[data-theme='notion'] .cu-act,
+[data-theme='notion'] .orgb-card,
+[data-theme='notion'] .orgb-anc,
+[data-theme='notion'] .orgb-chip {
+  border-color: transparent;
+}
+
+[data-theme='notion'] .meeting-row:hover,
+[data-theme='notion'] .link-row:hover,
+[data-theme='notion'] .cu-item:hover,
+[data-theme='notion'] .orgb-card:hover,
+[data-theme='notion'] .orgb-anc:hover,
+[data-theme='notion'] .orgb-chip:hover {
+  border-color: transparent;
+  background: var(--bg-overlay);
+}
+
+[data-theme='notion'] .cu-item.expanded {
+  border-color: var(--line);
+  background: #fbfbfa;
+}
+
+[data-theme='notion'] .orgb-chip.active {
+  border-color: var(--line);
+  background: var(--bg-overlay);
+}
+
+/* iOS: shadowed cards, pill buttons, green switches, segmented toggles */
+[data-theme='ios'] .meeting-row,
+[data-theme='ios'] .link-row,
+[data-theme='ios'] .cu-item,
+[data-theme='ios'] .cu-act,
+[data-theme='ios'] .orgb-card,
+[data-theme='ios'] .orgb-anc,
+[data-theme='ios'] .orgb-focus,
+[data-theme='ios'] .swatch-card {
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme='ios'] .btn,
+[data-theme='ios'] .record-cta {
+  border-radius: 999px;
+}
+
+[data-theme='ios'] .switch.on {
+  background: var(--ok);
+}
+
+[data-theme='ios'] .mode-toggle {
+  background: #e3e3e8;
+  border-color: transparent;
+  padding: 2px;
+}
+
+[data-theme='ios'] .mode-toggle button.active {
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme='ios'] .nav-btn.active {
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
 * {
   margin: 0;
   padding: 0;

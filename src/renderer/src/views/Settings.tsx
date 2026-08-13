@@ -12,7 +12,9 @@ const THEMES: { id: AppTheme; title: string; desc: string; bg: string; accent: s
   { id: 'studio', title: 'Studio', desc: 'Warm dark, signal red. The default.', bg: '#1b1717', accent: '#dc5546' },
   { id: 'rowan', title: 'Rowan', desc: 'Brown & gold, after the Profs.', bg: '#211a10', accent: '#e5b52e' },
   { id: 'slate', title: 'Slate', desc: 'Cool graphite, steel blue.', bg: '#16181d', accent: '#5e95dd' },
-  { id: 'paper', title: 'Paper', desc: 'Light, for bright offices.', bg: '#f8f6f3', accent: '#c33e2e' }
+  { id: 'paper', title: 'Paper', desc: 'Light, for bright offices.', bg: '#f8f6f3', accent: '#c33e2e' },
+  { id: 'notion', title: 'Notion', desc: 'Flat white, calm grays, familiar blue.', bg: '#ffffff', accent: '#2383e2' },
+  { id: 'ios', title: 'iOS', desc: 'Grouped cards, pill buttons, Apple blue.', bg: '#f2f2f7', accent: '#007aff' }
 ]
 
 const WHISPER_MODELS: { id: WhisperModel; title: string; desc: string }[] = [

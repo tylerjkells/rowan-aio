@@ -400,7 +400,7 @@ export interface BulkProgress {
 
 export type WhisperModel = 'base.en' | 'small.en' | 'medium.en' | 'small.en-tdrz'
 
-export type AppTheme = 'studio' | 'rowan' | 'slate' | 'paper'
+export type AppTheme = 'studio' | 'rowan' | 'slate' | 'paper' | 'notion' | 'ios'
 
 export interface AppSettings {
   whisperModel: WhisperModel
