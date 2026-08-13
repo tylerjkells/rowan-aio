@@ -63,7 +63,8 @@ export const BRAND_SEED: BrandData = {
         { name: 'Jersey Blue', pantone: '641', cmyk: [90, 45, 0, 20], hex: '#0067A0' },
         { name: 'Blue Book', pantone: '298', cmyk: [67, 2, 0, 0], hex: '#41B6E6' },
         { name: 'Glassboro Maroon', pantone: '202', cmyk: [5, 95, 65, 45], hex: '#8E142D' },
-        { name: 'Metallic Gold', pantone: '873', hex: null, printOnly: true }
+        // Pantone 873 is a metallic spot ink; this is Pantone's sRGB approximation
+        { name: 'Metallic Gold', pantone: '873', hex: '#84754E' }
       ]
     }
   ]

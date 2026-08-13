@@ -16,11 +16,34 @@ function file(): string {
 
 export function getBrand(): BrandData {
   try {
-    return JSON.parse(readFileSync(file(), 'utf8'))
+    return migrate(JSON.parse(readFileSync(file(), 'utf8')))
   } catch {
     saveBrand(BRAND_SEED)
     return BRAND_SEED
   }
+}
+
+/**
+ * Early seeds shipped Metallic Gold with no screen value ("print only");
+ * give existing libraries the approximation the seed now carries.
+ */
+function migrate(data: BrandData): BrandData {
+  let changed = false
+  const seedColors = BRAND_SEED.palettes.flatMap((p) => p.colors)
+  for (const palette of data.palettes ?? []) {
+    for (const color of palette.colors ?? []) {
+      if (color.hex == null) {
+        const seeded = seedColors.find((s) => s.name === color.name)
+        if (seeded?.hex) {
+          color.hex = seeded.hex
+          delete color.printOnly
+          changed = true
+        }
+      }
+    }
+  }
+  if (changed) saveBrand(data)
+  return data
 }
 
 export function saveBrand(data: BrandData): BrandData {

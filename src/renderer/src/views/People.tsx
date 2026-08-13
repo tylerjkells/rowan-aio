@@ -266,6 +266,7 @@ function OrgChart({
   focusName: string | null
   setFocusName: (name: string) => void
 }): React.JSX.Element {
+  const [showUnplaced, setShowUnplaced] = useState(false)
   const byKey = new Map(people.map((p) => [keyOf(p.name), p]))
   const children = new Map<string, PersonSummary[]>()
   const roots: PersonSummary[] = []
@@ -408,10 +409,13 @@ function OrgChart({
 
       {unplaced.length > 0 && (
         <div className="org-unplaced-block">
-          <div className="card-subhead">
-            Not placed in the chart · set “Reports to” to place them
-          </div>
-          <div className="orgb-reports">{unplaced.map(reportCard)}</div>
+          <button className="cu-section-head" onClick={() => setShowUnplaced(!showUnplaced)}>
+            <span className={`cu-section-chevron ${showUnplaced ? 'open' : ''}`}>›</span>
+            <span className="card-subhead">
+              Not placed in the chart · {unplaced.length} · set “Reports to” to place them
+            </span>
+          </button>
+          {showUnplaced && <div className="orgb-reports">{unplaced.map(reportCard)}</div>}
         </div>
       )}
     </div>
