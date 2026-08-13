@@ -233,6 +233,19 @@ button:disabled {
   letter-spacing: -0.01em;
 }
 
+/* which flavor is running: shown for dev runs and test builds, never stable */
+.channel-chip {
+  margin-left: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
 .brand-dot {
   width: 10px;
   height: 10px;

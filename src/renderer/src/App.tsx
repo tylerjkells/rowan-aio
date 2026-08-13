@@ -53,12 +53,17 @@ export default function App(): React.JSX.Element {
   const [paused, setPaused] = useState(false)
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
   const [digestRequested, setDigestRequested] = useState(false)
+  const [channel, setChannel] = useState<'stable' | 'test' | 'dev'>('stable')
   // finishing state lives here because a recording can also be stopped by the
   // auto-end watchdog while the user is on some other page
   const [finishing, setFinishing] = useState(false)
   const [stopError, setStopError] = useState<string | null>(null)
 
   useEffect(() => window.scribe.update.onReady(setUpdateVersion), [])
+
+  useEffect(() => {
+    window.scribe.appChannel().then(setChannel)
+  }, [])
 
   // record-nudge notification clicked: land on the Record page
   useEffect(() => window.scribe.nudge.onOpenRecord(() => setView({ name: 'record' })), [])
@@ -116,6 +121,7 @@ export default function App(): React.JSX.Element {
         <div className="brand">
           <span className="brand-dot" aria-hidden="true" />
           MeetingScribe
+          {channel !== 'stable' && <span className="channel-chip">{channel}</span>}
         </div>
         <button
           className={`nav-btn ${view.name === 'today' ? 'active' : ''}`}

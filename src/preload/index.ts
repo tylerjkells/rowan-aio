@@ -80,6 +80,7 @@ const api = {
     }
   },
   appVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
+  appChannel: (): Promise<'stable' | 'test' | 'dev'> => ipcRenderer.invoke('app:channel'),
   update: {
     onReady: (cb: (version: string) => void): (() => void) => {
       const handler = (_e: unknown, v: string): void => cb(v)

@@ -1,0 +1,50 @@
+# Builds the portable TEST flavor of the app and uploads it as a workflow
+# artifact — no release, no auto-update, safe to run from any branch.
+#
+# The test exe runs side-by-side with the installed release:
+#   - data lives in %APPDATA%\meeting-scribe-test, never the real library
+#   - it never self-updates
+#   - a TEST badge shows in the sidebar
+#
+# It runs automatically on every push to a claude/* working branch, and can
+# also be run by hand: Actions tab -> Test Build -> Run workflow, pick the
+# branch. (The manual option appears once this file exists on main.)
+#
+# To try a build: open the finished run, download the "MeetingScribe-Test"
+# artifact, unzip it, run MeetingScribe-Test-portable.exe.
+name: Test Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['claude/**']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Package portable test exe
+        run: node scripts/package.js --test
+
+      - name: Upload test build
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeetingScribe-Test
+          path: dist-installer/MeetingScribe-Test-portable.exe
+          retention-days: 14

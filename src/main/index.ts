@@ -13,6 +13,9 @@ import { join } from 'path'
 import { Readable } from 'stream'
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, createReadStream } from 'fs'
 import { autoUpdater } from 'electron-updater'
+// imported first: redirects userData for dev/test channels before any other
+// module resolves a path under it
+import { channel } from './channel'
 import {
   listMeetings,
   readMeeting,
@@ -251,7 +254,9 @@ app.on('window-all-closed', () => {
 })
 
 function setupAutoUpdate(): void {
-  if (!app.isPackaged) return
+  // only the installed release self-updates; a test build finding the GitHub
+  // releases feed would replace itself with the production app
+  if (channel !== 'stable') return
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.on('update-downloaded', (info) => {
@@ -359,6 +364,7 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('app:version', () => app.getVersion())
+  ipcMain.handle('app:channel', () => channel)
 
   // full-text search across titles, summaries, and transcripts
   ipcMain.handle('meetings:search', (_e, query: string): { id: string; snippet: string }[] => {
