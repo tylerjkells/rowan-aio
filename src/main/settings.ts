@@ -30,6 +30,8 @@ interface StoredSettings {
   apiKeyEncrypted: string | null
   /** base64 of safeStorage-encrypted iCal feed URL (the URL is a secret) */
   calendarUrlEncrypted: string | null
+  /** base64 of safeStorage-encrypted ClickUp personal API token */
+  clickupTokenEncrypted: string | null
 }
 
 const DEFAULTS: StoredSettings = {
@@ -53,7 +55,8 @@ const DEFAULTS: StoredSettings = {
   yourName: '',
   personAliases: {},
   apiKeyEncrypted: null,
-  calendarUrlEncrypted: null
+  calendarUrlEncrypted: null,
+  clickupTokenEncrypted: null
 }
 
 function settingsPath(): string {
@@ -103,7 +106,8 @@ export function getSettings(): AppSettings {
     yourName: s.yourName ?? '',
     personAliases: s.personAliases ?? {},
     hasApiKey: !!s.apiKeyEncrypted,
-    hasCalendar: !!s.calendarUrlEncrypted
+    hasCalendar: !!s.calendarUrlEncrypted,
+    hasClickup: !!s.clickupTokenEncrypted
   }
 }
 
@@ -292,6 +296,24 @@ export function setCalendarUrl(url: string | null): AppSettings {
 export function getCalendarUrl(): string | null {
   const s = load()
   return decryptStored(s.calendarUrlEncrypted)
+}
+
+export function setClickupToken(token: string | null): AppSettings {
+  const s = load()
+  if (!token) {
+    s.clickupTokenEncrypted = null
+  } else if (safeStorage.isEncryptionAvailable()) {
+    s.clickupTokenEncrypted = safeStorage.encryptString(token.trim()).toString('base64')
+  } else {
+    s.clickupTokenEncrypted = 'plain:' + Buffer.from(token.trim()).toString('base64')
+  }
+  persist()
+  return getSettings()
+}
+
+export function getClickupToken(): string | null {
+  const s = load()
+  return decryptStored(s.clickupTokenEncrypted)
 }
 
 function decryptStored(value: string | null): string | null {

@@ -47,6 +47,14 @@ import { applyDirectoryImport, scanDirectoryCsv } from './directoryImport'
 import { listLinks, removeLink, saveLink, toggleLinkPin } from './links'
 import { getBrand, saveBrand } from './brand'
 import {
+  clickupLists,
+  clickupStatus,
+  connectClickup,
+  disconnectClickup,
+  myClickupTasks,
+  pushClickupTask
+} from './clickup'
+import {
   refreshCalendar,
   getTodayEvents,
   getEventsBetween,
@@ -90,6 +98,7 @@ import type {
   AutoEndReason,
   BrandData,
   BulkSelection,
+  ClickupPushInput,
   DirectoryImportRow,
   EnergySample,
   LinkEntry,
@@ -679,6 +688,30 @@ function registerIpc(): void {
 
   ipcMain.handle('brand:get', () => getBrand())
   ipcMain.handle('brand:save', (_e, data: BrandData) => saveBrand(data))
+
+  ipcMain.handle('clickup:status', () => clickupStatus())
+  ipcMain.handle('clickup:connect', (_e, token: string) => connectClickup(token))
+  ipcMain.handle('clickup:disconnect', () => {
+    disconnectClickup()
+    return getSettings()
+  })
+  ipcMain.handle('clickup:myTasks', () => myClickupTasks())
+  ipcMain.handle('clickup:lists', () => clickupLists())
+  ipcMain.handle('clickup:push', (_e, input: ClickupPushInput) => pushClickupTask(input))
+  ipcMain.handle(
+    'actions:setClickupUrl',
+    (_e, meetingId: string, index: number, url: string | null) => {
+      const m = readMeeting(meetingId)
+      const item = m?.summary?.actionItems[index]
+      if (!m || !item) return null
+      item.clickupUrl = url || undefined
+      writeMeeting(m)
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send('meeting:updated', m)
+      }
+      return m
+    }
+  )
 
   ipcMain.handle('actions:list', (): ActionRollupItem[] => {
     const ctx = identityContext()

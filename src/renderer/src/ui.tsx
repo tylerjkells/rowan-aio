@@ -392,6 +392,15 @@ export function UsersIcon(): React.JSX.Element {
   )
 }
 
+export function BoardIcon(): React.JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="2.5" />
+      <path d="M9 3v18M15 3v10" />
+    </svg>
+  )
+}
+
 export function LinkIcon(): React.JSX.Element {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

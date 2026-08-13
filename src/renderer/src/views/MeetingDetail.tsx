@@ -12,6 +12,7 @@ import {
   useConfirm
 } from '../ui'
 import { parseDueDate } from '../../../shared/dates'
+import { ClickupPushDialog } from '../ClickupPush'
 import { exportFilename, followUpEmail, meetingToMarkdown, summaryToMarkdown } from '../markdown'
 
 function Collapse({
@@ -193,6 +194,8 @@ export function MeetingView({
   const [emailDraft, setEmailDraft] = useState<{ subject: string; body: string } | null>(null)
   const [knownOwners, setKnownOwners] = useState<string[]>([])
   const [hasApiKey, setHasApiKey] = useState(false)
+  const [hasClickup, setHasClickup] = useState(false)
+  const [pushIdx, setPushIdx] = useState<number | null>(null)
   const [identifying, setIdentifying] = useState(false)
   const [identifyError, setIdentifyError] = useState<string | null>(null)
   const [playheadMs, setPlayheadMs] = useState(-1)
@@ -217,6 +220,7 @@ export function MeetingView({
         const seen = items.flatMap((i) => i.owners).filter((o) => o !== 'Me')
         setKnownOwners(['Me', ...[...new Set([...settings.people, ...seen])].sort()])
         setHasApiKey(settings.hasApiKey)
+        setHasClickup(settings.hasClickup)
       }
     )
   }, [id])
@@ -548,6 +552,27 @@ export function MeetingView({
                         if (updated) setMeeting(updated)
                       }}
                     />
+                    {a.clickupUrl ? (
+                      <a
+                        className="cu-pushed"
+                        href={a.clickupUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Open the ClickUp task"
+                      >
+                        In ClickUp ↗
+                      </a>
+                    ) : (
+                      hasClickup && (
+                        <button
+                          className="btn btn-ghost cu-push-btn"
+                          onClick={() => setPushIdx(i)}
+                          title="Create a ClickUp task from this item"
+                        >
+                          → ClickUp
+                        </button>
+                      )
+                    )}
                   </div>
                 ))}
               </div>
@@ -773,6 +798,24 @@ export function MeetingView({
         </button>
       </section>
       {confirmEl}
+      {pushIdx !== null && meeting.summary?.actionItems[pushIdx] && (
+        <ClickupPushDialog
+          task={meeting.summary.actionItems[pushIdx].task}
+          owner={meeting.summary.actionItems[pushIdx].owner}
+          dueDate={
+            meeting.summary.actionItems[pushIdx].dueDate ??
+            parseDueDate(meeting.summary.actionItems[pushIdx].due, meeting.createdAt) ??
+            null
+          }
+          meetingTitle={meeting.title}
+          onDone={async (url) => {
+            const updated = await window.scribe.actions.setClickupUrl(meeting.id, pushIdx, url)
+            if (updated) setMeeting(updated)
+            setPushIdx(null)
+          }}
+          onClose={() => setPushIdx(null)}
+        />
+      )}
     </div>
   )
 }

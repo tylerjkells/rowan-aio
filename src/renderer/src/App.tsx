@@ -17,6 +17,7 @@ import { TodayView } from './views/Today'
 import { PeopleView, PersonView } from './views/People'
 import { LinksView } from './views/Links'
 import { BrandView } from './views/Brand'
+import { ProjectsView } from './views/Projects'
 import { SeriesView } from './views/Series'
 import { AskWidget } from './AskWidget'
 import { Digest } from './Digest'
@@ -30,6 +31,7 @@ import {
   UsersIcon,
   LinkIcon,
   PaletteIcon,
+  BoardIcon,
   formatDuration
 } from './ui'
 
@@ -43,6 +45,7 @@ export type View =
   | { name: 'person'; person: string }
   | { name: 'links' }
   | { name: 'brand' }
+  | { name: 'projects' }
   | { name: 'series'; title: string }
   | { name: 'import' }
   | { name: 'settings' }
@@ -171,6 +174,12 @@ export default function App(): React.JSX.Element {
           <UsersIcon /> People
         </button>
         <button
+          className={`nav-btn ${view.name === 'projects' ? 'active' : ''}`}
+          onClick={() => setView({ name: 'projects' })}
+        >
+          <BoardIcon /> Projects
+        </button>
+        <button
           className={`nav-btn ${view.name === 'links' ? 'active' : ''}`}
           onClick={() => setView({ name: 'links' })}
         >
@@ -293,6 +302,9 @@ export default function App(): React.JSX.Element {
           )}
           {view.name === 'links' && <LinksView />}
           {view.name === 'brand' && <BrandView />}
+          {view.name === 'projects' && (
+            <ProjectsView onSettings={() => setView({ name: 'settings' })} />
+          )}
           {view.name === 'import' && (
             <ImportView
               onDone={(m) => {

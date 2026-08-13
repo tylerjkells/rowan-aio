@@ -39,6 +39,8 @@ export interface ActionItem {
   done?: boolean
   /** user-set ISO due date; overrides whatever parses out of the free-text due */
   dueDate?: string | null
+  /** set once the item has been pushed to ClickUp */
+  clickupUrl?: string
 }
 
 /** one Q&A exchange in "ask about this meeting" */
@@ -197,6 +199,54 @@ export interface WeeklyDigest {
   byPerson: { name: string; count: number }[]
 }
 
+/** one open ClickUp task assigned to the user */
+export interface ClickupTask {
+  id: string
+  name: string
+  status: string
+  statusColor: string | null
+  /** ISO date (YYYY-MM-DD) or null */
+  dueDate: string | null
+  url: string
+  listName: string
+  folderName: string | null
+  priority: string | null
+}
+
+/** one list a task can be pushed to */
+export interface ClickupList {
+  id: string
+  name: string
+  folder: string | null
+  space: string
+}
+
+export interface ClickupStatus {
+  connected: boolean
+  userName?: string
+  userEmail?: string
+  teamName?: string
+  error?: string
+}
+
+export interface ClickupPushInput {
+  listId: string
+  name: string
+  description?: string
+  /** owner name or email; resolved against workspace members */
+  assignee?: string
+  /** ISO date */
+  dueDate?: string | null
+}
+
+export interface ClickupPushResult {
+  ok: boolean
+  url?: string
+  /** who the task got assigned to, if the assignee resolved */
+  assignedTo?: string
+  error?: string
+}
+
 /** one saved link in the link hub */
 export interface LinkEntry {
   id: string
@@ -343,6 +393,8 @@ export interface AppSettings {
   hasApiKey: boolean
   /** a calendar feed URL is connected */
   hasCalendar: boolean
+  /** a ClickUp personal API token is connected */
+  hasClickup: boolean
   /** notify when a calendared meeting starts and nothing is recording */
   recordNudge: boolean
   /** stop a recording by itself once the room has gone quiet */

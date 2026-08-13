@@ -8,6 +8,11 @@ import type {
   BulkScan,
   BulkSelection,
   CalendarEvent,
+  ClickupList,
+  ClickupPushInput,
+  ClickupPushResult,
+  ClickupStatus,
+  ClickupTask,
   DirectoryImportRow,
   DirectoryImportScan,
   EnergySample,
@@ -214,6 +219,15 @@ const api = {
     get: (): Promise<BrandData> => ipcRenderer.invoke('brand:get'),
     save: (data: BrandData): Promise<BrandData> => ipcRenderer.invoke('brand:save', data)
   },
+  clickup: {
+    status: (): Promise<ClickupStatus> => ipcRenderer.invoke('clickup:status'),
+    connect: (token: string): Promise<ClickupStatus> => ipcRenderer.invoke('clickup:connect', token),
+    disconnect: (): Promise<AppSettings> => ipcRenderer.invoke('clickup:disconnect'),
+    myTasks: (): Promise<ClickupTask[]> => ipcRenderer.invoke('clickup:myTasks'),
+    lists: (): Promise<ClickupList[]> => ipcRenderer.invoke('clickup:lists'),
+    push: (input: ClickupPushInput): Promise<ClickupPushResult> =>
+      ipcRenderer.invoke('clickup:push', input)
+  },
   actions: {
     list: (): Promise<ActionRollupItem[]> => ipcRenderer.invoke('actions:list'),
     toggle: (meetingId: string, index: number): Promise<boolean> =>
@@ -221,7 +235,9 @@ const api = {
     setOwner: (meetingId: string, index: number, owner: string | null): Promise<Meeting | null> =>
       ipcRenderer.invoke('actions:setOwner', meetingId, index, owner),
     setDue: (meetingId: string, index: number, isoDate: string | null): Promise<Meeting | null> =>
-      ipcRenderer.invoke('actions:setDue', meetingId, index, isoDate)
+      ipcRenderer.invoke('actions:setDue', meetingId, index, isoDate),
+    setClickupUrl: (meetingId: string, index: number, url: string | null): Promise<Meeting | null> =>
+      ipcRenderer.invoke('actions:setClickupUrl', meetingId, index, url)
   }
 }
 

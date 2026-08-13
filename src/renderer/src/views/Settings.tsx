@@ -167,6 +167,9 @@ export function SettingsView({
   const [dlProgress, setDlProgress] = useState<EngineProgress | null>(null)
   const [downloading, setDownloading] = useState<WhisperModel | null>(null)
   const [personDraft, setPersonDraft] = useState('')
+  const [cuDraft, setCuDraft] = useState('')
+  const [cuStatus, setCuStatus] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [connectingCu, setConnectingCu] = useState(false)
   const [yourNameDraft, setYourNameDraft] = useState(settings.yourName)
   const [vocabDraft, setVocabDraft] = useState(settings.vocabulary)
   const [backingUp, setBackingUp] = useState(false)
@@ -259,6 +262,22 @@ export function SettingsView({
       })
     } finally {
       setBackingUp(false)
+    }
+  }
+
+  async function connectClickupToken(): Promise<void> {
+    const token = cuDraft.trim()
+    if (!token) return
+    setConnectingCu(true)
+    setCuStatus(null)
+    const st = await window.scribe.clickup.connect(token)
+    setConnectingCu(false)
+    if (st.connected) {
+      onChange(await window.scribe.settings.get())
+      setCuDraft('')
+      setCuStatus({ ok: true, msg: `Connected as ${st.userName} · ${st.teamName}` })
+    } else {
+      setCuStatus({ ok: false, msg: st.error ?? 'Could not connect — check the token.' })
     }
   }
 
@@ -596,6 +615,57 @@ export function SettingsView({
                 <span className="switch-knob" aria-hidden="true" />
               </button>
             </div>
+          )}
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <header className="settings-label">
+          <h2>ClickUp</h2>
+          <p className="hint">
+            Powers the Projects page and “Send to ClickUp” on meeting action items. Uses your
+            personal API token, stored encrypted on this machine: in ClickUp, click your avatar →
+            Settings → Apps → API Token → Generate/Copy.
+          </p>
+        </header>
+        <div className="settings-body">
+          {settings.hasClickup ? (
+            <div className="field-row">
+              <span className="badge badge-quiet">ClickUp connected ✓</span>
+              <button
+                className="btn btn-ghost btn-danger"
+                onClick={async () => {
+                  onChange(await window.scribe.clickup.disconnect())
+                  setCuStatus(null)
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="field-row">
+              <input
+                className="text-input"
+                type="password"
+                placeholder="pk_…"
+                value={cuDraft}
+                onChange={(e) => setCuDraft(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && connectClickupToken()}
+                aria-label="ClickUp personal API token"
+              />
+              <button
+                className="btn btn-primary"
+                onClick={connectClickupToken}
+                disabled={connectingCu || !cuDraft.trim()}
+              >
+                {connectingCu ? 'Checking…' : 'Connect'}
+              </button>
+            </div>
+          )}
+          {cuStatus && (
+            <p className={`field-note ${cuStatus.ok ? 'ok' : 'error'}`} role="status">
+              {cuStatus.msg}
+            </p>
           )}
         </div>
       </section>
