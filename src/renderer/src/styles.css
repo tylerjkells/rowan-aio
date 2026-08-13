@@ -594,6 +594,52 @@ button:disabled {
   margin-right: auto;
 }
 
+/* people search (list filter + chart jump-to-person dropdown) */
+.people-search {
+  position: relative;
+}
+
+.people-search .search-input {
+  width: 180px;
+}
+
+.people-search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 260px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg-overlay);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+.people-search-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-ctl);
+  text-align: left;
+}
+
+.people-search-row:hover {
+  background: var(--bg-raised);
+}
+
+.people-search-empty {
+  padding: var(--s2) var(--s3);
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
 /* CSV import preview */
 .import-mapping {
   display: flex;

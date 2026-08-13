@@ -257,13 +257,15 @@ function ImportDialog({
 
 function OrgChart({
   people,
-  onOpen
+  onOpen,
+  focusName,
+  setFocusName
 }: {
   people: PersonSummary[]
   onOpen: (name: string) => void
+  focusName: string | null
+  setFocusName: (name: string) => void
 }): React.JSX.Element {
-  const [focusName, setFocusName] = useState<string | null>(null)
-
   const byKey = new Map(people.map((p) => [keyOf(p.name), p]))
   const children = new Map<string, PersonSummary[]>()
   const roots: PersonSummary[] = []
@@ -434,6 +436,8 @@ export function PeopleView({
   )
   const [editing, setEditing] = useState<PersonSummary | 'new' | null>(null)
   const [importScan, setImportScan] = useState<DirectoryImportScan | null>(null)
+  const [query, setQuery] = useState('')
+  const [chartFocus, setChartFocus] = useState<string | null>(null)
 
   function load(): void {
     window.scribe.people.list().then((list) => {
@@ -447,6 +451,18 @@ export function PeopleView({
     const scan = await window.scribe.people.importScan()
     if (scan) setImportScan(scan)
   }
+
+  const q = query.trim().toLowerCase()
+  const matchText = (p: PersonSummary): string =>
+    [p.name, p.details?.title, p.details?.department, p.details?.email]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+  const nameFirst = (a: PersonSummary, b: PersonSummary): number =>
+    Number(b.name.toLowerCase().startsWith(q)) - Number(a.name.toLowerCase().startsWith(q))
+  const allMatches = q ? people.filter((p) => matchText(p).includes(q)).sort(nameFirst) : people
+  // the chart dropdown stays short; the list shows every match
+  const matches = mode === 'chart' ? allMatches.slice(0, 8) : allMatches
 
   function switchMode(m: PeopleMode): void {
     setMode(m)
@@ -526,6 +542,39 @@ export function PeopleView({
           <span className="count-note">
             {people.length} {people.length === 1 ? 'person' : 'people'}
           </span>
+          <div className="people-search">
+            <input
+              className="text-input search-input"
+              type="search"
+              placeholder="Search people"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search people"
+            />
+            {mode === 'chart' && query.trim() && (
+              <div className="people-search-results">
+                {matches.length === 0 ? (
+                  <div className="people-search-empty">No matches</div>
+                ) : (
+                  matches.map((p) => (
+                    <button
+                      key={p.name}
+                      className="people-search-row"
+                      onClick={() => {
+                        setChartFocus(p.name)
+                        setQuery('')
+                      }}
+                    >
+                      <span className="org-name">{p.name}</span>
+                      {roleLine(p.details) && (
+                        <span className="org-role">{roleLine(p.details)}</span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
           <div className="mode-toggle view-toggle" role="radiogroup" aria-label="View">
             <button
               className={mode === 'list' ? 'active' : ''}
@@ -553,9 +602,19 @@ export function PeopleView({
         </div>
       </div>
       {mode === 'list' ? (
-        <div className="meeting-list">{people.map(row)}</div>
+        <div className="meeting-list">
+          {(query.trim() ? matches : people).map(row)}
+          {query.trim() && matches.length === 0 && (
+            <p className="today-quiet">No one matches “{query.trim()}”.</p>
+          )}
+        </div>
       ) : (
-        <OrgChart people={people} onOpen={onOpenPerson} />
+        <OrgChart
+          people={people}
+          onOpen={onOpenPerson}
+          focusName={chartFocus}
+          setFocusName={setChartFocus}
+        />
       )}
     </>
   )
