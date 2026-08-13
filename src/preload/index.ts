@@ -14,6 +14,7 @@ import type {
   LibraryQA,
   Meeting,
   MeetingListItem,
+  PersonDetails,
   PersonProfile,
   PersonSummary,
   RecordingMode,
@@ -188,7 +189,10 @@ const api = {
     profile: (name: string): Promise<PersonProfile | null> =>
       ipcRenderer.invoke('people:profile', name),
     merge: (from: string, to: string): Promise<PersonSummary[]> =>
-      ipcRenderer.invoke('people:merge', from, to)
+      ipcRenderer.invoke('people:merge', from, to),
+    setDetails: (name: string, details: PersonDetails): Promise<PersonSummary[]> =>
+      ipcRenderer.invoke('people:setDetails', name, details),
+    remove: (name: string): Promise<PersonSummary[]> => ipcRenderer.invoke('people:remove', name)
   },
   actions: {
     list: (): Promise<ActionRollupItem[]> => ipcRenderer.invoke('actions:list'),

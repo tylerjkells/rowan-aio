@@ -1,5 +1,6 @@
 import { listMeetings, readMeeting } from './store'
 import { getSettings } from './settings'
+import { readDirectory } from './directory'
 import { actionRollup, identityContext, resolveOwners, SELF, type IdentityContext } from './identity'
 import type {
   Meeting,
@@ -69,6 +70,12 @@ export function listPeople(): PersonSummary[] {
     }
   }
 
+  const directory = readDirectory()
+  for (const [key, entry] of byKey) {
+    const details = directory[key]
+    if (details) entry.details = details
+  }
+
   return [...byKey.values()].sort(
     (a, b) => b.openItems - a.openItems || b.meetingCount - a.meetingCount || a.name.localeCompare(b.name)
   )
@@ -103,5 +110,5 @@ export function personProfile(name: string): PersonProfile | null {
     }
   }
 
-  return { name: canonical, meetings, items, myCommitments }
+  return { name: canonical, details: readDirectory()[key], meetings, items, myCommitments }
 }

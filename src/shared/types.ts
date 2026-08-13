@@ -197,11 +197,24 @@ export interface WeeklyDigest {
   byPerson: { name: string; count: number }[]
 }
 
+/** editable directory fields for one colleague */
+export interface PersonDetails {
+  title?: string
+  department?: string
+  email?: string
+  phone?: string
+  office?: string
+  /** display name of their manager (another person in the directory) */
+  reportsTo?: string
+  notes?: string
+}
+
 /** one row on the People page */
 export interface PersonSummary {
   name: string
   meetingCount: number
   openItems: number
+  details?: PersonDetails
 }
 
 export interface PersonMeetingRef {
@@ -214,6 +227,7 @@ export interface PersonMeetingRef {
 /** everything the app knows about one colleague */
 export interface PersonProfile {
   name: string
+  details?: PersonDetails
   /** meetings they appeared in (attendee, named speaker, or item owner) */
   meetings: PersonMeetingRef[]
   /** action items they own, open and done */

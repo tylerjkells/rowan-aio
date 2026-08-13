@@ -210,6 +210,15 @@ export function addPerson(name: string): void {
   persist()
 }
 
+/** Remove someone from the team directory (their meeting history is untouched). */
+export function removePerson(name: string): void {
+  const key = name.trim().toLowerCase()
+  if (!key) return
+  const s = load()
+  s.people = (s.people ?? []).filter((p) => p.toLowerCase() !== key)
+  persist()
+}
+
 /**
  * Record that one name is really another person (a merge from the People
  * page). The alias applies at read time everywhere identities are resolved.

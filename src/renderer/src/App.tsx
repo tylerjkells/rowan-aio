@@ -262,6 +262,7 @@ export default function App(): React.JSX.Element {
               name={view.person}
               onBack={() => setView({ name: 'people' })}
               onOpenMeeting={openMeeting}
+              onOpenPerson={(person) => setView({ name: 'person', person })}
             />
           )}
           {view.name === 'import' && (

@@ -208,16 +208,28 @@ server.registerTool(
   }
 )
 
+interface PersonEntry {
+  name: string
+  meetings: number
+  openItems: number
+  title?: string
+  department?: string
+  email?: string
+  phone?: string
+  office?: string
+  reportsTo?: string
+}
+
 server.registerTool(
   'list_people',
   {
     description:
-      'People known to the library (action-item owners, attendees, named speakers) with meeting counts and open-item counts.',
+      'People known to the library (action-item owners, attendees, named speakers, the org directory) with meeting counts, open-item counts, and directory details where known: title, department, email, phone, office, and who they report to.',
     inputSchema: {}
   },
   async () => {
-    const byKey = new Map<string, { name: string; meetings: number; openItems: number }>()
-    const add = (name: string): { name: string; meetings: number; openItems: number } => {
+    const byKey = new Map<string, PersonEntry>()
+    const add = (name: string): PersonEntry => {
       const key = name.trim().toLowerCase()
       let e = byKey.get(key)
       if (!e) {
@@ -239,6 +251,26 @@ server.registerTool(
         }
       }
       for (const n of names) add(n).meetings++
+    }
+    // roster names from settings carry proper display casing
+    try {
+      const roster: string[] =
+        JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf-8')).people ?? []
+      for (const n of roster) add(n)
+    } catch {
+      // no settings.json yet
+    }
+    // fold in the org directory: everyone in it appears, with their details
+    try {
+      const directory: Record<string, Record<string, string>> = JSON.parse(
+        readFileSync(join(dataDir, 'directory.json'), 'utf-8')
+      )
+      for (const [key, details] of Object.entries(directory)) {
+        const entry = byKey.get(key) ?? add(key)
+        Object.assign(entry, details)
+      }
+    } catch {
+      // no directory.json yet
     }
     return {
       content: [{ type: 'text', text: JSON.stringify([...byKey.values()], null, 2) }]

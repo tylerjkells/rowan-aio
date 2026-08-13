@@ -38,8 +38,10 @@ import {
   setApiKey,
   setCalendarUrl,
   addPerson,
-  addPersonAlias
+  addPersonAlias,
+  removePerson
 } from './settings'
+import { mergeDetails, removeDetails, setDetails } from './directory'
 import {
   refreshCalendar,
   getTodayEvents,
@@ -85,6 +87,7 @@ import type {
   BulkSelection,
   EnergySample,
   Meeting,
+  PersonDetails,
   RecordingMode,
   WhisperModel
 } from '../shared/types'
@@ -635,6 +638,17 @@ function registerIpc(): void {
   ipcMain.handle('people:profile', (_e, name: string) => personProfile(name))
   ipcMain.handle('people:merge', (_e, from: string, to: string) => {
     addPersonAlias(from, to)
+    mergeDetails(from, to)
+    return listPeople()
+  })
+  ipcMain.handle('people:setDetails', (_e, name: string, details: PersonDetails) => {
+    addPerson(name) // no-op if already in the roster
+    setDetails(name, details)
+    return listPeople()
+  })
+  ipcMain.handle('people:remove', (_e, name: string) => {
+    removePerson(name)
+    removeDetails(name)
     return listPeople()
   })
 
