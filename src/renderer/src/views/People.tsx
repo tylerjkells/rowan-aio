@@ -262,6 +262,8 @@ function OrgChart({
   people: PersonSummary[]
   onOpen: (name: string) => void
 }): React.JSX.Element {
+  const [focusName, setFocusName] = useState<string | null>(null)
+
   const byKey = new Map(people.map((p) => [keyOf(p.name), p]))
   const children = new Map<string, PersonSummary[]>()
   const roots: PersonSummary[] = []
@@ -275,52 +277,139 @@ function OrgChart({
       roots.push(p)
     }
   }
+  const kidsOf = (p: PersonSummary): PersonSummary[] =>
+    (children.get(keyOf(p.name)) ?? []).sort(byName)
+  const managerOf = (p: PersonSummary): PersonSummary | undefined => {
+    const mgr = p.details?.reportsTo ? byKey.get(keyOf(p.details.reportsTo)) : undefined
+    return mgr && keyOf(mgr.name) !== keyOf(p.name) ? mgr : undefined
+  }
 
-  const rendered = new Set<string>()
-  const card = (p: PersonSummary): React.JSX.Element => (
-    <button className="org-card" onClick={() => onOpen(p.name)}>
-      <span className="org-name">{p.name}</span>
-      {roleLine(p.details) && <span className="org-role">{roleLine(p.details)}</span>}
-    </button>
-  )
-  const node = (p: PersonSummary): React.JSX.Element | null => {
-    if (rendered.has(keyOf(p.name))) return null // reporting-line cycle guard
-    rendered.add(keyOf(p.name))
-    const kids = (children.get(keyOf(p.name)) ?? []).sort(byName)
+  // everyone under a person, not just direct reports (cycle-safe)
+  const totalCache = new Map<string, number>()
+  const totalReports = (p: PersonSummary, seen = new Set<string>()): number => {
+    const key = keyOf(p.name)
+    if (totalCache.has(key)) return totalCache.get(key)!
+    if (seen.has(key)) return 0
+    seen.add(key)
+    const n = kidsOf(p).reduce((sum, k) => sum + 1 + totalReports(k, seen), 0)
+    totalCache.set(key, n)
+    return n
+  }
+
+  const treeRoots = roots.filter((p) => kidsOf(p).length > 0)
+  const unplaced = roots.filter((p) => kidsOf(p).length === 0).sort(byName)
+
+  // default focus: the top of the biggest tree
+  const defaultFocus =
+    [...treeRoots].sort((a, b) => totalReports(b) - totalReports(a))[0] ?? people[0]
+  const focus = (focusName && byKey.get(keyOf(focusName))) || defaultFocus
+  if (!focus) return <p className="today-quiet">Nobody in the directory yet.</p>
+
+  // chain of managers above the focused person
+  const ancestors: PersonSummary[] = []
+  const seen = new Set<string>([keyOf(focus.name)])
+  for (let m = managerOf(focus); m && !seen.has(keyOf(m.name)); m = managerOf(m)) {
+    seen.add(keyOf(m.name))
+    ancestors.unshift(m)
+  }
+
+  const manager = managerOf(focus)
+  const siblings = manager ? kidsOf(manager) : [...treeRoots].sort(byName)
+  const reports = kidsOf(focus)
+  const focusTotal = totalReports(focus)
+
+  const reportCard = (p: PersonSummary): React.JSX.Element => {
+    const n = totalReports(p)
     return (
-      <div className="org-node" key={p.name}>
-        {card(p)}
-        {kids.length > 0 && <div className="org-children">{kids.map(node)}</div>}
-      </div>
+      <button className="orgb-card" key={p.name} onClick={() => setFocusName(p.name)}>
+        <span className="orgb-card-main">
+          <span className="org-name">{p.name}</span>
+          {roleLine(p.details) && <span className="org-role">{roleLine(p.details)}</span>}
+          {p.details?.office && <span className="orgb-card-office">{p.details.office}</span>}
+        </span>
+        {n > 0 && <span className="orgb-count">{n} ▾</span>}
+      </button>
     )
   }
 
-  // real trees first; loose people (nobody above or below them) go to a
-  // compact grid at the end instead of stretching the chart
-  const hasReports = (p: PersonSummary): boolean =>
-    (children.get(keyOf(p.name)) ?? []).length > 0
-  const treeRoots = roots.filter(hasReports).sort(byName)
-  const unplaced = roots.filter((p) => !hasReports(p)).sort(byName)
-  const trees = treeRoots.map(node)
-  // anyone trapped in a reporting-line cycle still gets drawn, as a root
-  const leftovers = people
-    .filter((p) => !rendered.has(keyOf(p.name)) && !unplaced.includes(p))
-    .map(node)
-
   return (
-    <div className="org-chart">
-      {trees}
-      {leftovers}
+    <div className="orgb">
+      {ancestors.map((a) => (
+        <div className="orgb-anc-wrap" key={a.name}>
+          <button className="orgb-anc" onClick={() => setFocusName(a.name)}>
+            <span className="orgb-card-main">
+              <span className="org-name">{a.name}</span>
+              {roleLine(a.details) && <span className="org-role">{roleLine(a.details)}</span>}
+            </span>
+            <span className="orgb-count">{totalReports(a)}</span>
+          </button>
+          <span className="orgb-connector" aria-hidden="true" />
+        </div>
+      ))}
+
+      {siblings.length > 1 && (
+        <div className="orgb-sibs-block">
+          {manager && (
+            <div className="orgb-sibs-label">
+              People reporting to <strong>{manager.name}</strong>
+            </div>
+          )}
+          <div className="orgb-sibs">
+            {siblings.map((s) => {
+              const n = totalReports(s)
+              return (
+                <button
+                  key={s.name}
+                  className={`orgb-chip ${keyOf(s.name) === keyOf(focus.name) ? 'active' : ''}`}
+                  onClick={() => setFocusName(s.name)}
+                >
+                  {s.name}
+                  {n > 0 && <span className="orgb-chip-count">{n}</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="orgb-focus">
+        <div className="orgb-focus-main">
+          <span className="orgb-focus-name">{focus.name}</span>
+          {roleLine(focus.details) && <span className="orgb-focus-role">{roleLine(focus.details)}</span>}
+          {focus.details?.office && <span className="orgb-card-office">{focus.details.office}</span>}
+        </div>
+        <div className="orgb-focus-side">
+          <button className="btn btn-primary" onClick={() => onOpen(focus.name)}>
+            Open profile
+          </button>
+          {focusTotal > 0 && (
+            <span className="orgb-focus-counts">
+              {focusTotal} {focusTotal === 1 ? 'report' : 'reports'}
+              {reports.length !== focusTotal && <> · {reports.length} direct</>}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {reports.length > 0 ? (
+        <>
+          <div className="orgb-divider">
+            <span>
+              People reporting to <strong>{focus.name}</strong>
+            </span>
+          </div>
+          <div className="orgb-reports">{reports.map(reportCard)}</div>
+        </>
+      ) : (
+        <p className="today-quiet orgb-none">No one reports to {focus.name}.</p>
+      )}
+
       {unplaced.length > 0 && (
         <div className="org-unplaced-block">
           <div className="card-subhead">
             Not placed in the chart · set “Reports to” to place them
           </div>
-          <div className="org-unplaced">
-            {unplaced.map((p) => (
-              <span key={p.name}>{card(p)}</span>
-            ))}
-          </div>
+          <div className="orgb-reports">{unplaced.map(reportCard)}</div>
         </div>
       )}
     </div>

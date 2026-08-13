@@ -653,36 +653,13 @@ button:disabled {
   justify-content: center;
 }
 
-/* org chart: nested reporting lines. Siblings flow horizontally and wrap;
-   each report's own subtree hangs below their card. */
-.org-chart {
+/* org chart: an Outlook-style focused browser — manager chain on top, a peer
+   strip, the focused person, then their direct reports; click to refocus. */
+.orgb {
   display: flex;
   flex-direction: column;
-  gap: var(--s5);
-}
-
-.org-node {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.org-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-ctl);
-  background: var(--bg-raised);
-  width: fit-content;
-  max-width: 260px;
-  text-align: left;
-}
-
-.org-card:hover {
-  border-color: var(--accent);
+  align-items: center;
+  gap: 0;
 }
 
 .org-name {
@@ -695,26 +672,208 @@ button:disabled {
   color: var(--ink-faint);
 }
 
-.org-children {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--s2) var(--s3);
-  margin: var(--s2) 0 0 var(--s4);
-  padding: var(--s1) 0 var(--s1) var(--s4);
-  border-left: 2px solid var(--line-soft);
-}
-
-.org-unplaced-block {
+.orgb-anc-wrap {
   display: flex;
   flex-direction: column;
+  align-items: center;
+}
+
+.orgb-anc {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  width: min(480px, 90%);
+  min-width: 320px;
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+  text-align: left;
+}
+
+.orgb-anc:hover {
+  border-color: var(--accent);
+}
+
+.orgb-anc .orgb-card-main {
+  flex: 1;
+}
+
+.orgb-connector {
+  width: 2px;
+  height: 14px;
+  background: var(--line-soft);
+}
+
+.orgb-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.orgb-count {
+  flex: none;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.orgb-sibs-block {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  margin: var(--s3) 0;
+}
+
+.orgb-sibs-label {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.orgb-sibs {
+  display: flex;
+  gap: var(--s2);
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 2px var(--s2) var(--s2);
+}
+
+.orgb-chip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 5px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.orgb-chip:hover {
+  border-color: var(--accent);
+}
+
+.orgb-chip.active {
+  border-color: var(--accent);
+  background: var(--bg-overlay);
+  font-weight: 600;
+}
+
+.orgb-chip-count {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.orgb-focus {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  width: min(520px, 96%);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+  margin-top: var(--s2);
+}
+
+.orgb-focus-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.orgb-focus-name {
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.orgb-focus-role {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.orgb-card-office {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.orgb-focus-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s2);
+  flex: none;
+}
+
+.orgb-focus-counts {
+  font-size: 12px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.orgb-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  margin: var(--s5) 0 var(--s4);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.orgb-divider::before,
+.orgb-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+
+.orgb-reports {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: var(--s3);
 }
 
-.org-unplaced {
+.orgb-card {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+  text-align: left;
+}
+
+.orgb-card:hover {
+  border-color: var(--accent);
+}
+
+.orgb-card .orgb-card-main {
+  flex: 1;
+}
+
+.orgb-none {
+  margin-top: var(--s4);
+}
+
+.org-unplaced-block {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin-top: var(--s6, 32px);
 }
 
 /* module group label in the sidebar */
