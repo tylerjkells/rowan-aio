@@ -24,6 +24,6 @@ nsis:
 publish:
   provider: github
   owner: tylerjkells
-  repo: meeting-scribe
+  repo: rowan-aio
 portable:
   artifactName: RowanAIO-portable.exe

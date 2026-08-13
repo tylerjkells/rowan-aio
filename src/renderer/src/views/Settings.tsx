@@ -1139,7 +1139,7 @@ export function SettingsView({
         <div className="settings-body">
           <p className="opt-desc">
             Rowan AIO {version ? `v${version}` : ''} · updates install automatically from{' '}
-            <a href="https://github.com/tylerjkells/meeting-scribe/releases" target="_blank" rel="noreferrer">
+            <a href="https://github.com/tylerjkells/rowan-aio/releases" target="_blank" rel="noreferrer">
               GitHub releases
             </a>
             .
