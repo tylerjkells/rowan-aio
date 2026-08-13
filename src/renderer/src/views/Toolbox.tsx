@@ -92,13 +92,39 @@ export function ToolboxView(): React.JSX.Element {
     else if (r) setData(r)
   }
 
-  async function copyImage(id: string): Promise<void> {
-    const r = await window.scribe.toolbox.copyImage(id)
-    if (r.ok) {
-      setCopiedId(id)
-      setTimeout(() => setCopiedId((c) => (c === id ? null : c)), 1200)
-    } else {
-      setError(r.error ?? 'Could not copy the image')
+  async function copyImage(img: { id: string; file: string }): Promise<void> {
+    setError(null)
+    try {
+      if (img.file.endsWith('.svg')) {
+        // SVG copies as markup (Tableau wants text there)
+        const r = await window.scribe.toolbox.copyImage(img.id)
+        if (!r.ok) throw new Error(r.error ?? 'Could not copy the SVG')
+      } else {
+        // decode through Chromium (handles every format the grid can show)
+        // and hand the clipboard a PNG, transparency intact
+        const el = new Image()
+        el.crossOrigin = 'anonymous'
+        await new Promise<void>((resolve, reject) => {
+          el.onload = () => resolve()
+          el.onerror = () => reject(new Error('Could not load the image'))
+          el.src = `scribe-media://toolbox/${encodeURIComponent(img.file)}`
+        })
+        const canvas = document.createElement('canvas')
+        canvas.width = el.naturalWidth
+        canvas.height = el.naturalHeight
+        canvas.getContext('2d')!.drawImage(el, 0, 0)
+        const blob = await new Promise<Blob>((resolve, reject) =>
+          canvas.toBlob(
+            (b) => (b ? resolve(b) : reject(new Error('Could not encode the image'))),
+            'image/png'
+          )
+        )
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+      }
+      setCopiedId(img.id)
+      setTimeout(() => setCopiedId((c) => (c === img.id ? null : c)), 1200)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not copy the image')
     }
   }
 
@@ -240,7 +266,7 @@ export function ToolboxView(): React.JSX.Element {
               <div key={img.id} className="tbx-image-card">
                 <button
                   className="tbx-image-media"
-                  onClick={() => copyImage(img.id)}
+                  onClick={() => copyImage(img)}
                   title="Copy to clipboard"
                 >
                   <img src={`scribe-media://toolbox/${encodeURIComponent(img.file)}`} alt={img.name} loading="lazy" />
@@ -251,7 +277,7 @@ export function ToolboxView(): React.JSX.Element {
                     {img.name}
                   </span>
                   <span className="link-card-tools">
-                    <button className="btn btn-ghost" onClick={() => copyImage(img.id)}>
+                    <button className="btn btn-ghost" onClick={() => copyImage(img)}>
                       {copiedId === img.id ? 'Copied' : 'Copy'}
                     </button>
                     <button

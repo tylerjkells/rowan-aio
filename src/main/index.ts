@@ -192,7 +192,9 @@ function createWindow(): BrowserWindow {
 }
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'scribe-media', privileges: { stream: true, supportFetchAPI: true } }
+  // corsEnabled lets the renderer draw toolbox images to a canvas untainted,
+  // which is how images get onto the clipboard in every format
+  { scheme: 'scribe-media', privileges: { stream: true, supportFetchAPI: true, corsEnabled: true } }
 ])
 
 // Windows toasts need the app identity to match the installed shortcut
@@ -250,7 +252,11 @@ app.whenReady().then(() => {
                 ? 'image/svg+xml'
                 : 'image/jpeg'
       return new Response(Readable.toWeb(createReadStream(file)) as never, {
-        headers: { 'Content-Type': mime, 'Cache-Control': 'max-age=31536000, immutable' }
+        headers: {
+          'Content-Type': mime,
+          'Cache-Control': 'max-age=31536000, immutable',
+          'Access-Control-Allow-Origin': '*'
+        }
       })
     }
 
