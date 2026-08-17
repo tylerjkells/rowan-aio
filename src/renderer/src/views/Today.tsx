@@ -10,6 +10,7 @@ import type {
 } from '../../../shared/types'
 import { ChevronIcon, formatDuration, formatWhen, isOverdue, MicIcon, StageBadge } from '../ui'
 import { ClickupCompleteDialog } from '../ClickupComplete'
+import { PrepDialog } from '../PrepDialog'
 
 /**
  * The location field on virtual/hybrid events often carries platform
@@ -149,6 +150,8 @@ export function TodayView({
   const [pinnedLinks, setPinnedLinks] = useState<LinkEntry[]>([])
   const [cuDue, setCuDue] = useState<ClickupTask[] | null>(null)
   const [cuCompleting, setCuCompleting] = useState<ClickupTask | null>(null)
+  const [prep, setPrep] = useState<Record<string, string>>({})
+  const [prepFor, setPrepFor] = useState<CalendarEvent | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const autoExpanded = useRef(false)
   // re-render every minute so the "Now" marker tracks the clock
@@ -156,6 +159,7 @@ export function TodayView({
 
   useEffect(() => {
     window.scribe.settings.get().then(setSettings)
+    window.scribe.prep.all().then(setPrep)
     window.scribe.actions.list().then(setActions)
     window.scribe.links.list().then((ls) => setPinnedLinks(ls.filter((l) => l.pinned)))
     // ClickUp tasks that need attention today fill in once fetched
@@ -323,7 +327,7 @@ export function TodayView({
                         {live && <span className="sched-now">Now</span>}
                         {ev.title}
                       </span>
-                      {(room || ev.joinUrl || ev.attendees.length > 0 || brief) && (
+                      {(room || ev.joinUrl || ev.attendees.length > 0 || brief || !past) && (
                         <span className="sched-meta">
                           {ev.joinUrl && (
                             <a className="sched-join" href={ev.joinUrl} target="_blank" rel="noreferrer">
@@ -333,6 +337,15 @@ export function TodayView({
                           {room && <span>{room}</span>}
                           {ev.attendees.length > 0 && (
                             <span title={ev.attendees.join(', ')}>{attendeeLabel(ev.attendees)}</span>
+                          )}
+                          {!past && (
+                            <button
+                              className={`brief-toggle sched-prep ${prep[ev.id] ? 'has-prep' : ''}`}
+                              onClick={() => setPrepFor(ev)}
+                              title={prep[ev.id] ?? 'Notes to yourself for this meeting'}
+                            >
+                              {prep[ev.id] ? '✓ Prep' : '+ Prep'}
+                            </button>
                           )}
                           {brief && (
                             <button
@@ -356,6 +369,9 @@ export function TodayView({
                             </button>
                           )}
                         </span>
+                      )}
+                      {prep[ev.id] && !past && (
+                        <span className="sched-prep-note">{prep[ev.id]}</span>
                       )}
                       {brief && briefOpen && <BriefPanel brief={brief} onOpen={onOpen} />}
                     </span>
@@ -483,6 +499,22 @@ export function TodayView({
           </section>
         )}
       </div>
+      {prepFor && (
+        <PrepDialog
+          eventId={prepFor.id}
+          title={prepFor.title}
+          when={new Date(prepFor.start).toLocaleString(undefined, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+          })}
+          initial={prep[prepFor.id] ?? ''}
+          onSaved={setPrep}
+          onClose={() => setPrepFor(null)}
+        />
+      )}
       {cuCompleting && (
         <ClickupCompleteDialog
           task={cuCompleting}

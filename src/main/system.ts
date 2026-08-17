@@ -1,4 +1,5 @@
-import { app, BrowserWindow, Menu, Tray, globalShortcut, nativeImage } from 'electron'
+import { app, BrowserWindow, Menu, Tray, globalShortcut, nativeImage, powerSaveBlocker } from 'electron'
+import { execFile } from 'child_process'
 import { channel } from './channel'
 import { join } from 'path'
 import { getSettings } from './settings'
@@ -86,12 +87,96 @@ function destroyTray(): void {
   tray = null
 }
 
-/** (Re)apply tray, login item, and hotkey to match settings. Safe to call often. */
+// ---- keep awake ----
+// A synthetic 1px mouse move (SendInput) resets the OS idle timer, which is
+// what Windows lock timers and Teams presence watch — powerSaveBlocker alone
+// keeps the display on but still lets you go "Away". Ticks are randomized
+// (60–150s) and can follow a daily schedule with a break window.
+let jiggleTimer: NodeJS.Timeout | null = null
+let sleepBlockerId: number | null = null
+
+const JIGGLE_PS = `
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public class Jiggler {
+  [StructLayout(LayoutKind.Sequential)]
+  public struct INPUT { public uint type; public MOUSEINPUT mi; }
+  [StructLayout(LayoutKind.Sequential)]
+  public struct MOUSEINPUT { public int dx; public int dy; public uint mouseData; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
+  [DllImport("user32.dll", SetLastError=true)]
+  public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+  public static void Jiggle() {
+    INPUT[] moves = new INPUT[2];
+    moves[0].type = 0; moves[0].mi.dx = 1;  moves[0].mi.dy = 0; moves[0].mi.dwFlags = 0x0001;
+    moves[1].type = 0; moves[1].mi.dx = -1; moves[1].mi.dy = 0; moves[1].mi.dwFlags = 0x0001;
+    SendInput(2, moves, Marshal.SizeOf(typeof(INPUT)));
+  }
+}
+'@
+[Jiggler]::Jiggle()
+`
+
+function jiggleOnce(): void {
+  if (process.platform !== 'win32') return
+  execFile(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', JIGGLE_PS],
+    { windowsHide: true },
+    () => {}
+  )
+}
+
+function minutesOf(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number)
+  return (h || 0) * 60 + (m || 0)
+}
+
+function inKeepAwakeWindow(): boolean {
+  const s = getSettings()
+  if (!s.keepAwakeScheduled) return true
+  const now = new Date()
+  const cur = now.getHours() * 60 + now.getMinutes()
+  const start = minutesOf(s.keepAwakeStart)
+  const end = minutesOf(s.keepAwakeEnd)
+  const breakStart = minutesOf(s.keepAwakeBreakStart)
+  const breakEnd = minutesOf(s.keepAwakeBreakEnd)
+  const working = start <= cur && cur < end
+  const onBreak = breakStart < breakEnd && breakStart <= cur && cur < breakEnd
+  return working && !onBreak
+}
+
+function scheduleNextJiggle(): void {
+  const delay = 60_000 + Math.random() * 90_000
+  jiggleTimer = setTimeout(() => {
+    if (inKeepAwakeWindow()) jiggleOnce()
+    scheduleNextJiggle()
+  }, delay)
+}
+
+function setKeepAwake(on: boolean): void {
+  if (on && !jiggleTimer) {
+    if (inKeepAwakeWindow()) jiggleOnce()
+    scheduleNextJiggle()
+    if (sleepBlockerId === null) sleepBlockerId = powerSaveBlocker.start('prevent-display-sleep')
+  } else if (!on && jiggleTimer) {
+    clearTimeout(jiggleTimer)
+    jiggleTimer = null
+    if (sleepBlockerId !== null && powerSaveBlocker.isStarted(sleepBlockerId)) {
+      powerSaveBlocker.stop(sleepBlockerId)
+    }
+    sleepBlockerId = null
+  }
+}
+
+/** (Re)apply tray, login item, hotkey, and keep-awake to match settings. Safe to call often. */
 export function applySystemSettings(): void {
   const s = getSettings()
 
   if (s.closeToTray) ensureTray()
   else destroyTray()
+
+  setKeepAwake(s.keepAwake)
 
   if (channel === 'stable') {
     // neither the dev electron.exe nor a portable test build may register

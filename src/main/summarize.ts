@@ -180,9 +180,14 @@ export async function summarizeTranscript(
       ? ` The meeting took place on ${parsedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Use this only to make sense of relative time references — do not repeat it in the summary.`
       : ''
 
+  // budget-tier models (the everyday default) get a fact-check pass; the
+  // premium models the user picks for important meetings are accurate enough
+  // on their own, and skipping the pass roughly halves the tokens spent
+  const shouldVerify = /haiku|mini|nano/i.test(model)
+
   const draftPromise = aiChat({
     model,
-    maxTokens: 16000,
+    maxTokens: 24000,
     schema: SUMMARY_SCHEMA as unknown as Record<string, unknown>,
     schemaName: 'meeting_summary',
     system:
@@ -214,7 +219,10 @@ export async function summarizeTranscript(
   })
 
   // the fact sheet needs only the transcript, so it extracts while the draft generates
-  const [response, factSheet] = await Promise.all([draftPromise, extractFacts(model, transcript)])
+  const [response, factSheet] = await Promise.all([
+    draftPromise,
+    shouldVerify ? extractFacts(model, transcript) : Promise.resolve(null)
+  ])
 
   if (response.stop === 'refusal') {
     throw new Error('The summary request was declined by the model.')
@@ -230,7 +238,7 @@ export async function summarizeTranscript(
         : 'The model returned a malformed summary. Regenerating usually fixes this.'
     )
   }
-  return verifySummary(model, transcript, draft, dateNote, factSheet)
+  return shouldVerify ? verifySummary(model, transcript, draft, dateNote, factSheet) : draft
 }
 
 /**
@@ -242,7 +250,7 @@ async function extractFacts(model: string, transcript: string): Promise<string |
   try {
     const response = await aiChat({
       model,
-      maxTokens: 16000,
+      maxTokens: 24000,
       schema: FACTS_SCHEMA as unknown as Record<string, unknown>,
       schemaName: 'fact_sheet',
       system:
@@ -281,7 +289,7 @@ async function verifySummary(
   try {
     const response = await aiChat({
       model,
-      maxTokens: 16000,
+      maxTokens: 24000,
       schema: SUMMARY_SCHEMA as unknown as Record<string, unknown>,
       schemaName: 'meeting_summary',
       system:

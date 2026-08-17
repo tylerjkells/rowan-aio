@@ -179,6 +179,11 @@ const api = {
     range: (fromIso: string, toIso: string): Promise<{ events: CalendarEvent[]; error?: string }> =>
       ipcRenderer.invoke('calendar:range', fromIso, toIso)
   },
+  prep: {
+    all: (): Promise<Record<string, string>> => ipcRenderer.invoke('prep:all'),
+    set: (id: string, text: string): Promise<Record<string, string>> =>
+      ipcRenderer.invoke('prep:set', id, text)
+  },
   ask: {
     history: (): Promise<LibraryQA[]> => ipcRenderer.invoke('ask:history'),
     ask: (question: string): Promise<LibraryQA> => ipcRenderer.invoke('ask:ask', question),

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CalendarEvent, MeetingListItem } from '../../../shared/types'
+import { PrepDialog } from '../PrepDialog'
 import { formatDuration, formatWhen, StageBadge } from '../ui'
 
 type LibView = 'list' | 'calendar'
@@ -186,6 +187,12 @@ function CalendarView({
   const [showSchedule, setShowSchedule] = useState(
     () => localStorage.getItem('calSchedule') !== 'off'
   )
+  const [prep, setPrep] = useState<Record<string, string>>({})
+  const [prepFor, setPrepFor] = useState<CalendarEvent | null>(null)
+
+  useEffect(() => {
+    window.scribe.prep.all().then(setPrep)
+  }, [])
 
   function toggleSchedule(): void {
     const next = !showSchedule
@@ -328,10 +335,14 @@ function CalendarView({
                 </button>
               ))}
               {dayEvents.map((e) => (
-                <span
-                  className="calendar-event"
+                <button
+                  className={`calendar-event ${prep[e.id] ? 'has-prep' : ''}`}
                   key={e.id}
-                  title={`${e.title}${e.location ? ` · ${e.location}` : ''}`}
+                  onClick={() => setPrepFor(e)}
+                  title={
+                    `${e.title}${e.location ? ` · ${e.location}` : ''}` +
+                    (prep[e.id] ? `\n\nPrep: ${prep[e.id]}` : ' — click to add prep notes')
+                  }
                 >
                   <span className="calendar-event-time">
                     {new Date(e.start).toLocaleTimeString(undefined, {
@@ -339,13 +350,30 @@ function CalendarView({
                       minute: '2-digit'
                     })}
                   </span>
+                  {prep[e.id] && <span className="prep-dot" aria-label="Has prep notes" />}
                   {e.title}
-                </span>
+                </button>
               ))}
             </div>
           )
         })}
       </div>
+      {prepFor && (
+        <PrepDialog
+          eventId={prepFor.id}
+          title={prepFor.title}
+          when={new Date(prepFor.start).toLocaleString(undefined, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+          })}
+          initial={prep[prepFor.id] ?? ''}
+          onSaved={setPrep}
+          onClose={() => setPrepFor(null)}
+        />
+      )}
     </div>
   )
 }

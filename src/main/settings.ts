@@ -19,6 +19,12 @@ interface StoredSettings {
   closeToTray: boolean
   launchAtLogin: boolean
   recordHotkey: boolean
+  keepAwake: boolean
+  keepAwakeScheduled: boolean
+  keepAwakeStart: string
+  keepAwakeEnd: string
+  keepAwakeBreakStart: string
+  keepAwakeBreakEnd: string
   backupFolder: string | null
   backupSkipAudio: boolean
   /** epoch ms of the last automatic backup */
@@ -54,6 +60,12 @@ const DEFAULTS: StoredSettings = {
   closeToTray: true,
   launchAtLogin: false,
   recordHotkey: true,
+  keepAwake: false,
+  keepAwakeScheduled: false,
+  keepAwakeStart: '08:00',
+  keepAwakeEnd: '16:30',
+  keepAwakeBreakStart: '12:00',
+  keepAwakeBreakEnd: '13:00',
   backupFolder: null,
   backupSkipAudio: true,
   lastBackupAt: 0,
@@ -109,6 +121,12 @@ export function getSettings(): AppSettings {
     closeToTray: s.closeToTray !== false,
     launchAtLogin: s.launchAtLogin === true,
     recordHotkey: s.recordHotkey !== false,
+    keepAwake: s.keepAwake === true,
+    keepAwakeScheduled: s.keepAwakeScheduled === true,
+    keepAwakeStart: validTime(s.keepAwakeStart, DEFAULTS.keepAwakeStart),
+    keepAwakeEnd: validTime(s.keepAwakeEnd, DEFAULTS.keepAwakeEnd),
+    keepAwakeBreakStart: validTime(s.keepAwakeBreakStart, DEFAULTS.keepAwakeBreakStart),
+    keepAwakeBreakEnd: validTime(s.keepAwakeBreakEnd, DEFAULTS.keepAwakeBreakEnd),
     backupFolder: s.backupFolder ?? null,
     backupSkipAudio: s.backupSkipAudio !== false,
     people: s.people ?? [],
@@ -125,6 +143,10 @@ export function getSettings(): AppSettings {
 /** auto-end delays are minutes; keep them sane whatever lands in the file */
 const MIN_AUTO_END_MINUTES = 1
 const MAX_AUTO_END_MINUTES = 240
+
+function validTime(value: string, fallback: string): string {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value ?? '') ? value : fallback
+}
 
 function clampMinutes(value: number, fallback: number): number {
   const n = Math.round(Number(value))
@@ -151,6 +173,12 @@ export function updateSettings(
       | 'closeToTray'
       | 'launchAtLogin'
       | 'recordHotkey'
+      | 'keepAwake'
+      | 'keepAwakeScheduled'
+      | 'keepAwakeStart'
+      | 'keepAwakeEnd'
+      | 'keepAwakeBreakStart'
+      | 'keepAwakeBreakEnd'
       | 'backupFolder'
       | 'backupSkipAudio'
       | 'people'
@@ -184,6 +212,22 @@ export function updateSettings(
   if (typeof patch.closeToTray === 'boolean') s.closeToTray = patch.closeToTray
   if (typeof patch.launchAtLogin === 'boolean') s.launchAtLogin = patch.launchAtLogin
   if (typeof patch.recordHotkey === 'boolean') s.recordHotkey = patch.recordHotkey
+  if (typeof patch.keepAwake === 'boolean') s.keepAwake = patch.keepAwake
+  if (typeof patch.keepAwakeScheduled === 'boolean') s.keepAwakeScheduled = patch.keepAwakeScheduled
+  if (typeof patch.keepAwakeStart === 'string')
+    s.keepAwakeStart = validTime(patch.keepAwakeStart, s.keepAwakeStart ?? DEFAULTS.keepAwakeStart)
+  if (typeof patch.keepAwakeEnd === 'string')
+    s.keepAwakeEnd = validTime(patch.keepAwakeEnd, s.keepAwakeEnd ?? DEFAULTS.keepAwakeEnd)
+  if (typeof patch.keepAwakeBreakStart === 'string')
+    s.keepAwakeBreakStart = validTime(
+      patch.keepAwakeBreakStart,
+      s.keepAwakeBreakStart ?? DEFAULTS.keepAwakeBreakStart
+    )
+  if (typeof patch.keepAwakeBreakEnd === 'string')
+    s.keepAwakeBreakEnd = validTime(
+      patch.keepAwakeBreakEnd,
+      s.keepAwakeBreakEnd ?? DEFAULTS.keepAwakeBreakEnd
+    )
   if (patch.backupFolder !== undefined) s.backupFolder = patch.backupFolder
   if (typeof patch.backupSkipAudio === 'boolean') s.backupSkipAudio = patch.backupSkipAudio
   if (Array.isArray(patch.people)) {

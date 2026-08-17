@@ -1216,13 +1216,37 @@ a.rollup-task:hover {
   white-space: pre;
 }
 
-/* real queries need real width: the edit dialog goes near-full-screen */
+/* real queries need real room: the edit dialog opens near-full-screen and its
+   corner grip resizes it in BOTH directions; the SQL box fills whatever space
+   the dialog has */
 dialog.sql-edit {
   width: min(1000px, 94vw);
+  height: min(720px, 88vh);
+  max-width: 96vw;
+  max-height: 92vh;
+  min-width: 420px;
+  min-height: 340px;
+  resize: both;
+  overflow: auto;
 }
 
-.sql-edit .sql-input {
-  min-height: 40vh;
+.sql-edit form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sql-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sql-field .sql-input {
+  flex: 1;
+  min-height: 0;
+  resize: none;
 }
 
 /* image assets */
@@ -4612,10 +4636,80 @@ button.speaker-chip-btn:hover {
   padding: 2px var(--s2);
   border-radius: 6px;
   border: 1px dashed var(--line-soft);
+  background: none;
   color: var(--ink-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
+}
+
+.calendar-event:hover {
+  border-color: var(--accent-dim);
+  color: var(--ink);
+}
+
+.calendar-event.has-prep {
+  border-style: solid;
+  color: var(--ink-soft);
+}
+
+/* gold spark marking an event that has prep notes waiting */
+.prep-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.prep-when {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+.sched-prep.has-prep {
+  color: var(--accent-strong);
+}
+
+/* the note itself, right under the event on Today */
+.sched-prep-note {
+  display: block;
+  margin-top: 2px;
+  padding: var(--s2) var(--s3);
+  background: var(--bg-raised);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-ctl);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  max-width: 62ch;
+}
+
+/* keep-awake schedule times in Settings */
+.ka-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s5);
+  padding: var(--s2) 0 var(--s2) var(--s2);
+}
+
+.ka-times label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.ka-times .text-input {
+  width: auto;
 }
 
 .calendar-event-time {

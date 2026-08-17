@@ -490,6 +490,15 @@ export interface AppSettings {
   launchAtLogin: boolean
   /** global Ctrl+Alt+R opens the Record page from anywhere */
   recordHotkey: boolean
+  /** nudge the mouse periodically so Windows/Teams never mark you idle */
+  keepAwake: boolean
+  /** limit keep-awake to a daily window (with a break) instead of always-on */
+  keepAwakeScheduled: boolean
+  /** HH:MM local times bounding the keep-awake window and its break */
+  keepAwakeStart: string
+  keepAwakeEnd: string
+  keepAwakeBreakStart: string
+  keepAwakeBreakEnd: string
   /** folder for weekly automatic backups; null = off */
   backupFolder: string | null
   /** skip audio files in backups (much smaller archives) */

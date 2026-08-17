@@ -56,7 +56,7 @@ function QueryEditDialog({
             <input className="text-input" value={note} onChange={(e) => setNote(e.target.value)} />
           </label>
         </div>
-        <label className="pd-field">
+        <label className="pd-field sql-field">
           <span>SQL</span>
           <textarea
             className="text-input sql-input"

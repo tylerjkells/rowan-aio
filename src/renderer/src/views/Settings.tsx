@@ -1077,6 +1077,78 @@ export function SettingsView({
               onChange(await window.scribe.settings.update({ recordHotkey: v }))
             }
           />
+          <SwitchRow
+            title="Keep computer awake"
+            desc="Nudges the mouse by one pixel every minute or two, so Windows doesn't lock and Teams doesn't show you as Away."
+            checked={settings.keepAwake}
+            onToggle={async (v) => onChange(await window.scribe.settings.update({ keepAwake: v }))}
+          />
+          {settings.keepAwake && (
+            <>
+              <SwitchRow
+                title="Follow a daily schedule"
+                desc="Only stay awake during working hours, pausing over the break — no need to remember to switch it off at the end of the day."
+                checked={settings.keepAwakeScheduled}
+                onToggle={async (v) =>
+                  onChange(await window.scribe.settings.update({ keepAwakeScheduled: v }))
+                }
+              />
+              {settings.keepAwakeScheduled && (
+                <div className="ka-times">
+                  <label>
+                    Active
+                    <input
+                      type="time"
+                      className="text-input"
+                      value={settings.keepAwakeStart}
+                      onChange={async (e) =>
+                        onChange(
+                          await window.scribe.settings.update({ keepAwakeStart: e.target.value })
+                        )
+                      }
+                    />
+                    –
+                    <input
+                      type="time"
+                      className="text-input"
+                      value={settings.keepAwakeEnd}
+                      onChange={async (e) =>
+                        onChange(
+                          await window.scribe.settings.update({ keepAwakeEnd: e.target.value })
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    Break
+                    <input
+                      type="time"
+                      className="text-input"
+                      value={settings.keepAwakeBreakStart}
+                      onChange={async (e) =>
+                        onChange(
+                          await window.scribe.settings.update({
+                            keepAwakeBreakStart: e.target.value
+                          })
+                        )
+                      }
+                    />
+                    –
+                    <input
+                      type="time"
+                      className="text-input"
+                      value={settings.keepAwakeBreakEnd}
+                      onChange={async (e) =>
+                        onChange(
+                          await window.scribe.settings.update({ keepAwakeBreakEnd: e.target.value })
+                        )
+                      }
+                    />
+                  </label>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </section>
 

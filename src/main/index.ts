@@ -118,6 +118,7 @@ import {
   startHidden
 } from './system'
 import { runBackup, startAutoBackup } from './backup'
+import { getPrepNotes, setPrepNote } from './prep'
 import { actionRollup, identityContext } from './identity'
 import { claudeConnectionStatus, connectClaude, disconnectClaude } from './claudeConnect'
 import { engineStatus, setupEngine } from './whisper'
@@ -704,6 +705,10 @@ function registerIpc(): void {
       return null
     }
   })
+  // --- meeting prep notes (keyed by calendar occurrence id) ---
+  ipcMain.handle('prep:all', () => getPrepNotes())
+  ipcMain.handle('prep:set', (_e, id: string, text: string) => setPrepNote(id, text))
+
   ipcMain.handle('calendar:today', async () => {
     if (!getSettings().hasCalendar) return { events: [] }
     try {

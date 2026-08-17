@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.20.0': [
+    'Plan ahead for meetings: click any upcoming event on the Library calendar (or the “+ Prep” chip on Today’s schedule) to jot “before the meeting” notes — numbers to pull, questions to raise. The note shows under the event on Today with a gold dot on the calendar, stays private to you, and never touches the AI summary.',
+    'Keep computer awake (Settings → System): an invisible one-pixel mouse nudge every minute or two stops Windows from locking and Teams from marking you Away. Optionally follow a daily schedule — active hours plus a break — so it switches itself off after work.',
+    'Long-meeting summaries breathe again: the output budget grew by half, fixing “ran past the output limit” errors on hour-long recordings.',
+    'Summaries with Sonnet or GPT-5.1 now skip the Haiku-era fact-check pass — premium models are accurate on their own, so important-meeting summaries cost roughly half the tokens. Haiku keeps the full double-check.',
+    'The SQL query editor is properly resizable: drag its corner to make the window wider or taller, and the SQL box grows with it.'
+  ],
   '0.19.3': [
     'Settings → Team directory now folds the roster behind a count — click “47 people” to expand it instead of scrolling a long list.',
     'The app window declares its own icon to Windows, so the taskbar shows the Rowan R even where the shortcut icon cache still remembers the old one.'

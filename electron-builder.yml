@@ -11,6 +11,7 @@ files:
   - package.json
   - build/icon.ico
 win:
+  icon: build/icon.ico
   target:
     - target: nsis
       arch: [x64]
