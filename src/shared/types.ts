@@ -143,6 +143,23 @@ export interface MeetingListItem {
 }
 
 /** one event from the connected calendar feed */
+/** an attachment on a meeting-prep note */
+export interface PrepFile {
+  id: string
+  /** original filename, shown as the label */
+  name: string
+  /** stored filename under userData/prep */
+  file: string
+  /** renderable inline via scribe-media://prep/<file> */
+  image: boolean
+}
+
+/** "before the meeting" note on a calendar occurrence */
+export interface PrepEntry {
+  text: string
+  files: PrepFile[]
+}
+
 export interface CalendarEvent {
   id: string
   title: string

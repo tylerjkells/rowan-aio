@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.21.0': [
+    'Prep notes take attachments: “Attach files…” in the prep dialog adds screenshots (shown as thumbnails wherever the note appears — Today, the calendar tooltip, the Record screen) and any other files as chips that open in their own app.',
+    'Silence no longer hallucinates: Whisper’s made-up lines on quiet audio — “Subs by www.zeoranger.co.uk”, “Thanks for watching”, stray “Uh.” — are recognized and dropped from live and final transcripts.'
+  ],
   '0.20.1': [
     'Prep notes follow you into the meeting: when you open the Record page during (or just before) a calendar event, that event’s “before the meeting” note is displayed right there — before you hit record and while recording.'
   ],

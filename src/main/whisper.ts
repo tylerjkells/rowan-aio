@@ -231,7 +231,18 @@ export async function transcribeFile(
       text: t.text.trim(),
       ...(t.speaker_turn_next === true ? { turn: true } : {})
     }))
-    .filter((t) => t.text.length > 0)
+    .filter((t) => t.text.length > 0 && !isHallucination(t.text))
+}
+
+// On silence, Whisper hallucinates lines from its training data — subtitle
+// credits ("Subs by www.zeoranger.co.uk", Amara.org), sign-offs ("Thanks for
+// watching"), and stray fillers. None of it came from the room; drop it.
+const HALLUCINATED_PHRASES =
+  /\b(subs? by|subtitles? (by|made)|amara\.org|zeoranger|thanks? (you )?(all )?for watching|please subscribe|like and subscribe|mooji)\b/i
+const FILLER_ONLY = /^[\s.!?,'-]*(uh|um|oh|ah|hm+|mm+(-?hmm?)?|huh)?[\s.!?,'-]*$/i
+
+function isHallucination(text: string): boolean {
+  return HALLUCINATED_PHRASES.test(text) || FILLER_ONLY.test(text)
 }
 
 export async function transcribe(

@@ -23,6 +23,7 @@ import type {
   EventBrief,
   LibraryQA,
   LinkEntry,
+  PrepEntry,
   Meeting,
   MeetingListItem,
   PersonDetails,
@@ -180,9 +181,15 @@ const api = {
       ipcRenderer.invoke('calendar:range', fromIso, toIso)
   },
   prep: {
-    all: (): Promise<Record<string, string>> => ipcRenderer.invoke('prep:all'),
-    set: (id: string, text: string): Promise<Record<string, string>> =>
-      ipcRenderer.invoke('prep:set', id, text)
+    all: (): Promise<Record<string, PrepEntry>> => ipcRenderer.invoke('prep:all'),
+    set: (id: string, text: string): Promise<Record<string, PrepEntry>> =>
+      ipcRenderer.invoke('prep:set', id, text),
+    addFiles: (id: string): Promise<Record<string, PrepEntry> | null> =>
+      ipcRenderer.invoke('prep:addFiles', id),
+    removeFile: (id: string, fileId: string): Promise<Record<string, PrepEntry>> =>
+      ipcRenderer.invoke('prep:removeFile', id, fileId),
+    openFile: (id: string, fileId: string): Promise<void> =>
+      ipcRenderer.invoke('prep:openFile', id, fileId)
   },
   ask: {
     history: (): Promise<LibraryQA[]> => ipcRenderer.invoke('ask:history'),

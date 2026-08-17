@@ -4,13 +4,14 @@ import type {
   AppSettings,
   CalendarEvent,
   ClickupTask,
+  PrepEntry,
   EventBrief,
   LinkEntry,
   MeetingListItem
 } from '../../../shared/types'
 import { ChevronIcon, formatDuration, formatWhen, isOverdue, MicIcon, StageBadge } from '../ui'
 import { ClickupCompleteDialog } from '../ClickupComplete'
-import { PrepDialog } from '../PrepDialog'
+import { PrepBody, PrepDialog } from '../PrepDialog'
 
 /**
  * The location field on virtual/hybrid events often carries platform
@@ -150,7 +151,7 @@ export function TodayView({
   const [pinnedLinks, setPinnedLinks] = useState<LinkEntry[]>([])
   const [cuDue, setCuDue] = useState<ClickupTask[] | null>(null)
   const [cuCompleting, setCuCompleting] = useState<ClickupTask | null>(null)
-  const [prep, setPrep] = useState<Record<string, string>>({})
+  const [prep, setPrep] = useState<Record<string, PrepEntry>>({})
   const [prepFor, setPrepFor] = useState<CalendarEvent | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const autoExpanded = useRef(false)
@@ -342,7 +343,7 @@ export function TodayView({
                             <button
                               className={`brief-toggle sched-prep ${prep[ev.id] ? 'has-prep' : ''}`}
                               onClick={() => setPrepFor(ev)}
-                              title={prep[ev.id] ?? 'Notes to yourself for this meeting'}
+                              title={prep[ev.id]?.text || 'Notes to yourself for this meeting'}
                             >
                               {prep[ev.id] ? '✓ Prep' : '+ Prep'}
                             </button>
@@ -371,7 +372,9 @@ export function TodayView({
                         </span>
                       )}
                       {prep[ev.id] && !past && (
-                        <span className="sched-prep-note">{prep[ev.id]}</span>
+                        <span className="sched-prep-note">
+                          <PrepBody eventId={ev.id} entry={prep[ev.id]} />
+                        </span>
                       )}
                       {brief && briefOpen && <BriefPanel brief={brief} onOpen={onOpen} />}
                     </span>
@@ -510,7 +513,7 @@ export function TodayView({
             hour: 'numeric',
             minute: '2-digit'
           })}
-          initial={prep[prepFor.id] ?? ''}
+          initial={prep[prepFor.id]}
           onSaved={setPrep}
           onClose={() => setPrepFor(null)}
         />

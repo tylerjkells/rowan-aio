@@ -1,9 +1,53 @@
 import { useEffect, useRef, useState } from 'react'
+import type { PrepEntry } from '../../shared/types'
+
+/**
+ * Read-only rendering of a prep note's content — the text plus its
+ * attachments. Images render inline; other files open in their own app.
+ */
+export function PrepBody({
+  eventId,
+  entry
+}: {
+  eventId: string
+  entry: PrepEntry
+}): React.JSX.Element {
+  return (
+    <>
+      {entry.text && <span className="prep-text">{entry.text}</span>}
+      {entry.files.length > 0 && (
+        <span className="prep-files">
+          {entry.files.map((f) =>
+            f.image ? (
+              <button
+                key={f.id}
+                className="prep-thumb"
+                title={`${f.name} — open`}
+                onClick={() => window.scribe.prep.openFile(eventId, f.id)}
+              >
+                <img src={`scribe-media://prep/${f.file}`} alt={f.name} />
+              </button>
+            ) : (
+              <button
+                key={f.id}
+                className="prep-file-chip"
+                title="Open"
+                onClick={() => window.scribe.prep.openFile(eventId, f.id)}
+              >
+                📄 {f.name}
+              </button>
+            )
+          )}
+        </span>
+      )}
+    </>
+  )
+}
 
 /**
  * "Before the meeting" notes on a calendar event: numbers to pull, questions
- * to raise, links to have open. Stored per occurrence, shown wherever the
- * event appears, and never fed into the AI summary.
+ * to raise, screenshots and files to have handy. Stored per occurrence,
+ * shown wherever the event appears, and never fed into the AI summary.
  */
 export function PrepDialog({
   eventId,
@@ -17,12 +61,13 @@ export function PrepDialog({
   title: string
   /** human-readable date/time line under the title */
   when: string
-  initial: string
-  onSaved: (notes: Record<string, string>) => void
+  initial: PrepEntry | undefined
+  onSaved: (notes: Record<string, PrepEntry>) => void
   onClose: () => void
 }): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null)
-  const [text, setText] = useState(initial)
+  const [text, setText] = useState(initial?.text ?? '')
+  const [files, setFiles] = useState(initial?.files ?? [])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -36,6 +81,20 @@ export function PrepDialog({
     setSaving(false)
     onSaved(notes)
     onClose()
+  }
+
+  async function attach(): Promise<void> {
+    const notes = await window.scribe.prep.addFiles(eventId)
+    if (notes) {
+      onSaved(notes)
+      setFiles(notes[eventId]?.files ?? [])
+    }
+  }
+
+  async function removeFile(fileId: string): Promise<void> {
+    const notes = await window.scribe.prep.removeFile(eventId, fileId)
+    onSaved(notes)
+    setFiles(notes[eventId]?.files ?? [])
   }
 
   return (
@@ -68,20 +127,31 @@ export function PrepDialog({
             autoFocus
           />
         </label>
+        {files.length > 0 && (
+          <div className="prep-files prep-files-edit">
+            {files.map((f) => (
+              <span key={f.id} className={f.image ? 'prep-thumb-wrap' : 'prep-file-chip'}>
+                {f.image ? (
+                  <img src={`scribe-media://prep/${f.file}`} alt={f.name} title={f.name} />
+                ) : (
+                  <>📄 {f.name}</>
+                )}
+                <button
+                  type="button"
+                  className="prep-file-x"
+                  aria-label={`Remove ${f.name}`}
+                  onClick={() => removeFile(f.id)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <div className="confirm-actions">
-          {initial && (
-            <button
-              type="button"
-              className="btn btn-ghost pd-remove"
-              onClick={async () => {
-                const notes = await window.scribe.prep.set(eventId, '')
-                onSaved(notes)
-                onClose()
-              }}
-            >
-              Clear note
-            </button>
-          )}
+          <button type="button" className="btn btn-ghost pd-remove" onClick={attach}>
+            Attach files…
+          </button>
           <button type="button" className="btn" onClick={onClose}>
             Cancel
           </button>

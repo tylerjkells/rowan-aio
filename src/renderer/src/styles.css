@@ -4692,6 +4692,77 @@ button.speaker-chip-btn:hover {
   max-width: 62ch;
 }
 
+/* prep attachments: inline image thumbnails + file chips */
+.prep-text {
+  display: block;
+  white-space: pre-wrap;
+}
+
+.prep-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
+.prep-thumb,
+.prep-thumb-wrap {
+  position: relative;
+  display: inline-flex;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+  background: var(--bg-raised);
+  cursor: pointer;
+}
+
+.prep-thumb img,
+.prep-thumb-wrap img {
+  max-height: 110px;
+  max-width: 200px;
+  object-fit: contain;
+  display: block;
+}
+
+.prep-file-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg-raised);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.prep-file-chip:hover,
+.prep-thumb:hover {
+  border-color: var(--accent-dim);
+}
+
+.prep-file-x {
+  border: none;
+  background: oklch(0 0 0 / 0.55);
+  color: #fff;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  font-size: 13px;
+  cursor: pointer;
+  flex: none;
+}
+
+.prep-thumb-wrap .prep-file-x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
 /* prep note carried onto the Record screen */
 .rec-prep {
   width: min(560px, 100%);

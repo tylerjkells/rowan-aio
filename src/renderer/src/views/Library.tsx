@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CalendarEvent, MeetingListItem } from '../../../shared/types'
+import type { CalendarEvent, MeetingListItem, PrepEntry } from '../../../shared/types'
 import { PrepDialog } from '../PrepDialog'
 import { formatDuration, formatWhen, StageBadge } from '../ui'
 
@@ -187,7 +187,7 @@ function CalendarView({
   const [showSchedule, setShowSchedule] = useState(
     () => localStorage.getItem('calSchedule') !== 'off'
   )
-  const [prep, setPrep] = useState<Record<string, string>>({})
+  const [prep, setPrep] = useState<Record<string, PrepEntry>>({})
   const [prepFor, setPrepFor] = useState<CalendarEvent | null>(null)
 
   useEffect(() => {
@@ -341,7 +341,9 @@ function CalendarView({
                   onClick={() => setPrepFor(e)}
                   title={
                     `${e.title}${e.location ? ` · ${e.location}` : ''}` +
-                    (prep[e.id] ? `\n\nPrep: ${prep[e.id]}` : ' — click to add prep notes')
+                    (prep[e.id]
+                      ? `\n\nPrep: ${prep[e.id].text || `${prep[e.id].files.length} attachment(s)`}`
+                      : ' — click to add prep notes')
                   }
                 >
                   <span className="calendar-event-time">
@@ -369,7 +371,7 @@ function CalendarView({
             hour: 'numeric',
             minute: '2-digit'
           })}
-          initial={prep[prepFor.id] ?? ''}
+          initial={prep[prepFor.id]}
           onSaved={setPrep}
           onClose={() => setPrepFor(null)}
         />

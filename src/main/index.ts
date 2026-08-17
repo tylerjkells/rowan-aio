@@ -118,7 +118,14 @@ import {
   startHidden
 } from './system'
 import { runBackup, startAutoBackup } from './backup'
-import { getPrepNotes, setPrepNote } from './prep'
+import {
+  addPrepFiles,
+  getPrepNotes,
+  prepFilePath,
+  prepFilesDir,
+  removePrepFile,
+  setPrepNote
+} from './prep'
 import { actionRollup, identityContext } from './identity'
 import { claudeConnectionStatus, connectClaude, disconnectClaude } from './claudeConnect'
 import { engineStatus, setupEngine } from './whisper'
@@ -255,13 +262,17 @@ app.whenReady().then(() => {
     const id = decodeURIComponent(parsed.hostname)
 
     // scribe-media://thumb/<filename> serves link-card thumbnails;
-    // scribe-media://toolbox/<filename> serves toolbox images
-    if (id === 'thumb' || id === 'toolbox') {
+    // scribe-media://toolbox/<filename> serves toolbox images;
+    // scribe-media://prep/<filename> serves meeting-prep attachments
+    if (id === 'thumb' || id === 'toolbox' || id === 'prep') {
       const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''))
       if (!/^[\w.-]+$/.test(name) || name.includes('..')) {
         return new Response('bad name', { status: 400 })
       }
-      const file = join(id === 'thumb' ? thumbsDir() : toolboxImagesDir(), name)
+      const file = join(
+        id === 'thumb' ? thumbsDir() : id === 'toolbox' ? toolboxImagesDir() : prepFilesDir(),
+        name
+      )
       if (!existsSync(file)) return new Response('not found', { status: 404 })
       const ext = name.split('.').pop()!.toLowerCase()
       const mime =
@@ -708,6 +719,14 @@ function registerIpc(): void {
   // --- meeting prep notes (keyed by calendar occurrence id) ---
   ipcMain.handle('prep:all', () => getPrepNotes())
   ipcMain.handle('prep:set', (_e, id: string, text: string) => setPrepNote(id, text))
+  ipcMain.handle('prep:addFiles', (_e, id: string) => addPrepFiles(id))
+  ipcMain.handle('prep:removeFile', (_e, id: string, fileId: string) =>
+    removePrepFile(id, fileId)
+  )
+  ipcMain.handle('prep:openFile', (_e, id: string, fileId: string) => {
+    const path = prepFilePath(id, fileId)
+    if (path) shell.openPath(path)
+  })
 
   ipcMain.handle('calendar:today', async () => {
     if (!getSettings().hasCalendar) return { events: [] }

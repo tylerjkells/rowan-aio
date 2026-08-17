@@ -31,7 +31,8 @@ export async function runBackup(destZip: string, skipAudio: boolean): Promise<Ba
     'link-thumbs',
     'brand.json',
     'toolbox',
-    'prep.json'
+    'prep.json',
+    'prep'
   ].filter((t) =>
     existsSync(join(userData, t))
   )

@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import type {
   EngineProgress,
   EngineStatus,
+  PrepEntry,
   RecordingMode,
   TranscriptSegment
 } from '../../../shared/types'
 import { startRecording, readLevel, type RecorderHandles } from '../recorder'
+import { PrepBody } from '../PrepDialog'
 import { formatDuration, MicIcon, StopIcon, useConfirm } from '../ui'
 
 export function RecordView({
@@ -38,7 +40,7 @@ export function RecordView({
   const [liveSegs, setLiveSegs] = useState<TranscriptSegment[]>([])
   const [confirmEl, confirm] = useConfirm()
   const [notes, setNotes] = useState('')
-  const [prepNote, setPrepNote] = useState<string | null>(null)
+  const [prepNote, setPrepNote] = useState<{ id: string; entry: PrepEntry } | null>(null)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // prep written on the calendar follows you in here: if a calendar event is
@@ -50,7 +52,7 @@ export function RecordView({
         const ev = await window.scribe.calendar.liveEvent(new Date().toISOString())
         if (!ev || !alive) return
         const all = await window.scribe.prep.all()
-        if (alive && all[ev.id]) setPrepNote(all[ev.id])
+        if (alive && all[ev.id]) setPrepNote({ id: ev.id, entry: all[ev.id] })
       } catch {
         // no calendar connected — nothing to show
       }
@@ -176,7 +178,7 @@ export function RecordView({
         {prepNote && (
           <div className="rec-prep">
             <span className="rec-prep-label">Before the meeting</span>
-            {prepNote}
+            <PrepBody eventId={prepNote.id} entry={prepNote.entry} />
           </div>
         )}
         {error && (
@@ -214,7 +216,7 @@ export function RecordView({
       {prepNote && (
         <div className="rec-prep">
           <span className="rec-prep-label">Before the meeting</span>
-          {prepNote}
+          <PrepBody eventId={prepNote.id} entry={prepNote.entry} />
         </div>
       )}
       <textarea
