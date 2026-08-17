@@ -1,6 +1,6 @@
 {
   "name": "meeting-scribe",
-  "version": "0.20.0",
+  "version": "0.20.1",
   "description": "Rowan AIO: the all-in-one work hub — meetings, org directory, projects, links, brand, and toolbox. Local-first.",
   "main": "out/main/index.js",
   "author": "Tyler Kells",

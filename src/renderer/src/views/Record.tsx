@@ -38,7 +38,27 @@ export function RecordView({
   const [liveSegs, setLiveSegs] = useState<TranscriptSegment[]>([])
   const [confirmEl, confirm] = useConfirm()
   const [notes, setNotes] = useState('')
+  const [prepNote, setPrepNote] = useState<string | null>(null)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // prep written on the calendar follows you in here: if a calendar event is
+  // live (or starts within a few minutes), its "before the meeting" note shows
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const ev = await window.scribe.calendar.liveEvent(new Date().toISOString())
+        if (!ev || !alive) return
+        const all = await window.scribe.prep.all()
+        if (alive && all[ev.id]) setPrepNote(all[ev.id])
+      } catch {
+        // no calendar connected — nothing to show
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
   const livePanelRef = useRef<HTMLDivElement>(null)
 
   // notes live next to the in-progress recording on disk, so they survive
@@ -153,6 +173,12 @@ export function RecordView({
         <button className="big-record" onClick={begin} aria-label="Start recording">
           <MicIcon />
         </button>
+        {prepNote && (
+          <div className="rec-prep">
+            <span className="rec-prep-label">Before the meeting</span>
+            {prepNote}
+          </div>
+        )}
         {error && (
           <div className="stage-banner error" role="alert">
             {error}
@@ -183,6 +209,12 @@ export function RecordView({
               <span className="transcript-text">{seg.text}</span>
             </div>
           ))}
+        </div>
+      )}
+      {prepNote && (
+        <div className="rec-prep">
+          <span className="rec-prep-label">Before the meeting</span>
+          {prepNote}
         </div>
       )}
       <textarea

@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.20.1': [
+    'Prep notes follow you into the meeting: when you open the Record page during (or just before) a calendar event, that event’s “before the meeting” note is displayed right there — before you hit record and while recording.'
+  ],
   '0.20.0': [
     'Plan ahead for meetings: click any upcoming event on the Library calendar (or the “+ Prep” chip on Today’s schedule) to jot “before the meeting” notes — numbers to pull, questions to raise. The note shows under the event on Today with a gold dot on the calendar, stays private to you, and never touches the AI summary.',
     'Keep computer awake (Settings → System): an invisible one-pixel mouse nudge every minute or two stops Windows from locking and Teams from marking you Away. Optionally follow a daily schedule — active hours plus a break — so it switches itself off after work.',
