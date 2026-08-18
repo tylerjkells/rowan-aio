@@ -94,7 +94,7 @@ import {
   findLiveEvent,
   clearCalendarCache
 } from './calendar'
-import { startRecordNudge, notifyAutoEnd } from './nudge'
+import { startRecordNudge, notifyAutoEnd, dismissNotifications } from './nudge'
 import {
   bulkImportStatus,
   cancelBulkImport,
@@ -342,6 +342,8 @@ app.whenReady().then(() => {
   createWindow()
   setupAutoUpdate()
   startRecordNudge()
+  // a toast left behind by a quit app would raw-activate the exe on click
+  app.on('before-quit', dismissNotifications)
   applySystemSettings()
   startAutoBackup()
 

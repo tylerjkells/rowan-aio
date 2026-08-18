@@ -10,6 +10,16 @@ import type { AutoEndReason } from '../shared/types'
 // back to a raw app activation. Hold the latest one until it's dismissed.
 let liveNotification: Notification | null = null
 
+/**
+ * Withdraw our toast when the app quits. A toast that outlives its process
+ * gets a raw exe activation from Windows on click — which for a dev run
+ * opens Electron's bare welcome window instead of the app.
+ */
+export function dismissNotifications(): void {
+  liveNotification?.close()
+  liveNotification = null
+}
+
 function notify(title: string, body: string, onClick: () => void): void {
   const n = new Notification({ title, body })
   n.on('click', () => {

@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.21.1': [
+    'Fixed “Streaming is required for operations that may take longer than 10 minutes” when summarizing with Claude — responses now stream under the hood, so long meetings summarize instead of erroring.',
+    'Notifications are withdrawn when the app quits, so a leftover “Meeting started — record it?” toast can no longer open a broken window.'
+  ],
   '0.21.0': [
     'Prep notes take attachments: “Attach files…” in the prep dialog adds screenshots (shown as thumbnails wherever the note appears — Today, the calendar tooltip, the Record screen) and any other files as chips that open in their own app.',
     'Silence no longer hallucinates: Whisper’s made-up lines on quiet audio — “Subs by www.zeoranger.co.uk”, “Thanks for watching”, stray “Uh.” — are recognized and dropped from live and final transcripts.'

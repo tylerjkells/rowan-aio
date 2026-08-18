@@ -56,15 +56,19 @@ async function claudeChat(req: AiRequest): Promise<AiResult> {
   }
   const client = new Anthropic({ apiKey })
   const model = req.model ?? getSettings().claudeModel
-  const response = await client.messages.create({
-    model,
-    max_tokens: req.maxTokens,
-    system: req.system,
-    ...(req.schema
-      ? { output_config: { format: { type: 'json_schema' as const, schema: req.schema } } }
-      : {}),
-    messages: req.messages
-  })
+  // stream and collect: large max_tokens trips the SDK's "streaming required
+  // for long operations" guard on plain create()
+  const response = await client.messages
+    .stream({
+      model,
+      max_tokens: req.maxTokens,
+      system: req.system,
+      ...(req.schema
+        ? { output_config: { format: { type: 'json_schema' as const, schema: req.schema } } }
+        : {}),
+      messages: req.messages
+    })
+    .finalMessage()
   recordUsage(model, response.usage)
   if (response.stop_reason === 'refusal') return { text: '', stop: 'refusal' }
   const text = response.content.find((b) => b.type === 'text')?.text ?? ''
