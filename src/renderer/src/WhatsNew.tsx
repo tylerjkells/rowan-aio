@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.21.2': [
+    'Tasks pushed to ClickUp no longer advertise the app: the description now reads “From meeting: …” with just the meeting title, so coworkers see where the task came from without any mention of Rowan AIO.'
+  ],
   '0.21.1': [
     'Fixed “Streaming is required for operations that may take longer than 10 minutes” when summarizing with Claude — responses now stream under the hood, so long meetings summarize instead of erroring.',
     'Notifications are withdrawn when the app quits, so a leftover “Meeting started — record it?” toast can no longer open a broken window.'
