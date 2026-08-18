@@ -58,7 +58,7 @@ export function ClickupPushDialog({
     const result = await window.scribe.clickup.push({
       listId,
       name: name.trim(),
-      description: `From meeting: "${meetingTitle}"`,
+      description: `From meeting: ${meetingTitle}`,
       assignee: assignee.trim() || undefined,
       dueDate: due || null
     })
