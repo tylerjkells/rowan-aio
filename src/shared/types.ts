@@ -536,6 +536,8 @@ export interface MailMessage {
   subject: string
   /** Exchange tagged the subject [EXTERNAL]; stripped from `subject` */
   external: boolean
+  /** sent by a machine: bulk headers, or a no-reply address */
+  automated: boolean
   /** sender address */
   from: string
   /** sender display name: the directory, then the From header, else null */
@@ -588,7 +590,8 @@ export interface RecapMail {
   from: string
   receivedAt: string
   external: boolean
-  /** rough guess that this one wants an answer */
+  automated: boolean
+  /** someone asked you something and has not had an answer */
   needsReply: boolean
 }
 
