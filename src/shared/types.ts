@@ -526,6 +526,43 @@ export interface AppSettings {
   yourName: string
   /** identity merges: normalized raw name -> canonical display name */
   personAliases: Record<string, string>
+  /** OneDrive-synced folder the mail bridge reads; null = not set up */
+  mailFolder: string | null
+}
+
+/** one message, as filed by the Power Automate bridge (see docs/OUTLOOK.md) */
+export interface MailMessage {
+  id: string
+  subject: string
+  /** sender address */
+  from: string
+  /** sender display name when the connector supplied one */
+  fromName: string | null
+  to: string[]
+  cc: string[]
+  receivedAt: string
+  /** short snippet for the list */
+  preview: string
+  /** the body, flattened to plain text */
+  body: string
+  isRead: boolean
+  hasAttachments: boolean
+  importance: string | null
+  /** groups a thread together */
+  conversationId: string | null
+  /** opens the message in Outlook on the web */
+  webLink: string | null
+  /** the file on disk this was read from */
+  file: string
+}
+
+export interface MailStatus {
+  /** the folder exists and is readable */
+  connected: boolean
+  folder: string | null
+  count: number
+  newestAt: string | null
+  error?: string
 }
 
 export interface EngineStatus {

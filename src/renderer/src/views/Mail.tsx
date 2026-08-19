@@ -1,0 +1,191 @@
+import { useCallback, useEffect, useState } from 'react'
+import type { MailMessage, MailStatus } from '../../../shared/types'
+import { ClickupPushDialog } from '../ClickupPush'
+
+function formatWhen(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const today = new Date()
+  if (d.toDateString() === today.toDateString()) {
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  }
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+type Group = { label: string; messages: MailMessage[] }
+
+/** today / yesterday / earlier, so a busy inbox still reads at a glance */
+function byDay(messages: MailMessage[]): Group[] {
+  const today = new Date().toDateString()
+  const yesterday = new Date(Date.now() - 86_400_000).toDateString()
+  const groups: Group[] = [
+    { label: 'Today', messages: [] },
+    { label: 'Yesterday', messages: [] },
+    { label: 'Earlier', messages: [] }
+  ]
+  for (const m of messages) {
+    const day = new Date(m.receivedAt).toDateString()
+    if (day === today) groups[0].messages.push(m)
+    else if (day === yesterday) groups[1].messages.push(m)
+    else groups[2].messages.push(m)
+  }
+  return groups.filter((g) => g.messages.length > 0)
+}
+
+export function MailView({ onSettings }: { onSettings: () => void }): React.JSX.Element {
+  const [status, setStatus] = useState<MailStatus | null>(null)
+  const [messages, setMessages] = useState<MailMessage[]>([])
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [taskFrom, setTaskFrom] = useState<MailMessage | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const load = useCallback(async (): Promise<void> => {
+    setRefreshing(true)
+    try {
+      const st = await window.scribe.mail.status()
+      setStatus(st)
+      setMessages(st.connected ? await window.scribe.mail.list() : [])
+    } finally {
+      setRefreshing(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+    // the main process watches the synced folder and pings when it changes
+    return window.scribe.mail.onChanged(load)
+  }, [load])
+
+  if (!status) return <></>
+
+  if (!status.connected) {
+    return (
+      <div className="empty-state">
+        <h2>Mail</h2>
+        <p>
+          Rowan reads your inbox from a OneDrive folder that a Power Automate flow files
+          messages into — no mailbox password, no tokens, nothing to approve. Point it at
+          the synced folder to get started.
+          {status.error && <> ({status.error})</>}
+        </p>
+        <button className="btn btn-primary" onClick={onSettings}>
+          Set it up in Settings
+        </button>
+      </div>
+    )
+  }
+
+  const needle = query.trim().toLowerCase()
+  const filtered = needle
+    ? messages.filter((m) =>
+        [m.subject, m.fromName ?? '', m.from, m.preview].join(' ').toLowerCase().includes(needle)
+      )
+    : messages
+
+  const row = (m: MailMessage): React.JSX.Element => {
+    const expanded = expandedId === m.id
+    return (
+      <div key={m.id} className={`mail-item ${expanded ? 'expanded' : ''} ${m.isRead ? '' : 'unread'}`}>
+        <div className="mail-row">
+          <button
+            className="mail-main"
+            onClick={() => setExpandedId(expanded ? null : m.id)}
+          >
+            <span className="mail-from">{m.fromName ?? m.from}</span>
+            <span className="mail-subject">{m.subject}</span>
+            <span className="mail-preview">{m.preview}</span>
+          </button>
+          <span className="mail-meta">
+            {m.hasAttachments && <span className="mail-clip" title="Has attachments">📎</span>}
+            {m.importance === 'high' && <span className="mail-important">!</span>}
+            <span className="mail-when">{formatWhen(m.receivedAt)}</span>
+          </span>
+        </div>
+        {expanded && (
+          <div className="mail-detail">
+            <div className="mail-addr">
+              <span>
+                <strong>From</strong> {m.fromName ? `${m.fromName} <${m.from}>` : m.from}
+              </span>
+              {m.to.length > 0 && (
+                <span>
+                  <strong>To</strong> {m.to.join(', ')}
+                </span>
+              )}
+              {m.cc.length > 0 && (
+                <span>
+                  <strong>Cc</strong> {m.cc.join(', ')}
+                </span>
+              )}
+            </div>
+            <pre className="mail-body">{m.body}</pre>
+            <div className="mail-actions">
+              <button className="btn" onClick={() => setTaskFrom(m)}>
+                Make a ClickUp task
+              </button>
+              {m.webLink && (
+                <a className="cu-pushed" href={m.webLink} target="_blank" rel="noreferrer">
+                  Open in Outlook ↗
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="page-head">
+        <h1>Mail</h1>
+        <div className="page-head-tools">
+          <span className="count-note">
+            {messages.length} {messages.length === 1 ? 'message' : 'messages'}
+          </span>
+          <input
+            className="text-input mail-search"
+            placeholder="Search subject, sender, preview…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <button className="btn btn-ghost" onClick={load} disabled={refreshing}>
+            {refreshing ? 'Reading…' : 'Refresh'}
+          </button>
+        </div>
+      </div>
+      {messages.length === 0 && (
+        <p className="today-quiet">
+          The folder is connected but empty. Nothing arrives until the Power Automate flow
+          files its first message — send yourself a test email.
+        </p>
+      )}
+      {messages.length > 0 && filtered.length === 0 && (
+        <p className="today-quiet">Nothing matches “{query}”.</p>
+      )}
+      {byDay(filtered).map((g) => (
+        <section className="section" key={g.label}>
+          <span className="card-subhead">
+            {g.label} · {g.messages.length}
+          </span>
+          <div className="mail-list">{g.messages.map(row)}</div>
+        </section>
+      ))}
+      {taskFrom && (
+        <ClickupPushDialog
+          task={taskFrom.subject}
+          description={[
+            `From email: ${taskFrom.subject}`,
+            `Sender: ${taskFrom.fromName ? `${taskFrom.fromName} <${taskFrom.from}>` : taskFrom.from}`,
+            taskFrom.webLink ?? ''
+          ]
+            .filter(Boolean)
+            .join('\n')}
+          onDone={() => setTaskFrom(null)}
+          onClose={() => setTaskFrom(null)}
+        />
+      )}
+    </>
+  )
+}

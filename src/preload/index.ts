@@ -23,6 +23,8 @@ import type {
   EventBrief,
   LibraryQA,
   LinkEntry,
+  MailMessage,
+  MailStatus,
   PrepEntry,
   Meeting,
   MeetingListItem,
@@ -275,6 +277,18 @@ const api = {
     saveFileCopy: (id: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('toolbox:saveFileCopy', id),
     removeFile: (id: string): Promise<ToolboxData> => ipcRenderer.invoke('toolbox:removeFile', id)
+  },
+  mail: {
+    status: (): Promise<MailStatus> => ipcRenderer.invoke('mail:status'),
+    list: (): Promise<MailMessage[]> => ipcRenderer.invoke('mail:list'),
+    chooseFolder: (): Promise<AppSettings> => ipcRenderer.invoke('mail:chooseFolder'),
+    forgetFolder: (): Promise<AppSettings> => ipcRenderer.invoke('mail:forgetFolder'),
+    /** the bridge folder gained or lost files */
+    onChanged: (fn: () => void): (() => void) => {
+      const handler = (): void => fn()
+      ipcRenderer.on('mail:changed', handler)
+      return () => ipcRenderer.removeListener('mail:changed', handler)
+    }
   },
   clickup: {
     status: (): Promise<ClickupStatus> => ipcRenderer.invoke('clickup:status'),

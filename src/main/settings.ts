@@ -27,6 +27,8 @@ interface StoredSettings {
   keepAwakeBreakEnd: string
   backupFolder: string | null
   backupSkipAudio: boolean
+  /** OneDrive-synced folder the Power Automate mail bridge writes into */
+  mailFolder: string | null
   /** epoch ms of the last automatic backup */
   lastBackupAt: number
   people: string[]
@@ -68,6 +70,7 @@ const DEFAULTS: StoredSettings = {
   keepAwakeBreakEnd: '13:00',
   backupFolder: null,
   backupSkipAudio: true,
+  mailFolder: null,
   lastBackupAt: 0,
   people: [],
   yourName: '',
@@ -129,6 +132,7 @@ export function getSettings(): AppSettings {
     keepAwakeBreakEnd: validTime(s.keepAwakeBreakEnd, DEFAULTS.keepAwakeBreakEnd),
     backupFolder: s.backupFolder ?? null,
     backupSkipAudio: s.backupSkipAudio !== false,
+    mailFolder: s.mailFolder ?? null,
     people: s.people ?? [],
     yourName: s.yourName ?? '',
     personAliases: s.personAliases ?? {},
@@ -181,6 +185,7 @@ export function updateSettings(
       | 'keepAwakeBreakEnd'
       | 'backupFolder'
       | 'backupSkipAudio'
+      | 'mailFolder'
       | 'people'
       | 'yourName'
     >
@@ -229,6 +234,7 @@ export function updateSettings(
       s.keepAwakeBreakEnd ?? DEFAULTS.keepAwakeBreakEnd
     )
   if (patch.backupFolder !== undefined) s.backupFolder = patch.backupFolder
+  if (patch.mailFolder !== undefined) s.mailFolder = patch.mailFolder
   if (typeof patch.backupSkipAudio === 'boolean') s.backupSkipAudio = patch.backupSkipAudio
   if (Array.isArray(patch.people)) {
     s.people = dedupeNames(patch.people)
@@ -249,6 +255,10 @@ function dedupeNames(names: string[]): string[] {
     out.push(name)
   }
   return out.sort((a, b) => a.localeCompare(b))
+}
+
+export function getMailFolder(): string | null {
+  return load().mailFolder ?? null
 }
 
 export function getLastBackupAt(): number {

@@ -1154,6 +1154,43 @@ export function SettingsView({
 
       <section className="settings-section">
         <header className="settings-label">
+          <h2>Mail</h2>
+          <p className="hint">
+            Rowan can&rsquo;t talk to Exchange directly — Rowan University requires an
+            administrator to approve any app that reads mail. Instead a Power Automate flow
+            files each new message into a OneDrive folder, and Rowan reads that folder off
+            disk. No password, no tokens, nothing to approve. Point this at the synced folder
+            holding the <code>in</code> subfolder.
+          </p>
+        </header>
+        <div className="settings-body">
+          <div className="field-row">
+            {settings.mailFolder ? (
+              <>
+                <span className="opt-desc backup-folder" title={settings.mailFolder}>
+                  Reading {settings.mailFolder}
+                </span>
+                <button
+                  className="btn btn-ghost"
+                  onClick={async () => onChange(await window.scribe.mail.forgetFolder())}
+                >
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <button
+                className="btn"
+                onClick={async () => onChange(await window.scribe.mail.chooseFolder())}
+              >
+                Choose mail folder…
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <header className="settings-label">
           <h2>Backup</h2>
           <p className="hint">
             The library lives in one folder on this PC. Back it up on demand, or pick a folder

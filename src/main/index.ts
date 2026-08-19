@@ -88,6 +88,13 @@ import {
   setClickupTaskStatus
 } from './clickup'
 import {
+  ensureMailDirs,
+  mailStatus,
+  readMailbox,
+  startMailWatch,
+  stopMailWatch
+} from './mail'
+import {
   refreshCalendar,
   getTodayEvents,
   getEventsBetween,
@@ -346,6 +353,8 @@ app.whenReady().then(() => {
   app.on('before-quit', dismissNotifications)
   applySystemSettings()
   startAutoBackup()
+  ensureMailDirs()
+  startMailWatch()
 
   // Repair pre-0.2.1 recordings whose webm lacks a duration header (seeking)
   patchLegacyAudioDurations().catch(() => 0)
@@ -847,6 +856,27 @@ function registerIpc(): void {
   ipcMain.handle('toolbox:addFiles', () => addToolboxFiles())
   ipcMain.handle('toolbox:saveFileCopy', (_e, id: string) => saveToolboxFileCopy(id))
   ipcMain.handle('toolbox:removeFile', (_e, id: string) => removeToolboxFile(id))
+
+  // --- mail bridge (see docs/OUTLOOK.md) ---
+  ipcMain.handle('mail:status', () => mailStatus())
+  ipcMain.handle('mail:list', () => readMailbox())
+  ipcMain.handle('mail:chooseFolder', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const result = await dialog.showOpenDialog(win!, {
+      title: 'Choose the Rowan mail folder inside OneDrive (the one holding "in")',
+      properties: ['openDirectory']
+    })
+    if (result.canceled || !result.filePaths[0]) return getSettings()
+    const settings = updateSettings({ mailFolder: result.filePaths[0] })
+    ensureMailDirs()
+    startMailWatch()
+    return settings
+  })
+  ipcMain.handle('mail:forgetFolder', () => {
+    const settings = updateSettings({ mailFolder: null })
+    stopMailWatch()
+    return settings
+  })
 
   ipcMain.handle('clickup:status', () => clickupStatus())
   ipcMain.handle('clickup:connect', (_e, token: string) => connectClickup(token))

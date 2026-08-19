@@ -4982,3 +4982,128 @@ button.speaker-chip-btn:hover {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---- mail bridge ---- */
+
+.mail-search {
+  width: 260px;
+}
+
+.mail-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.mail-item {
+  border-bottom: 1px solid var(--line);
+}
+
+.mail-item:last-child {
+  border-bottom: none;
+}
+
+.mail-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+}
+
+.mail-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0 var(--s3);
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mail-from {
+  color: var(--ink-soft);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mail-item.unread .mail-from,
+.mail-item.unread .mail-subject {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.mail-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mail-preview {
+  grid-column: 2;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mail-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.mail-important {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.mail-detail {
+  padding: 0 0 var(--s3) 0;
+}
+
+.mail-addr {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-bottom: var(--s3);
+}
+
+.mail-addr strong {
+  color: var(--ink-faint);
+  font-weight: 500;
+  margin-right: var(--s2);
+}
+
+.mail-body {
+  max-height: 420px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 var(--s3) 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+}
+
+.mail-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}

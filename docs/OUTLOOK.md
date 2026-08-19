@@ -168,11 +168,30 @@ that, EWS, is being blocked starting October 1 2026.
 ## Recommendation
 
 1. ~~Run the Route A test.~~ Done — blocked, see above.
-2. Build Route B. Start read-only: one flow, one folder, inbox triage on
-   the Today screen. That proves the pipe with almost no code in Rowan — a
-   folder watcher and a JSON parse. Confirm first that Power Automate is
-   reachable and that an Outlook connection can be created, since a DLP
-   policy could close that door too.
+2. ~~Confirm Power Automate is reachable.~~ Done — Office 365 Outlook and
+   OneDrive for Business connections both create fine, so no DLP policy is
+   in the way.
+3. ~~Build the read side.~~ Done — `src/main/mail.ts` plus a Mail view.
+4. Next: the outbound draft flow, then Today triage, recaps, and the
+   cross-links into meetings and people.
+
+## How the read side is wired
+
+- **Flow `Rowan inbox bridge`** — *When a new email arrives (V3)* →
+  OneDrive *Create file* at `/Apps/Rowan/in`, name
+  `concat(utcNow('yyyyMMddHHmmssfff'), '-', guid(), '.json')`, content
+  `string(triggerOutputs()?['body'])`. Serializing the whole trigger body
+  means no hand-built JSON to break on a subject containing a quote, and
+  Rowan gets every field the connector happens to expose.
+- **Settings → Mail** points at the synced folder holding `in`.
+  `src/main/mail.ts` reads it, parses defensively (both the flat connector
+  shape and the Graph shape), and watches for changes so the view updates
+  without polling.
+- File names lead with a UTC timestamp, so a reverse name sort is
+  newest-first and the parse cache can key off the path — files are written
+  once and never edited.
+- Only the newest 300 files are parsed per read. Nothing prunes the folder
+  yet; that wants doing before it grows into five figures.
 3. Add the outbound draft flow once reading feels good.
 4. Route C later, only if you want the button inside Outlook rather than
    inside Rowan.

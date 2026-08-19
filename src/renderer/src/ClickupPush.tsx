@@ -12,6 +12,7 @@ export function ClickupPushDialog({
   owner = null,
   dueDate = null,
   meetingTitle,
+  description: initialDescription,
   onDone,
   onClose
 }: {
@@ -20,6 +21,8 @@ export function ClickupPushDialog({
   dueDate?: string | null
   /** the meeting this came from; omitted for a task typed from scratch */
   meetingTitle?: string
+  /** starting description, for sources other than a meeting (e.g. an email) */
+  description?: string
   /** called with the created task's URL */
   onDone: (url: string) => void
   onClose: () => void
@@ -28,7 +31,9 @@ export function ClickupPushDialog({
   const [lists, setLists] = useState<ClickupList[] | null>(null)
   const [listId, setListId] = useState(() => localStorage.getItem('clickupPushList') ?? '')
   const [name, setName] = useState(task)
-  const [description, setDescription] = useState(meetingTitle ? `From meeting: ${meetingTitle}` : '')
+  const [description, setDescription] = useState(
+    initialDescription ?? (meetingTitle ? `From meeting: ${meetingTitle}` : '')
+  )
   const [assignee, setAssignee] = useState(owner ?? '')
   const [due, setDue] = useState(dueDate ?? '')
   const [busy, setBusy] = useState(false)
