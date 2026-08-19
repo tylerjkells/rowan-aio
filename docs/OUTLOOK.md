@@ -180,7 +180,8 @@ that, EWS, is being blocked starting October 1 2026.
 - **Flow `Rowan inbox bridge`** — *When a new email arrives (V3)* →
   OneDrive *Create file* at `/Apps/Rowan/in`, name
   `concat(utcNow('yyyyMMddHHmmssfff'), '-', guid(), '.json')`, content
-  `string(triggerOutputs()?['body'])`. Serializing the whole trigger body
+  `string(removeProperty(triggerOutputs()?['body'], 'internetMessageHeaders'))`.
+  Serializing the whole trigger body
   means no hand-built JSON to break on a subject containing a quote, and
   Rowan gets every field the connector happens to expose.
 - **Settings → Mail** points at the synced folder holding `in`.
@@ -192,6 +193,29 @@ that, EWS, is being blocked starting October 1 2026.
   once and never edited.
 - Only the newest 300 files are parsed per read. Nothing prunes the folder
   yet; that wants doing before it grows into five figures.
+
+### What the connector actually sends
+
+Confirmed against a real message on 19 Aug 2026:
+
+- `from` is a **bare address string** with no display name, and
+  `toRecipients` is a **semicolon-delimited string**, not an array. Both
+  shapes were already handled defensively; this is what really arrives.
+- **There is no `webLink`.** The Mail view builds an OWA deep link from the
+  message `id` instead (`?ItemID=…&exvsurl=1&viewmodel=ReadMessageItem`).
+- `internetMessageHeaders` is enormous — DKIM signatures and antispam
+  blobs made up roughly 90% of the file. The flow drops it with
+  `removeProperty`, which takes a message from ~15 KB to ~1 KB.
+- Exchange prefixes inbound external mail with `[EXTERNAL]`. That's stripped
+  from the displayed subject and kept as an `external` flag, shown as a
+  small EXT chip.
+- `isHtml`, `body`, `bodyPreview`, `receivedDateTime`, `conversationId`,
+  `isRead`, `hasAttachments`, and `importance` all arrive as expected.
+
+Sender display names come from Rowan's own People directory by matching the
+address, falling back to the raw `From` header when the flow is still
+shipping headers. That means colleagues read as people rather than
+mailboxes, and it is the first thread tying mail to the People pages.
 3. Add the outbound draft flow once reading feels good.
 4. Route C later, only if you want the button inside Outlook rather than
    inside Rowan.

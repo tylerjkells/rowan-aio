@@ -10,6 +10,7 @@ import {
 } from 'fs'
 import { join } from 'path'
 import { getMailFolder } from './settings'
+import { readDirectory } from './directory'
 import type { MailMessage, MailStatus } from '../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -100,6 +101,53 @@ function looksHtml(s: string): boolean {
   return /<(p|div|br|table|span|a)\b|<\/\w+>/i.test(s)
 }
 
+/** address -> directory display name, so colleagues read as people not mailboxes */
+let addressBook: { at: number; map: Map<string, string> } | null = null
+
+function nameForAddress(address: string): string | null {
+  const key = address.trim().toLowerCase()
+  if (!key) return null
+  if (!addressBook || Date.now() - addressBook.at > 60_000) {
+    const map = new Map<string, string>()
+    for (const [name, details] of Object.entries(readDirectory())) {
+      const email = details.email?.trim().toLowerCase()
+      if (email) map.set(email, name)
+    }
+    addressBook = { at: Date.now(), map }
+  }
+  return addressBook.map.get(key) ?? null
+}
+
+/**
+ * The connector hands us `from` as a bare address, but the raw From header
+ * carries the sender's display name — worth reading when the flow is still
+ * shipping headers.
+ */
+function nameFromHeaders(raw: unknown): string | null {
+  if (!Array.isArray(raw)) return null
+  for (const h of raw) {
+    if (!h || typeof h !== 'object') continue
+    const entry = h as { name?: unknown; value?: unknown }
+    if (String(entry.name).toLowerCase() !== 'from') continue
+    return asPerson(asText(entry.value)).name
+  }
+  return null
+}
+
+/** Exchange stamps inbound external mail; carry it as a flag, not as noise */
+const EXTERNAL_TAG = /^\s*\[EXTERNAL\]\s*/i
+
+/**
+ * The connector's trigger has no webLink, so build the OWA deep link from the
+ * message id instead.
+ */
+function outlookLink(id: string): string | null {
+  if (!id) return null
+  return `https://outlook.office.com/owa/?ItemID=${encodeURIComponent(
+    id
+  )}&exvsurl=1&viewmodel=ReadMessageItem`
+}
+
 function parseMessage(raw: unknown, file: string): MailMessage | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
@@ -110,17 +158,24 @@ function parseMessage(raw: unknown, file: string): MailMessage | null {
   const preview = asText(o.bodyPreview ?? o.BodyPreview).trim() || body.slice(0, 240)
 
   const from = asPerson(o.from ?? o.From ?? o.sender)
+  const fromName =
+    from.name ?? nameForAddress(from.address) ?? nameFromHeaders(o.internetMessageHeaders)
+
+  const rawSubject = asText(o.subject ?? o.Subject).trim()
+  const external = EXTERNAL_TAG.test(rawSubject)
   const received =
     asText(o.receivedDateTime ?? o.ReceivedDateTime ?? o.dateTimeReceived ?? o.receivedTime) ||
     // fall back to the timestamp the flow put at the head of the file name
     ''
   const receivedAt = new Date(received)
 
+  const id = asText(o.id ?? o.Id ?? o.internetMessageId) || file
   return {
-    id: asText(o.id ?? o.Id ?? o.internetMessageId) || file,
-    subject: asText(o.subject ?? o.Subject).trim() || '(no subject)',
+    id,
+    subject: rawSubject.replace(EXTERNAL_TAG, '') || '(no subject)',
+    external,
     from: from.address,
-    fromName: from.name,
+    fromName,
     to: asPeople(o.toRecipients ?? o.to ?? o.To),
     cc: asPeople(o.ccRecipients ?? o.cc ?? o.Cc),
     receivedAt: isNaN(receivedAt.getTime())
@@ -132,7 +187,7 @@ function parseMessage(raw: unknown, file: string): MailMessage | null {
     hasAttachments: o.hasAttachments === true,
     importance: asText(o.importance ?? o.Importance).toLowerCase() || null,
     conversationId: asText(o.conversationId ?? o.ConversationId) || null,
-    webLink: asText(o.webLink ?? o.WebLink) || null,
+    webLink: asText(o.webLink ?? o.WebLink) || outlookLink(id),
     file
   }
 }

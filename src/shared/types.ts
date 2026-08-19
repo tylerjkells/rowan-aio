@@ -534,9 +534,11 @@ export interface AppSettings {
 export interface MailMessage {
   id: string
   subject: string
+  /** Exchange tagged the subject [EXTERNAL]; stripped from `subject` */
+  external: boolean
   /** sender address */
   from: string
-  /** sender display name when the connector supplied one */
+  /** sender display name: the directory, then the From header, else null */
   fromName: string | null
   to: string[]
   cc: string[]
@@ -550,7 +552,7 @@ export interface MailMessage {
   importance: string | null
   /** groups a thread together */
   conversationId: string | null
-  /** opens the message in Outlook on the web */
+  /** opens the message in Outlook on the web (built from the id if need be) */
   webLink: string | null
   /** the file on disk this was read from */
   file: string

@@ -93,7 +93,10 @@ export function MailView({ onSettings }: { onSettings: () => void }): React.JSX.
             onClick={() => setExpandedId(expanded ? null : m.id)}
           >
             <span className="mail-from">{m.fromName ?? m.from}</span>
-            <span className="mail-subject">{m.subject}</span>
+            <span className="mail-subject">
+              {m.external && <span className="mail-ext" title="From outside Rowan">EXT</span>}
+              {m.subject}
+            </span>
             <span className="mail-preview">{m.preview}</span>
           </button>
           <span className="mail-meta">

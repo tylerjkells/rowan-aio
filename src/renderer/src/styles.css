@@ -5107,3 +5107,16 @@ button.speaker-chip-btn:hover {
   align-items: center;
   gap: var(--s3);
 }
+
+.mail-ext {
+  display: inline-block;
+  margin-right: var(--s2);
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
