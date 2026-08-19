@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Meeting } from '../../../shared/types'
 import {
   BackIcon,
@@ -187,6 +187,10 @@ export interface PlayerControl {
   seek: (ms: number, andPlay?: boolean) => void
 }
 
+/** Recordings past this size keep streaming instead of being held in memory.
+ *  Only a recovered WAV from a very long meeting gets anywhere near it. */
+const MAX_BUFFERED_BYTES = 200 * 1024 * 1024
+
 function AudioPlayer({
   src,
   fallbackMs,
@@ -203,22 +207,96 @@ function AudioPlayer({
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(fallbackMs / 1000)
   const [rate, setRate] = useState(1)
+  /** what the <audio> element actually plays: a blob: URL once it is loaded */
+  const [source, setSource] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  /** a seek asked for before the element was ready to take it */
+  const pendingSeek = useRef<{ seconds: number; play: boolean } | null>(null)
+  const scrubbing = useRef(false)
+  const scrubTo = useRef(0)
+  const reportedSec = useRef(-1)
+
+  // The recording is a local file, but a custom protocol looks like the network
+  // to the media element: every seek aborts the in-flight response and refetches,
+  // and a MediaRecorder webm carries no cue index, so landing one seek takes
+  // several of those round trips. That is the stall that reads as buffering.
+  // Reading the file once into a blob makes playback and every later seek
+  // memory-local, with no request to abort halfway through.
+  useEffect(() => {
+    let cancelled = false
+    let url: string | null = null
+    setSource(null)
+    setFailed(false)
+    setTime(0)
+    reportedSec.current = -1
+    void (async () => {
+      try {
+        const res = await fetch(src)
+        if (!res.ok) throw new Error(`recording fetch failed: ${res.status}`)
+        // the headers land before the body does, so an oversized recording is
+        // waved through to streaming without ever being read into memory
+        const total = Number(res.headers.get('Content-Length'))
+        if (Number.isFinite(total) && total > MAX_BUFFERED_BYTES) {
+          void res.body?.cancel()
+          if (!cancelled) setSource(src)
+          return
+        }
+        const blob = await res.blob()
+        if (cancelled) return
+        url = URL.createObjectURL(blob)
+        setSource(url)
+      } catch {
+        // streaming still plays; better that than no player at all
+        if (!cancelled) setSource(src)
+      }
+    })()
+    return () => {
+      cancelled = true
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [src])
+
+  const seekTo = useCallback((seconds: number, andPlay: boolean): void => {
+    setTime(seconds)
+    const a = audioRef.current
+    // readyState 0 means the file has not been opened yet, and assigning
+    // currentTime there is dropped on the floor — hold it until metadata lands
+    if (!a || a.readyState === 0) {
+      pendingSeek.current = { seconds, play: andPlay }
+      return
+    }
+    a.currentTime = seconds
+    // play() rejects when a pause or another seek interrupts it; that is normal
+    if (andPlay) void a.play().catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!control) return
-    control.current = {
-      seek: (ms, andPlay = true) => {
-        const a = audioRef.current
-        if (!a) return
-        a.currentTime = ms / 1000
-        setTime(ms / 1000)
-        if (andPlay) a.play()
-      }
-    }
+    control.current = { seek: (ms, andPlay = true) => seekTo(ms / 1000, andPlay) }
     return () => {
       control.current = null
     }
-  }, [control])
+  }, [control, seekTo])
+
+  // Dragging the slider fires a change per pixel. Each one used to be a seek,
+  // so a single drag asked the file for dozens of positions at once and the
+  // player spent the rest of the drag catching up. Commit on release instead.
+  useEffect(() => {
+    const release = (): void => {
+      if (!scrubbing.current) return
+      scrubbing.current = false
+      const a = audioRef.current
+      // a click that never moved the thumb should not nudge the playhead
+      if (a && Math.abs(a.currentTime - scrubTo.current) < 0.2) return
+      seekTo(scrubTo.current, false)
+    }
+    window.addEventListener('pointerup', release)
+    window.addEventListener('pointercancel', release)
+    return () => {
+      window.removeEventListener('pointerup', release)
+      window.removeEventListener('pointercancel', release)
+    }
+  }, [seekTo])
 
   // Recordings may lack a duration header (MediaRecorder quirk), and probing
   // the file end for it stalls playback on long files. The app already knows
@@ -231,11 +309,18 @@ function AudioPlayer({
     if (isFinite(a.duration) && a.duration > fallbackMs / 1000) {
       setDuration(a.duration)
     }
+    a.playbackRate = rate
+    const pending = pendingSeek.current
+    if (pending) {
+      pendingSeek.current = null
+      a.currentTime = pending.seconds
+      if (pending.play) void a.play().catch(() => {})
+    }
   }
 
   function toggle(): void {
     const a = audioRef.current
-    if (!a) return
+    if (!a || !source) return
     if (a.paused) {
       // if the playhead is parked at the end (post-scan or after finishing),
       // start from the beginning instead of silently doing nothing
@@ -243,7 +328,7 @@ function AudioPlayer({
         a.currentTime = 0
         setTime(0)
       }
-      a.play()
+      void a.play().catch(() => {})
     } else {
       a.pause()
     }
@@ -255,23 +340,38 @@ function AudioPlayer({
     if (audioRef.current) audioRef.current.playbackRate = next
   }
 
+  const loading = source === null
   return (
     <div className="player">
       <audio
         ref={audioRef}
-        src={src}
-        preload="metadata"
+        src={source ?? undefined}
+        preload="auto"
         onLoadedMetadata={onLoadedMetadata}
         onTimeUpdate={() => {
+          // the slider owns the position mid-drag
+          if (scrubbing.current) return
           const t = audioRef.current?.currentTime ?? 0
           setTime(t)
-          onTimeMs?.(t * 1000)
+          // the transcript highlights by the second, and the parent re-renders
+          // the whole meeting page on every report — so report once a second
+          const sec = Math.floor(t)
+          if (sec !== reportedSec.current) {
+            reportedSec.current = sec
+            onTimeMs?.(t * 1000)
+          }
         }}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
+        onError={() => setFailed(true)}
       />
-      <button className="player-btn" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>
+      <button
+        className="player-btn"
+        onClick={toggle}
+        disabled={loading || failed}
+        aria-label={playing ? 'Pause' : 'Play'}
+      >
         {playing ? (
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <rect x="5" y="4" width="5" height="16" rx="1.5" />
@@ -286,21 +386,39 @@ function AudioPlayer({
       <span className="player-time">
         {formatDuration(time * 1000)} / {formatDuration(duration * 1000)}
       </span>
-      <input
-        className="player-seek"
-        type="range"
-        min={0}
-        max={duration || 1}
-        step={0.1}
-        value={Math.min(time, duration)}
-        onChange={(e) => {
-          const t = Number(e.target.value)
-          if (audioRef.current) audioRef.current.currentTime = t
-          setTime(t)
-        }}
-        aria-label="Seek"
-      />
-      <button className="player-btn player-rate" onClick={cycleRate} aria-label="Playback speed">
+      {failed ? (
+        <span className="player-note" role="status">
+          This recording could not be played.
+        </span>
+      ) : (
+        <input
+          className="player-seek"
+          type="range"
+          min={0}
+          max={duration || 1}
+          step={0.1}
+          value={Math.min(time, duration)}
+          disabled={loading}
+          onPointerDown={() => {
+            scrubbing.current = true
+            scrubTo.current = time
+          }}
+          onChange={(e) => {
+            const t = Number(e.target.value)
+            setTime(t)
+            scrubTo.current = t
+            // a drag commits on release; keyboard and click-to-position seek now
+            if (!scrubbing.current) seekTo(t, false)
+          }}
+          aria-label="Seek"
+        />
+      )}
+      <button
+        className="player-btn player-rate"
+        onClick={cycleRate}
+        disabled={loading || failed}
+        aria-label="Playback speed"
+      >
         {rate}×
       </button>
     </div>
