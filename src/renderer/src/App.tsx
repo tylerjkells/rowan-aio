@@ -263,6 +263,7 @@ export default function App(): React.JSX.Element {
               onSettings={() => setView({ name: 'settings' })}
               onActions={() => setView({ name: 'actions' })}
               onDigest={() => setDigestRequested(true)}
+              onMail={() => setView({ name: 'mail' })}
               onProjects={() => setView({ name: 'projects' })}
             />
           )}

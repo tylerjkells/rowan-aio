@@ -94,6 +94,8 @@ import {
   startMailWatch,
   stopMailWatch
 } from './mail'
+import { draftMailReply, queueMailDraft, summarizeMailMessage } from './mailReply'
+import { buildDailyRecap, narrateRecap, startBriefWatch, todaysBrief } from './recap'
 import {
   refreshCalendar,
   getTodayEvents,
@@ -149,9 +151,11 @@ import type {
   BrandData,
   BulkSelection,
   ClickupPushInput,
+  DailyRecap,
   DirectoryImportRow,
   EnergySample,
   LinkEntry,
+  MailDraftInput,
   Meeting,
   PersonDetails,
   RecordingMode,
@@ -355,6 +359,7 @@ app.whenReady().then(() => {
   startAutoBackup()
   ensureMailDirs()
   startMailWatch()
+  startBriefWatch()
 
   // Repair pre-0.2.1 recordings whose webm lacks a duration header (seeking)
   patchLegacyAudioDurations().catch(() => 0)
@@ -877,6 +882,17 @@ function registerIpc(): void {
     stopMailWatch()
     return settings
   })
+
+  ipcMain.handle('mail:draftReply', (_e, messageId: string, instruction?: string) =>
+    draftMailReply(messageId, instruction)
+  )
+  ipcMain.handle('mail:queueDraft', (_e, input: MailDraftInput) => queueMailDraft(input))
+  ipcMain.handle('mail:summarize', (_e, messageId: string) => summarizeMailMessage(messageId))
+
+  // --- daily recap ---
+  ipcMain.handle('recap:build', () => todaysBrief())
+  ipcMain.handle('recap:rebuild', () => buildDailyRecap())
+  ipcMain.handle('recap:narrate', (_e, recap: DailyRecap) => narrateRecap(recap))
 
   ipcMain.handle('clickup:status', () => clickupStatus())
   ipcMain.handle('clickup:connect', (_e, token: string) => connectClickup(token))

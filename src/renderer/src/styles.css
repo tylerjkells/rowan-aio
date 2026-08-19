@@ -5120,3 +5120,89 @@ button.speaker-chip-btn:hover {
   letter-spacing: 0.04em;
   vertical-align: 1px;
 }
+
+.mail-reply {
+  max-width: 720px;
+  width: 92vw;
+}
+
+.mail-reply-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin: var(--s3) 0;
+}
+
+.mail-reply-body {
+  resize: vertical;
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.mail-summary {
+  margin-bottom: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+}
+
+.mail-summary p {
+  margin: var(--s2) 0 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* ---- morning brief ---- */
+
+.brief-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.brief-refresh {
+  font-size: 12px;
+}
+
+.brief-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+  margin: var(--s3) 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.brief-counts strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.brief-count-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.brief-count-link:hover {
+  color: var(--accent);
+}
+
+.brief-overdue strong {
+  color: var(--accent-strong);
+}
+
+.brief-body {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}

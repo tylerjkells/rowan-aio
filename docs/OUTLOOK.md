@@ -172,8 +172,10 @@ that, EWS, is being blocked starting October 1 2026.
    OneDrive for Business connections both create fine, so no DLP policy is
    in the way.
 3. ~~Build the read side.~~ Done — `src/main/mail.ts` plus a Mail view.
-4. Next: the outbound draft flow, then Today triage, recaps, and the
-   cross-links into meetings and people.
+4. ~~Reply drafting, summaries, morning brief.~~ Done — see below. The
+   outbound flow still needs building in Power Automate.
+5. Next: capturing Sent Items so "you asked and nobody answered" works, and
+   pruning the bridge folder.
 
 ## How the read side is wired
 
@@ -193,6 +195,42 @@ that, EWS, is being blocked starting October 1 2026.
   once and never edited.
 - Only the newest 300 files are parsed per read. Nothing prunes the folder
   yet; that wants doing before it grows into five figures.
+
+### The outbound half
+
+Rowan never sends mail. "Draft a reply" writes a JSON file into the bridge's
+`out` folder and stops there; a second flow turns it into a real Outlook
+draft, which the user reviews and sends themselves.
+
+The file looks like:
+
+    {
+      "kind": "reply",
+      "messageId": "...",       // the message being answered
+      "conversationId": "...",  // for threading
+      "to": "sender@example.com",
+      "subject": "RE: ...",
+      "body": "...",
+      "queuedAt": "2026-08-19T..."
+    }
+
+The flow: OneDrive *When a file is created* on `/Apps/Rowan/out` → *Get file
+content* → *Parse JSON* → the Outlook connector's draft action → *Delete
+file*. Polling makes this the slow direction, about a minute, which is fine
+for something a human reviews anyway.
+
+### Why the brief is a poll, not a timer
+
+The written brief is one model call a day, cached to `recap.json` by date.
+Generating it on app open covers the normal case, but the app is meant to be
+left running — and an app left open overnight would sit on yesterday's brief
+forever. So `startBriefWatch()` also checks every ten minutes and writes the
+brief once the clock passes 8am, then tells the windows. Waking from sleep
+needs no special handling: the next tick catches it.
+
+Nothing here is shared between people. Each Windows account has its own
+userData folder, so two people on one machine get their own brief on their
+own first-open, with no coordination and no collision.
 
 ### What the connector actually sends
 

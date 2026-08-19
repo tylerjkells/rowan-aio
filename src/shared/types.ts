@@ -567,6 +567,57 @@ export interface MailStatus {
   error?: string
 }
 
+/** a reply drafted in Rowan, on its way to becoming an Outlook draft */
+export interface MailDraftInput {
+  /** the message being replied to */
+  messageId: string
+  body: string
+}
+
+export interface MailDraftResult {
+  ok: boolean
+  body?: string
+  error?: string
+}
+
+/** one of today's messages, as the recap sees it */
+export interface RecapMail {
+  id: string
+  subject: string
+  /** display name where known, else the address */
+  from: string
+  receivedAt: string
+  external: boolean
+  /** rough guess that this one wants an answer */
+  needsReply: boolean
+}
+
+/**
+ * The morning brief: yesterday, overnight, and today ahead, assembled from the
+ * calendar, the mail bridge, the library, and ClickUp.
+ */
+export interface DailyRecap {
+  /** ISO date */
+  date: string
+  /** e.g. "Wednesday, August 19" */
+  dateLabel: string
+  events: {
+    title: string
+    start: string
+    end: string
+    allDay: boolean
+    attendees: string[]
+  }[]
+  mail: RecapMail[]
+  /** open action items owned by Me, most urgent first */
+  myOpen: ActionRollupItem[]
+  clickupDue: { name: string; dueDate: string; listName: string; url: string }[]
+  /** meetings recorded since yesterday */
+  recentMeetings: { id: string; title: string; createdAt: string; tldr: string | null }[]
+  /** the written brief, once generated (cached per date) */
+  narrative: string | null
+}
+
 export interface EngineStatus {
   binaryReady: boolean
   modelReady: boolean

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { MailMessage, MailStatus } from '../../../shared/types'
 import { ClickupPushDialog } from '../ClickupPush'
+import { MailReplyDialog } from '../MailReply'
 
 function formatWhen(iso: string): string {
   const d = new Date(iso)
@@ -38,6 +39,10 @@ export function MailView({ onSettings }: { onSettings: () => void }): React.JSX.
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [taskFrom, setTaskFrom] = useState<MailMessage | null>(null)
+  const [replyTo, setReplyTo] = useState<MailMessage | null>(null)
+  const [summaries, setSummaries] = useState<Record<string, string>>({})
+  const [summarizing, setSummarizing] = useState<string | null>(null)
+  const [rowError, setRowError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
   const load = useCallback(async (): Promise<void> => {
@@ -56,6 +61,15 @@ export function MailView({ onSettings }: { onSettings: () => void }): React.JSX.
     // the main process watches the synced folder and pings when it changes
     return window.scribe.mail.onChanged(load)
   }, [load])
+
+  async function summarize(m: MailMessage): Promise<void> {
+    setSummarizing(m.id)
+    setRowError(null)
+    const result = await window.scribe.mail.summarize(m.id)
+    setSummarizing(null)
+    if (result.ok && result.body) setSummaries((prev) => ({ ...prev, [m.id]: result.body! }))
+    else setRowError(result.error ?? 'Could not summarize that message')
+  }
 
   if (!status) return <></>
 
@@ -122,8 +136,28 @@ export function MailView({ onSettings }: { onSettings: () => void }): React.JSX.
                 </span>
               )}
             </div>
+            {summaries[m.id] && (
+              <div className="mail-summary">
+                <span className="card-subhead">Summary</span>
+                <p>{summaries[m.id]}</p>
+              </div>
+            )}
             <pre className="mail-body">{m.body}</pre>
             <div className="mail-actions">
+              <button className="btn btn-primary" onClick={() => setReplyTo(m)}>
+                Draft a reply
+              </button>
+              <button
+                className="btn"
+                onClick={() => summarize(m)}
+                disabled={summarizing === m.id}
+              >
+                {summarizing === m.id
+                  ? 'Summarizing…'
+                  : summaries[m.id]
+                    ? 'Re-summarize'
+                    : 'Summarize'}
+              </button>
               <button className="btn" onClick={() => setTaskFrom(m)}>
                 Make a ClickUp task
               </button>
@@ -133,6 +167,7 @@ export function MailView({ onSettings }: { onSettings: () => void }): React.JSX.
                 </a>
               )}
             </div>
+            {rowError && <p className="field-note error">{rowError}</p>}
           </div>
         )}
       </div>
@@ -175,6 +210,7 @@ export function MailView({ onSettings }: { onSettings: () => void }): React.JSX.
           <div className="mail-list">{g.messages.map(row)}</div>
         </section>
       ))}
+      {replyTo && <MailReplyDialog message={replyTo} onClose={() => setReplyTo(null)} />}
       {taskFrom && (
         <ClickupPushDialog
           task={taskFrom.subject}
