@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.22.2': [
+    'Recordings really do play and skip around now. The 0.22.1 fix loaded a recording into memory so that seeking would be instant, but the app’s own security policy blocked it from doing that, so every meeting quietly fell back to the slow path the fix existed to replace — and that path cannot jump ahead in a long recording at all. It waits for the audio to arrive in order, which on a 55-minute meeting never finishes. Checked end to end this time, against a recording the size of a full hour.'
+  ],
   '0.22.1': [
     'Meeting recordings actually play now. Audio that stopped a few seconds in was the app answering the player’s request for the end of the file with the beginning of it, so the player never learned how long the recording was.',
     'Skipping around a recording no longer stalls. The whole file is loaded up front instead of being re-fetched on every jump, so scrubbing lands where you dropped it — and dragging the seek bar now seeks once, when you let go, rather than on every pixel of the drag.'
