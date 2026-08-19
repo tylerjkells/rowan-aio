@@ -219,6 +219,14 @@ content* → *Parse JSON* → the Outlook connector's draft action → *Delete
 file*. Polling makes this the slow direction, about a minute, which is fine
 for something a human reviews anyway.
 
+*Get file content* hands back binary rather than JSON, whatever the file
+extension, so Parse JSON's Content has to decode it explicitly:
+
+    json(base64ToString(body('Get_file_content')?['$content']))
+
+(Setting *Infer Content Type* to Yes on the OneDrive action does the same
+job, if a plain dynamic token is preferred.)
+
 Parse JSON schema:
 
     {
@@ -233,11 +241,20 @@ Parse JSON schema:
         "bodyHtml": { "type": "string" },
         "queuedAt": { "type": "string" }
       },
-      "required": ["kind", "messageId", "to", "subject", "body", "bodyHtml"]
+      "required": ["kind", "messageId", "to", "subject", "body"]
     }
 
+Keep `required` minimal. `bodyHtml` was added after the first drafts were
+already queued, and listing it as required made Parse JSON reject every
+file written by the older build. Any field the bridge gains later has the
+same problem, so new fields stay optional and the flow copes with their
+absence.
+
 Field mapping into *Draft an email message*: To ← `to`, Subject ←
-`subject`, Body ← **`bodyHtml`**.
+`subject`, Body ← `coalesce(body('Parse_JSON')?['bodyHtml'], body('Parse_JSON')?['body'])`.
+
+The coalesce is what copes: current drafts carry `bodyHtml`, older ones
+fall back to the plain text (losing line breaks, but still drafting).
 
 The connector's body is a rich-text field, so the plain-text `body` would
 arrive as one run-on paragraph with every line break lost. Rowan writes
