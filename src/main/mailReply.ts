@@ -181,6 +181,20 @@ export async function summarizeMailMessage(messageId: string): Promise<MailDraft
 }
 
 /**
+ * The connector's "Draft an email message" body is a rich-text field, so a
+ * plain-text draft would arrive as one run-on paragraph. Escaping and
+ * converting here rather than in the flow keeps the HTML correct even when the
+ * reply contains <, > or & — Logic Apps string functions would not.
+ */
+function toHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\r\n|\r|\n/g, '<br>')
+}
+
+/**
  * File a draft for the outbound flow to turn into a real Outlook draft.
  * Writing the file IS the send — the flow picks it up within a minute.
  */
@@ -199,6 +213,8 @@ export function queueMailDraft(input: MailDraftInput): { ok: boolean; error?: st
       to: message?.from ?? '',
       subject: message ? `RE: ${message.subject}` : 'RE:',
       body: input.body,
+      /** the same text as HTML, for the connector's rich-text body field */
+      bodyHtml: toHtml(input.body),
       queuedAt: new Date().toISOString()
     }
     writeFileSync(join(dir, `${stamp}-${randomUUID()}.json`), JSON.stringify(payload, null, 2))

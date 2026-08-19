@@ -230,10 +230,21 @@ Parse JSON schema:
         "to": { "type": "string" },
         "subject": { "type": "string" },
         "body": { "type": "string" },
+        "bodyHtml": { "type": "string" },
         "queuedAt": { "type": "string" }
       },
-      "required": ["kind", "messageId", "to", "subject", "body"]
+      "required": ["kind", "messageId", "to", "subject", "body", "bodyHtml"]
     }
+
+Field mapping into *Draft an email message*: To ← `to`, Subject ←
+`subject`, Body ← **`bodyHtml`**.
+
+The connector's body is a rich-text field, so the plain-text `body` would
+arrive as one run-on paragraph with every line break lost. Rowan writes
+`bodyHtml` alongside it, escaped and with newlines already converted. Doing
+that here rather than in the flow keeps the HTML correct when a reply
+contains `<`, `>` or `&`, which Logic Apps string functions would mangle.
+`body` stays in the file as the plain text of record.
 
 `conversationId` is nullable, which the auto-generated schema will not
 guess from a sample: generating from a file that happens to have one
