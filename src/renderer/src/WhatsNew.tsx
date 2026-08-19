@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.22.1': [
+    'Meeting recordings actually play now. Audio that stopped a few seconds in was the app answering the player’s request for the end of the file with the beginning of it, so the player never learned how long the recording was.',
+    'Skipping around a recording no longer stalls. The whole file is loaded up front instead of being re-fetched on every jump, so scrubbing lands where you dropped it — and dragging the seek bar now seeks once, when you let go, rather than on every pixel of the drag.'
+  ],
   '0.22.0': [
     'Your Outlook inbox now lives in Rowan. Rowan University won’t let any app read mail without an administrator’s approval, so mail arrives a way that needs nobody’s permission: a Power Automate flow you own files each message into OneDrive, and Rowan reads it off your own disk. Settings → Mail has a full setup guide with every expression ready to copy.',
     'Draft a reply to any email with what Rowan knows behind it: who the sender is, what they still owe you, what you owe them, which meetings you shared. That is a draft no mail client can write. Add a steer (“push it to next week”) if you want one. Drafts land in Outlook for you to review, and Rowan never sends mail itself.',
