@@ -18,6 +18,7 @@ import { PeopleView, PersonView } from './views/People'
 import { LinksView } from './views/Links'
 import { BrandView } from './views/Brand'
 import { ProjectsView } from './views/Projects'
+import { MailView } from './views/Mail'
 import { ToolboxView } from './views/Toolbox'
 import { SeriesView } from './views/Series'
 import { AskWidget } from './AskWidget'
@@ -33,6 +34,7 @@ import {
   LinkIcon,
   PaletteIcon,
   BoardIcon,
+  MailIcon,
   WrenchIcon,
   formatDuration
 } from './ui'
@@ -48,6 +50,7 @@ export type View =
   | { name: 'links' }
   | { name: 'brand' }
   | { name: 'projects' }
+  | { name: 'mail' }
   | { name: 'toolbox' }
   | { name: 'series'; title: string }
   | { name: 'import' }
@@ -183,6 +186,12 @@ export default function App(): React.JSX.Element {
           <BoardIcon /> Projects
         </button>
         <button
+          className={`nav-btn ${view.name === 'mail' ? 'active' : ''}`}
+          onClick={() => setView({ name: 'mail' })}
+        >
+          <MailIcon /> Mail
+        </button>
+        <button
           className={`nav-btn ${view.name === 'links' ? 'active' : ''}`}
           onClick={() => setView({ name: 'links' })}
         >
@@ -254,6 +263,7 @@ export default function App(): React.JSX.Element {
               onSettings={() => setView({ name: 'settings' })}
               onActions={() => setView({ name: 'actions' })}
               onDigest={() => setDigestRequested(true)}
+              onMail={() => setView({ name: 'mail' })}
               onProjects={() => setView({ name: 'projects' })}
             />
           )}
@@ -315,6 +325,7 @@ export default function App(): React.JSX.Element {
           {view.name === 'projects' && (
             <ProjectsView onSettings={() => setView({ name: 'settings' })} />
           )}
+          {view.name === 'mail' && <MailView onSettings={() => setView({ name: 'settings' })} />}
           {view.name === 'toolbox' && <ToolboxView />}
           {view.name === 'import' && (
             <ImportView

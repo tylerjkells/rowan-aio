@@ -526,6 +526,96 @@ export interface AppSettings {
   yourName: string
   /** identity merges: normalized raw name -> canonical display name */
   personAliases: Record<string, string>
+  /** OneDrive-synced folder the mail bridge reads; null = not set up */
+  mailFolder: string | null
+}
+
+/** one message, as filed by the Power Automate bridge (see docs/OUTLOOK.md) */
+export interface MailMessage {
+  id: string
+  subject: string
+  /** Exchange tagged the subject [EXTERNAL]; stripped from `subject` */
+  external: boolean
+  /** sender address */
+  from: string
+  /** sender display name: the directory, then the From header, else null */
+  fromName: string | null
+  to: string[]
+  cc: string[]
+  receivedAt: string
+  /** short snippet for the list */
+  preview: string
+  /** the body, flattened to plain text */
+  body: string
+  isRead: boolean
+  hasAttachments: boolean
+  importance: string | null
+  /** groups a thread together */
+  conversationId: string | null
+  /** opens the message in Outlook on the web (built from the id if need be) */
+  webLink: string | null
+  /** the file on disk this was read from */
+  file: string
+}
+
+export interface MailStatus {
+  /** the folder exists and is readable */
+  connected: boolean
+  folder: string | null
+  count: number
+  newestAt: string | null
+  error?: string
+}
+
+/** a reply drafted in Rowan, on its way to becoming an Outlook draft */
+export interface MailDraftInput {
+  /** the message being replied to */
+  messageId: string
+  body: string
+}
+
+export interface MailDraftResult {
+  ok: boolean
+  body?: string
+  error?: string
+}
+
+/** one of today's messages, as the recap sees it */
+export interface RecapMail {
+  id: string
+  subject: string
+  /** display name where known, else the address */
+  from: string
+  receivedAt: string
+  external: boolean
+  /** rough guess that this one wants an answer */
+  needsReply: boolean
+}
+
+/**
+ * The morning brief: yesterday, overnight, and today ahead, assembled from the
+ * calendar, the mail bridge, the library, and ClickUp.
+ */
+export interface DailyRecap {
+  /** ISO date */
+  date: string
+  /** e.g. "Wednesday, August 19" */
+  dateLabel: string
+  events: {
+    title: string
+    start: string
+    end: string
+    allDay: boolean
+    attendees: string[]
+  }[]
+  mail: RecapMail[]
+  /** open action items owned by Me, most urgent first */
+  myOpen: ActionRollupItem[]
+  clickupDue: { name: string; dueDate: string; listName: string; url: string }[]
+  /** meetings recorded since yesterday */
+  recentMeetings: { id: string; title: string; createdAt: string; tldr: string | null }[]
+  /** the written brief, once generated (cached per date) */
+  narrative: string | null
 }
 
 export interface EngineStatus {

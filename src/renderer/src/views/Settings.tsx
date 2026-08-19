@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { MailGuideDialog } from '../MailGuide'
 import type {
   AppSettings,
   AppTheme,
@@ -190,6 +191,7 @@ export function SettingsView({
   const [okStatus, setOkStatus] = useState<{ ok: boolean; msg: string } | null>(null)
   const [savingOKey, setSavingOKey] = useState(false)
   const [customModelDraft, setCustomModelDraft] = useState('')
+  const [guideOpen, setGuideOpen] = useState(false)
   const [toc, setToc] = useState<{ id: string; label: string }[]>([])
   const [activeToc, setActiveToc] = useState('')
   const tocLockUntil = useRef(0)
@@ -1154,6 +1156,56 @@ export function SettingsView({
 
       <section className="settings-section">
         <header className="settings-label">
+          <h2>Mail</h2>
+          <p className="hint">
+            Rowan can&rsquo;t talk to Exchange directly, because Rowan University requires an
+            administrator to approve any app that reads mail. Instead a Power Automate flow
+            files each new message into a OneDrive folder, and Rowan reads that folder off
+            disk. No password, no tokens, nothing to approve. Point this at the synced folder
+            holding the <code>in</code> subfolder.
+          </p>
+          <p className="hint">
+            New to this?{' '}
+            <button className="link-btn" onClick={() => setGuideOpen(true)}>
+              Follow the setup guide
+            </button>{' '}
+            — it walks through both Power Automate flows step by step, with every expression
+            ready to copy.
+          </p>
+        </header>
+        <div className="settings-body">
+          <div className="field-row">
+            {settings.mailFolder ? (
+              <>
+                <span className="opt-desc backup-folder" title={settings.mailFolder}>
+                  Reading {settings.mailFolder}
+                </span>
+                <button
+                  className="btn btn-ghost"
+                  onClick={async () => onChange(await window.scribe.mail.forgetFolder())}
+                >
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="btn"
+                  onClick={async () => onChange(await window.scribe.mail.chooseFolder())}
+                >
+                  Choose mail folder…
+                </button>
+                <button className="btn btn-ghost" onClick={() => setGuideOpen(true)}>
+                  Setup guide
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <header className="settings-label">
           <h2>Backup</h2>
           <p className="hint">
             The library lives in one folder on this PC. Back it up on demand, or pick a folder
@@ -1234,6 +1286,7 @@ export function SettingsView({
         </div>
       </section>
       </div>
+      {guideOpen && <MailGuideDialog onClose={() => setGuideOpen(false)} />}
     </div>
   )
 }

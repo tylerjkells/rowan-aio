@@ -2,21 +2,27 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ClickupList } from '../../shared/types'
 
 /**
- * "Send to ClickUp" dialog for one meeting action item: pick a list (last
- * choice remembered), confirm the task name/assignee/due, create the task.
+ * "Send to ClickUp" dialog: pick a list (last choice remembered), confirm the
+ * task name/description/assignee/due, create the task. Used for a meeting
+ * action item (prefilled, credited back to the meeting) and for a task typed
+ * from scratch on the Projects page.
  */
 export function ClickupPushDialog({
-  task,
-  owner,
-  dueDate,
+  task = '',
+  owner = null,
+  dueDate = null,
   meetingTitle,
+  description: initialDescription,
   onDone,
   onClose
 }: {
-  task: string
-  owner: string | null
-  dueDate: string | null
-  meetingTitle: string
+  task?: string
+  owner?: string | null
+  dueDate?: string | null
+  /** the meeting this came from; omitted for a task typed from scratch */
+  meetingTitle?: string
+  /** starting description, for sources other than a meeting (e.g. an email) */
+  description?: string
   /** called with the created task's URL */
   onDone: (url: string) => void
   onClose: () => void
@@ -25,6 +31,9 @@ export function ClickupPushDialog({
   const [lists, setLists] = useState<ClickupList[] | null>(null)
   const [listId, setListId] = useState(() => localStorage.getItem('clickupPushList') ?? '')
   const [name, setName] = useState(task)
+  const [description, setDescription] = useState(
+    initialDescription ?? (meetingTitle ? `From meeting: ${meetingTitle}` : '')
+  )
   const [assignee, setAssignee] = useState(owner ?? '')
   const [due, setDue] = useState(dueDate ?? '')
   const [busy, setBusy] = useState(false)
@@ -58,7 +67,7 @@ export function ClickupPushDialog({
     const result = await window.scribe.clickup.push({
       listId,
       name: name.trim(),
-      description: `From meeting: ${meetingTitle}`,
+      description: description.trim() || undefined,
       assignee: assignee.trim() || undefined,
       dueDate: due || null
     })
@@ -81,14 +90,26 @@ export function ClickupPushDialog({
       }}
     >
       <form onSubmit={push}>
-        <h3>Send to ClickUp</h3>
+        <h3>{meetingTitle ? 'Send to ClickUp' : 'New ClickUp task'}</h3>
         <label className="pd-field">
           <span>Task</span>
           <input
             className="text-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            placeholder="What needs doing"
+            autoFocus={!task}
             required
+          />
+        </label>
+        <label className="pd-field">
+          <span>Description</span>
+          <textarea
+            className="text-input cu-push-desc"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="Optional detail"
           />
         </label>
         <label className="pd-field">
@@ -138,7 +159,11 @@ export function ClickupPushDialog({
           <button type="button" className="btn" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary" disabled={busy || !listId}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={busy || !listId || !name.trim()}
+          >
             {busy ? 'Creating…' : 'Create task'}
           </button>
         </div>

@@ -12,6 +12,7 @@ import type {
 import { ChevronIcon, formatDuration, formatWhen, isOverdue, MicIcon, StageBadge } from '../ui'
 import { ClickupCompleteDialog } from '../ClickupComplete'
 import { PrepBody, PrepDialog } from '../PrepDialog'
+import { MorningBrief } from '../MorningBrief'
 
 /**
  * The location field on virtual/hybrid events often carries platform
@@ -132,6 +133,7 @@ export function TodayView({
   onSettings,
   onActions,
   onDigest,
+  onMail,
   onProjects
 }: {
   meetings: MeetingListItem[]
@@ -140,6 +142,7 @@ export function TodayView({
   onSettings: () => void
   onActions: () => void
   onDigest: () => void
+  onMail: () => void
   onProjects: () => void
 }): React.JSX.Element {
   const [settings, setSettings] = useState<AppSettings | null>(null)
@@ -276,6 +279,7 @@ export function TodayView({
       )}
 
       <div className="today-col">
+        <MorningBrief onMail={onMail} />
         <section className="today-section">
           <div className="card-subhead">Schedule</div>
 

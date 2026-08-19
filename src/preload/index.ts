@@ -15,6 +15,7 @@ import type {
   ClickupStatus,
   ClickupStatusOption,
   ClickupTask,
+  DailyRecap,
   DirectoryImportRow,
   DirectoryImportScan,
   EnergySample,
@@ -23,6 +24,10 @@ import type {
   EventBrief,
   LibraryQA,
   LinkEntry,
+  MailDraftInput,
+  MailDraftResult,
+  MailMessage,
+  MailStatus,
   PrepEntry,
   Meeting,
   MeetingListItem,
@@ -275,6 +280,40 @@ const api = {
     saveFileCopy: (id: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('toolbox:saveFileCopy', id),
     removeFile: (id: string): Promise<ToolboxData> => ipcRenderer.invoke('toolbox:removeFile', id)
+  },
+  mail: {
+    status: (): Promise<MailStatus> => ipcRenderer.invoke('mail:status'),
+    list: (): Promise<MailMessage[]> => ipcRenderer.invoke('mail:list'),
+    chooseFolder: (): Promise<AppSettings> => ipcRenderer.invoke('mail:chooseFolder'),
+    forgetFolder: (): Promise<AppSettings> => ipcRenderer.invoke('mail:forgetFolder'),
+    /** ask the model for a reply, with Rowan's context behind it */
+    draftReply: (messageId: string, instruction?: string): Promise<MailDraftResult> =>
+      ipcRenderer.invoke('mail:draftReply', messageId, instruction),
+    /** a short read on one message */
+    summarize: (messageId: string): Promise<MailDraftResult> =>
+      ipcRenderer.invoke('mail:summarize', messageId),
+    /** file the draft for the outbound flow to turn into an Outlook draft */
+    queueDraft: (input: MailDraftInput): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('mail:queueDraft', input),
+    /** the bridge folder gained or lost files */
+    onChanged: (fn: () => void): (() => void) => {
+      const handler = (): void => fn()
+      ipcRenderer.on('mail:changed', handler)
+      return () => ipcRenderer.removeListener('mail:changed', handler)
+    }
+  },
+  recap: {
+    build: (): Promise<DailyRecap> => ipcRenderer.invoke('recap:build'),
+    /** rebuild without generating a brief (used by the refresh button) */
+    rebuild: (): Promise<DailyRecap> => ipcRenderer.invoke('recap:rebuild'),
+    /** the background watch wrote today's brief */
+    onUpdated: (fn: () => void): (() => void) => {
+      const handler = (): void => fn()
+      ipcRenderer.on('recap:updated', handler)
+      return () => ipcRenderer.removeListener('recap:updated', handler)
+    },
+    narrate: (recap: DailyRecap): Promise<{ ok: boolean; text?: string; error?: string }> =>
+      ipcRenderer.invoke('recap:narrate', recap)
   },
   clickup: {
     status: (): Promise<ClickupStatus> => ipcRenderer.invoke('clickup:status'),
