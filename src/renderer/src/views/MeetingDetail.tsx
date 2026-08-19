@@ -245,8 +245,10 @@ function AudioPlayer({
         if (cancelled) return
         url = URL.createObjectURL(blob)
         setSource(url)
-      } catch {
-        // streaming still plays; better that than no player at all
+      } catch (err) {
+        // streaming plays from the start but seeks badly, so say why it
+        // happened rather than leaving a mysteriously sticky player
+        console.warn('recording could not be buffered; falling back to streaming', err)
         if (!cancelled) setSource(src)
       }
     })()
@@ -364,7 +366,11 @@ function AudioPlayer({
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
-        onError={() => setFailed(true)}
+        onError={() => {
+          const e = audioRef.current?.error
+          console.error(`recording playback failed: code=${e?.code} ${e?.message ?? ''}`)
+          setFailed(true)
+        }}
       />
       <button
         className="player-btn"
