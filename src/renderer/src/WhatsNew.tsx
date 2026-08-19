@@ -2,6 +2,14 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.22.0': [
+    'Your Outlook inbox now lives in Rowan. Rowan University won’t let any app read mail without an administrator’s approval, so mail arrives a way that needs nobody’s permission: a Power Automate flow you own files each message into OneDrive, and Rowan reads it off your own disk. Settings → Mail has a full setup guide with every expression ready to copy.',
+    'Draft a reply to any email with what Rowan knows behind it: who the sender is, what they still owe you, what you owe them, which meetings you shared. That is a draft no mail client can write. Add a steer (“push it to next week”) if you want one. Drafts land in Outlook for you to review, and Rowan never sends mail itself.',
+    'Summarize any email in a few lines, for deciding whether it needs you at all.',
+    'A morning brief on Today covering yesterday, overnight, and the day ahead. It pulls together your calendar, what arrived in the inbox, your open action items, and anything due in ClickUp, then writes itself once a day after 8am whether or not the app was closed overnight.',
+    'Anything the app writes for you now follows house rules: no em dashes, no “delve” or “leverage”, no tidy summarizing sign-off. Drafts should read like you typed them.',
+    'Create a ClickUp task straight from the Projects page with the New task button, instead of only from a meeting’s action items. Any email can become a task too.'
+  ],
   '0.21.2': [
     'Tasks pushed to ClickUp no longer advertise the app: the description now reads “From meeting: …” with just the plain meeting title, so coworkers see where the task came from without any mention of Rowan AIO.'
   ],
