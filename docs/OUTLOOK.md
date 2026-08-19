@@ -12,9 +12,8 @@ registration with `Mail.Read` — almost certainly hits a wall you can't get
 past on your own. The route that does work is a **Power Automate flow
 bridging Outlook to a OneDrive folder that Rowan reads off local disk.**
 
-Worth ten minutes to confirm the clean route is really shut before
-committing to the bridge, because the test is free and the failure message
-is unambiguous.
+The clean route was tested on 19 Aug 2026 and came back "Approval
+required" — see Route A below. The bridge it is.
 
 ## What the iPhone proves (and what it doesn't)
 
@@ -54,7 +53,24 @@ Four independent blocks:
 - EAS moved to OAuth, so it hits the **same consent wall** anyway.
 - It leans on **EWS**, blocked from October 1 2026.
 
-## Route A: Graph + your own app registration — test it first
+## Route A: Graph + your own app registration — TESTED, BLOCKED
+
+**Result (19 Aug 2026): blocked.** An app registration named `Rowan-AIO`
+was created successfully — registration is open to users in this tenant —
+but the consent screen came back "Approval required: This app requires your
+admin's approval to: Read user mail / Read and write access to user mail /
+Maintain access to data you have given it access to / Sign in and read user
+profile," with a justification box and a **Request approval** button.
+
+So the tenant is in state (a): an admin consented to Apple's mail app at
+some point, and broad user consent is off. Route A cannot be opened from a
+non-admin account. Retrying with a narrower scope is pointless — no mail
+permission is classified low impact.
+
+The **Request approval** button is the IT route, should that ever become
+acceptable. Everything below assumes it doesn't.
+
+The original reasoning, kept because it explains the shape of the wall:
 
 By default, Entra lets any user register an application in the tenant, so
 step one is probably open to you. Registering an app is not the problem.
@@ -151,11 +167,12 @@ that, EWS, is being blocked starting October 1 2026.
 
 ## Recommendation
 
-1. Run the Route A test **first**. Ten minutes, and it either saves the
-   whole bridge or closes the question for good.
-2. Assuming it fails, build Route B. Start read-only: one flow, one folder,
-   inbox triage on the Today screen. That proves the pipe with almost no
-   code in Rowan — a folder watcher and a JSON parse.
+1. ~~Run the Route A test.~~ Done — blocked, see above.
+2. Build Route B. Start read-only: one flow, one folder, inbox triage on
+   the Today screen. That proves the pipe with almost no code in Rowan — a
+   folder watcher and a JSON parse. Confirm first that Power Automate is
+   reachable and that an Outlook connection can be created, since a DLP
+   policy could close that door too.
 3. Add the outbound draft flow once reading feels good.
 4. Route C later, only if you want the button inside Outlook rather than
    inside Rowan.
