@@ -314,10 +314,19 @@ app.whenReady().then(() => {
     const range = request.headers.get('range')
 
     if (range) {
-      const m = range.match(/bytes=(\d*)-(\d*)/)
-      let start = m && m[1] ? parseInt(m[1], 10) : 0
-      let end = m && m[2] ? parseInt(m[2], 10) : total - 1
-      if (!Number.isFinite(start)) start = 0
+      const m = /bytes=(\d*)-(\d*)/.exec(range)
+      // "bytes=-500" is a suffix range: the LAST 500 bytes, not the first 500.
+      // The media player uses it to read the tail of a webm for its duration
+      // and cue index, so answering it with the head hands the demuxer garbage
+      // and playback dies a few seconds in.
+      const suffix = !!m && !m[1] && !!m[2]
+      let start = suffix
+        ? Math.max(0, total - parseInt(m![2], 10))
+        : m && m[1]
+          ? parseInt(m[1], 10)
+          : 0
+      let end = !suffix && m && m[2] ? parseInt(m[2], 10) : total - 1
+      if (!Number.isFinite(start) || start < 0) start = 0
       if (!Number.isFinite(end) || end >= total) end = total - 1
       if (start > end || start >= total) {
         return new Response(null, {
@@ -332,7 +341,11 @@ app.whenReady().then(() => {
           'Content-Type': mime,
           'Accept-Ranges': 'bytes',
           'Content-Length': String(end - start + 1),
-          'Content-Range': `bytes ${start}-${end}/${total}`
+          'Content-Range': `bytes ${start}-${end}/${total}`,
+          // the player fetches the recording itself, and a cross-origin fetch
+          // can only read the headers named here
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges'
         }
       })
     }
@@ -343,7 +356,9 @@ app.whenReady().then(() => {
       headers: {
         'Content-Type': mime,
         'Accept-Ranges': 'bytes',
-        'Content-Length': String(total)
+        'Content-Length': String(total),
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges'
       }
     })
   })
