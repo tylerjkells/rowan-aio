@@ -1023,6 +1023,11 @@ a.rollup-task:hover {
   text-decoration: underline;
 }
 
+.cu-push-desc {
+  resize: vertical;
+  line-height: 1.5;
+}
+
 /* ---- toolbox ---- */
 
 .guide-list {

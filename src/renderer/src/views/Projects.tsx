@@ -6,6 +6,7 @@ import type {
   ClickupTask
 } from '../../../shared/types'
 import { ClickupCompleteDialog } from '../ClickupComplete'
+import { ClickupPushDialog } from '../ClickupPush'
 
 function todayIso(): string {
   const d = new Date()
@@ -104,6 +105,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   const [collapsed, setCollapsed] = useState<Set<string> | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [completing, setCompleting] = useState<ClickupTask | null>(null)
+  const [creating, setCreating] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [comment, setComment] = useState('')
   const [commentSent, setCommentSent] = useState(false)
@@ -397,6 +399,9 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
           <button className="btn btn-ghost" onClick={load} disabled={refreshing}>
             {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
+          <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            New task
+          </button>
         </div>
       </div>
       {error && <p className="field-note error">{error}</p>}
@@ -447,6 +452,16 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
           )}
         </section>
       ))}
+      {creating && (
+        <ClickupPushDialog
+          owner={status.userName ?? null}
+          onDone={() => {
+            setCreating(false)
+            load()
+          }}
+          onClose={() => setCreating(false)}
+        />
+      )}
       {completing && (
         <ClickupCompleteDialog
           task={completing}
