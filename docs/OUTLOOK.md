@@ -16,7 +16,45 @@ Worth ten minutes to confirm the clean route is really shut before
 committing to the bridge, because the test is free and the failure message
 is unambiguous.
 
-## Route A: Graph + your own app registration — test it, expect no
+## What the iPhone proves (and what it doesn't)
+
+Adding the mailbox to iPhone Mail as a "Microsoft Exchange" account is not
+you-with-a-password. iOS Mail connects as an Entra application called
+**Apple Internet Accounts** over OAuth, and that app needs *"Access
+mailboxes as the signed-in user via Exchange Web Services"* — not a
+low-impact permission, so it takes admin consent. Admins grant it
+tenant-wide in one click (`aka.ms/ConsentAppleApp`), and districts almost
+always do, so staff can get mail on their phones.
+
+That's a grant to one specific app identity. It does not extend to an app
+registered here.
+
+It does rule out the worst case, though. If user consent were blocked *and*
+nobody had approved Apple's app, the iPhone would have shown "Need admin
+approval." It didn't, so the tenant is in one of two states:
+
+- **(a)** an admin consented to Apple's app tenant-wide — says nothing
+  about Route A; or
+- **(b)** broad user consent is still enabled and the consent screen was
+  clicked through personally — in which case **Route A works**.
+
+Tell them apart by whether adding the account showed a permissions screen
+that had to be accepted. A list of permissions means (b). Straight from
+password + MFA to syncing means (a). Either way the Route A test below is
+definitive, and (b) is live enough odds to run that test before building
+anything else.
+
+### Being an Exchange client directly is not an option
+
+Four independent blocks:
+
+- EAS is a **licensed protocol**, granted to commercial mail clients.
+- Exchange Online has required **EAS 16.1+ since March 1 2026** (fully
+  enforced August 4 2026), so a hand-rolled client is refused outright.
+- EAS moved to OAuth, so it hits the **same consent wall** anyway.
+- It leans on **EWS**, blocked from October 1 2026.
+
+## Route A: Graph + your own app registration — test it first
 
 By default, Entra lets any user register an application in the tenant, so
 step one is probably open to you. Registering an app is not the problem.
@@ -25,9 +63,9 @@ step one is probably open to you. Registering an app is not the problem.
 so granting it requires either an admin or a tenant that still allows broad
 user consent. In July–August 2025 Microsoft flipped every tenant still on
 the legacy "users can consent to any app" setting over to the restrictive
-recommended policy. Unless someone deliberately re-opened it since, you'll
-get "Need admin approval" and there is no way around that from a
-non-admin account.
+recommended policy — which is why the base case is "Need admin approval".
+The iPhone evidence above is the reason to test rather than assume: if this
+tenant is in state (b), consent still works here.
 
 **Test it anyway — 10 minutes, no IT contact:**
 
@@ -113,8 +151,8 @@ that, EWS, is being blocked starting October 1 2026.
 
 ## Recommendation
 
-1. Run the Route A test. Ten minutes, and it either saves the whole bridge
-   or closes the question for good.
+1. Run the Route A test **first**. Ten minutes, and it either saves the
+   whole bridge or closes the question for good.
 2. Assuming it fails, build Route B. Start read-only: one flow, one folder,
    inbox triage on the Today screen. That proves the pipe with almost no
    code in Rowan — a folder watcher and a JSON parse.
@@ -145,6 +183,15 @@ Ranked by value per unit of work, once mail is reachable by any route:
    thread died, alongside the aging action items the digest already tracks.
 6. **Richer pre-meeting briefs** — recent mail with the attendees is the
    obvious missing input to the Today brief.
+
+## Stopgap, independent of all of it
+
+Rowan is Electron, so it could embed Outlook on the web in a tab and show
+mail inside the app with no API work at all. That satisfies "see my email
+in Rowan" and nothing else — no recaps, no generated replies, since there's
+no programmatic access to the messages. Microsoft also blocks sign-in from
+some embedded browsers, so it may simply refuse to load. Only worth doing
+if seeing mail in-app has value on its own.
 
 ## Privacy posture
 
