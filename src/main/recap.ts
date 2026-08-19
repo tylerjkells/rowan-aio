@@ -8,6 +8,7 @@ import { actionRollup, identityContext, SELF } from './identity'
 import { fetchClickupTasks } from './clickup'
 import { getSettings } from './settings'
 import { aiChat, aiReady } from './ai'
+import { stripDashes, VOICE_RULES } from './voice'
 import type { ActionRollupItem, DailyRecap, RecapMail } from '../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -216,6 +217,8 @@ export function startBriefWatch(): void {
 const SYSTEM = `You write a short morning brief for one person, from structured facts covering
 yesterday, overnight, and the day ahead.
 
+${VOICE_RULES}
+
 Rules:
 - Two or three short paragraphs, plain prose. No headings, no bullet lists, no markdown.
 - Lead with what needs them today: what wants an answer, what is overdue, what is due next,
@@ -274,7 +277,7 @@ export async function narrateRecap(recap: DailyRecap): Promise<{ ok: boolean; te
       system: SYSTEM,
       messages: [{ role: 'user', content: lines.join('\n') }]
     })
-    const text = result.text.trim()
+    const text = stripDashes(result.text.trim())
     if (!text) return { ok: false, error: 'The model came back empty.' }
     writeNarrative(recap.date, text)
     return { ok: true, text }

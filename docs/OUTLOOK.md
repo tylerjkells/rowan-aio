@@ -219,6 +219,46 @@ content* → *Parse JSON* → the Outlook connector's draft action → *Delete
 file*. Polling makes this the slow direction, about a minute, which is fine
 for something a human reviews anyway.
 
+Parse JSON schema:
+
+    {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string" },
+        "messageId": { "type": "string" },
+        "conversationId": { "type": ["string", "null"] },
+        "to": { "type": "string" },
+        "subject": { "type": "string" },
+        "body": { "type": "string" },
+        "queuedAt": { "type": "string" }
+      },
+      "required": ["kind", "messageId", "to", "subject", "body"]
+    }
+
+`conversationId` is nullable, which the auto-generated schema will not
+guess from a sample: generating from a file that happens to have one
+produces `"type": "string"`, and the flow then fails on any draft where it
+came back null.
+
+## House voice
+
+Anything the model writes for Tyler to read or send goes through
+`src/main/voice.ts`. The rules are adapted from the humanizer skill he uses
+for coursework, keeping what survives the move from an essay to a work
+email: the em dash ban, the AI vocabulary list, varied sentence length, no
+tidy summarizing closer, no mirrored parallel constructions, no reflexive
+lists of three.
+
+Deliberately left behind: "have opinions and react to the material", "let
+thoughts trail off", "open with a blunt one-word answer". That advice makes
+a discussion post read as human and makes an email to a colleague read as
+odd. The goal is sounding like Tyler, not beating a detector.
+
+`stripDashes()` is a backstop rather than the mechanism — the prompt does
+the real work, but one slipped em dash undoes the whole effect, so
+generated text gets swept afterwards too. It leaves dashes between digits
+alone, because "10-15 people" and "pages 4-7" are ranges, not prose.
+
 ### Why the brief is a poll, not a timer
 
 The written brief is one model call a day, cached to `recap.json` by date.

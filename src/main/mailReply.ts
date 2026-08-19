@@ -6,6 +6,7 @@ import { mailOutDir, readMailbox } from './mail'
 import { personProfile } from './people'
 import { detailsFor, readDirectory } from './directory'
 import { getSettings } from './settings'
+import { stripDashes, VOICE_RULES } from './voice'
 import type { MailDraftInput, MailDraftResult, MailMessage } from '../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -72,6 +73,8 @@ function senderContext(message: MailMessage): string {
 
 const SYSTEM = `You draft email replies on behalf of the user, in their voice.
 
+${VOICE_RULES}
+
 Rules:
 - Write only the reply body. No subject line, no "Here's a draft", no commentary.
 - Match the register of the message you are answering. A one-line question gets a one-line answer.
@@ -81,7 +84,10 @@ Rules:
 - You may reference the context you are given about the sender — outstanding
   commitments, past meetings — but only where it genuinely answers the message.
 - Plain text. No markdown, no bullet characters unless the reply really is a list.
-- Sign off with the user's first name alone, or no sign-off for a short internal reply.`
+- Sign off with the user's first name alone, or no sign-off for a short internal reply.
+- Write it the way a busy person actually types a reply, not the way an assistant
+  would compose one. No "I hope this email finds you well", no "Please don't
+  hesitate to reach out", no "Thank you for your email".`
 
 export async function draftMailReply(
   messageId: string,
@@ -117,7 +123,7 @@ export async function draftMailReply(
       messages: [{ role: 'user', content: parts.filter((p) => p !== '').join('\n') }]
     })
 
-    const text = result.text.trim()
+    const text = stripDashes(result.text.trim())
     if (!text) return { ok: false, error: 'The model came back empty. Try again.' }
     return { ok: true, body: text }
   } catch (err) {
@@ -126,6 +132,8 @@ export async function draftMailReply(
 }
 
 const SUMMARY_SYSTEM = `You summarize a single email for someone deciding what to do about it.
+
+${VOICE_RULES}
 
 Rules:
 - Three to five lines of plain text, no markdown, no headings.
@@ -164,7 +172,7 @@ export async function summarizeMailMessage(messageId: string): Promise<MailDraft
       ]
     })
 
-    const text = result.text.trim()
+    const text = stripDashes(result.text.trim())
     if (!text) return { ok: false, error: 'The model came back empty. Try again.' }
     return { ok: true, body: text }
   } catch (err) {
