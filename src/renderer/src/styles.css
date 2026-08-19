@@ -5206,3 +5206,107 @@ button.speaker-chip-btn:hover {
   line-height: 1.7;
   white-space: pre-wrap;
 }
+
+/* ---- mail setup guide ---- */
+
+.mail-guide {
+  max-width: 760px;
+  width: 92vw;
+}
+
+.guide-scroll {
+  max-height: 68vh;
+  overflow-y: auto;
+  padding-right: var(--s3);
+}
+
+.guide-intro {
+  margin: 0 0 var(--s4) 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+.guide-step {
+  margin-bottom: var(--s4);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.guide-step h4 {
+  margin: 0 0 var(--s2) 0;
+  font-size: 13.5px;
+}
+
+.guide-step p {
+  margin: 0 0 var(--s2) 0;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.guide-step code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-raised);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.guide-why {
+  color: var(--ink-faint);
+  font-size: 12.5px !important;
+}
+
+.guide-snippet {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  margin: 0 0 var(--s3) 0;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+}
+
+.guide-snippet code {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  font-size: 11.5px;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.guide-copy {
+  flex: none;
+  font-size: 11.5px;
+}
+
+.guide-list-plain {
+  margin: 0;
+  padding-left: var(--s4);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.guide-list-plain li {
+  margin-bottom: var(--s2);
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.empty-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+}

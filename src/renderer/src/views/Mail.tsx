@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { MailMessage, MailStatus } from '../../../shared/types'
 import { ClickupPushDialog } from '../ClickupPush'
 import { MailReplyDialog } from '../MailReply'
+import { MailGuideDialog } from '../MailGuide'
 
 function formatWhen(iso: string): string {
   const d = new Date(iso)
@@ -44,6 +45,7 @@ export function MailView({ onSettings }: { onSettings: () => void }): React.JSX.
   const [summarizing, setSummarizing] = useState<string | null>(null)
   const [rowError, setRowError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
 
   const load = useCallback(async (): Promise<void> => {
     setRefreshing(true)
@@ -83,9 +85,15 @@ export function MailView({ onSettings }: { onSettings: () => void }): React.JSX.
           the synced folder to get started.
           {status.error && <> ({status.error})</>}
         </p>
-        <button className="btn btn-primary" onClick={onSettings}>
-          Set it up in Settings
-        </button>
+        <div className="empty-actions">
+          <button className="btn btn-primary" onClick={onSettings}>
+            Set it up in Settings
+          </button>
+          <button className="btn" onClick={() => setGuideOpen(true)}>
+            Read the setup guide
+          </button>
+        </div>
+        {guideOpen && <MailGuideDialog onClose={() => setGuideOpen(false)} />}
       </div>
     )
   }
