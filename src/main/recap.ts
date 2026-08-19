@@ -9,7 +9,7 @@ import { fetchClickupTasks } from './clickup'
 import { getSettings } from './settings'
 import { aiChat, aiReady } from './ai'
 import { stripDashes, VOICE_RULES } from './voice'
-import type { ActionRollupItem, DailyRecap, RecapMail } from '../shared/types'
+import type { ActionRollupItem, DailyRecap, MailMessage, RecapMail } from '../shared/types'
 
 // ---------------------------------------------------------------------------
 // Morning brief: the day pulled together from everything Rowan already holds —
@@ -67,14 +67,43 @@ function writeNarrative(date: string, text: string): void {
   writeFileSync(recapFile(), JSON.stringify(trimmed, null, 2))
 }
 
-/** senders that never want an answer */
-const NO_REPLY = /(^|[.@])(no-?reply|do-?not-?reply|notifications?|alerts?|mailer)([.@]|$)/i
+/**
+ * Phrases that mean a person is waiting on you. A question mark alone is not
+ * enough: marketing mail and automated alerts are full of rhetorical ones
+ * ("Need help getting started?").
+ */
+const ASKS = [
+  /\b(can|could|would) you\b/i,
+  /\bare you able\b/i,
+  /\bplease (send|review|confirm|approve|advise|sign|complete|fill|provide|share)\b/i,
+  /\blet me know\b/i,
+  /\byour (thoughts|approval|input|feedback|sign.?off)\b/i,
+  /\b(any update|following up|circling back|checking in|gentle reminder)\b/i,
+  /\bby (end of day|eod|cob|monday|tuesday|wednesday|thursday|friday|tomorrow|next week)\b/i,
+  /\bneed (this|it|your|you to)\b/i,
+  /\bwhen (can|will|would) you\b/i,
+  /\bwaiting (on|for) (you|your)\b/i
+]
 
 /**
- * Mail worth surfacing since yesterday, with a rough "this one wants an
- * answer" flag. Deliberately crude — unread, from a human, and either asking
- * something or addressed to you alone.
+ * Does a person appear to be waiting on an answer?
+ *
+ * The first version of this was "unread, not obviously a robot, and either
+ * containing a question mark or addressed to one recipient". The last clause
+ * is true of nearly every email ever sent, so the whole thing collapsed into
+ * "unread" and the brief reported an inbox of junk as three things that could
+ * not wait. Being wrong here is expensive: a flag that fires on everything
+ * gets ignored, and then it fires on the one that mattered too.
  */
+function wantsReply(m: MailMessage): boolean {
+  if (m.isRead || m.automated) return false
+  const text = `${m.subject}\n${m.body}`.slice(0, 4000)
+  if (ASKS.some((re) => re.test(text))) return true
+  // a direct question from a human, not a subject-line teaser
+  return /\?/.test(m.body)
+}
+
+/** Mail worth surfacing since yesterday. */
 function recentMail(): RecapMail[] {
   const from = windowStart().getTime()
   return readMailbox()
@@ -85,10 +114,8 @@ function recentMail(): RecapMail[] {
       from: m.fromName ?? m.from,
       receivedAt: m.receivedAt,
       external: m.external,
-      needsReply:
-        !m.isRead &&
-        !NO_REPLY.test(m.from) &&
-        (/\?/.test(m.body) || m.to.length <= 1)
+      automated: m.automated,
+      needsReply: wantsReply(m)
     }))
 }
 
@@ -225,6 +252,10 @@ Rules:
   what their calendar does to the time available.
 - What happened yesterday matters only where it sets up today. Do not recap for its own sake.
 - State only what the facts support. Never invent a meeting, a task, a name, or a deadline.
+- Do not manufacture urgency. Only say something is pressing when a stated deadline, an overdue
+  date, or an explicit request supports it. If the facts do not say something is urgent, it is not.
+- Automated notifications are not work. Do not tell them to reply to one, and do not pad the brief
+  by narrating them. Mentioning that the inbox was mostly noise is fine; listing the noise is not.
 - Write to them directly ("you"), plainly, the way a good chief of staff would. No cheerleading, no filler.
 - If it is genuinely a quiet day, say so in one line rather than padding it.`
 
@@ -245,12 +276,18 @@ export async function narrateRecap(recap: DailyRecap): Promise<{ ok: boolean; te
     }
 
     const needsReply = recap.mail.filter((m) => m.needsReply)
+    const automated = recap.mail.filter((m) => m.automated).length
     lines.push(
       '',
-      `Mail since yesterday: ${recap.mail.length} in, ${needsReply.length} looking like they want a reply.`
+      `Mail since yesterday: ${recap.mail.length} in total, of which ${automated} are automated ` +
+        `notifications nobody is waiting on. ${needsReply.length} look like someone is waiting ` +
+        `for an answer` + (needsReply.length ? ':' : '.')
     )
     for (const m of needsReply.slice(0, 10)) {
       lines.push(`- "${m.subject}" from ${m.from}`)
+    }
+    if (!needsReply.length && recap.mail.length) {
+      lines.push('Nothing in the inbox is waiting on a reply from you.')
     }
 
     lines.push('', recap.myOpen.length ? 'Your open action items:' : 'Your open action items: none.')
