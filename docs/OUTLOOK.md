@@ -1,124 +1,154 @@
 # Outlook / email integration — feasibility
 
-Status: **assessment only, nothing built.** Written to answer "is this real?"
-before any code gets written.
+Status: **assessment only, nothing built.**
+
+Constraints this is written against: **no IT involvement**, and **new Outlook**
+(not classic).
 
 ## The short version
 
-Technically everything on the wish list is buildable, and most of it is a
-small amount of work on top of what the app already does. The whole thing
-hinges on one non-technical question:
+It's doable without IT, but not the obvious way. The clean route — an app
+registration with `Mail.Read` — almost certainly hits a wall you can't get
+past on your own. The route that does work is a **Power Automate flow
+bridging Outlook to a OneDrive folder that Rowan reads off local disk.**
 
-> **Will IT approve an Entra ID app registration with mail permissions?**
+Worth ten minutes to confirm the clean route is really shut before
+committing to the bridge, because the test is free and the failure message
+is unambiguous.
 
-Unlike the calendar, there is no back door. The calendar works because
-Outlook lets you publish an iCal feed to a secret URL — a read-only escape
-hatch that needs nobody's approval. **Mail has no equivalent.** Every route
-to a mailbox goes through an authenticated Microsoft API.
+## Route A: Graph + your own app registration — test it, expect no
 
-So: ask IT first, build second. Everything below assumes the answer.
+By default, Entra lets any user register an application in the tenant, so
+step one is probably open to you. Registering an app is not the problem.
 
-## The three routes, honestly
+**Consent is.** `Mail.Read` isn't in Microsoft's low-impact permission set,
+so granting it requires either an admin or a tenant that still allows broad
+user consent. In July–August 2025 Microsoft flipped every tenant still on
+the legacy "users can consent to any app" setting over to the restrictive
+recommended policy. Unless someone deliberately re-opened it since, you'll
+get "Need admin approval" and there is no way around that from a
+non-admin account.
 
-### A. Microsoft Graph + OAuth — the real one
+**Test it anyway — 10 minutes, no IT contact:**
 
-Delegated scopes needed: `Mail.Read` (read), `Mail.ReadWrite` (create
-drafts), `Mail.Send` (only if we ever send), `offline_access` (refresh
-tokens), `User.Read`.
+1. portal.azure.com → Entra ID → App registrations → New registration.
+   Single tenant, redirect URI `http://localhost` (Public client/native).
+   *If this screen is greyed out, app registration is disabled and Route A
+   is dead here.*
+2. API permissions → Microsoft Graph → Delegated → `Mail.Read`,
+   `Mail.ReadWrite`, `offline_access`.
+3. Build the consent URL for that client ID and open it in a browser signed
+   in as yourself.
 
-The catch: `Mail.Read` is **not** in Microsoft's low-impact permission set,
-so under the default user-consent policy an ordinary user cannot consent to
-it for themselves — a tenant admin has to grant consent. Microsoft has been
-tightening this, not loosening it (user consent is now off by default in new
-tenants). In a district tenant handling student data, assume this is a
-deliberate policy, not an oversight.
+Three possible outcomes: it consents (great — Route A is open, build the
+real thing); "Need admin approval" (Route A is dead); or you never reach
+step 1 (also dead). Any of the three answers the question permanently.
 
-If IT says yes, the rest is routine:
+There's a known trick of borrowing a first-party Microsoft client ID to
+dodge the consent prompt. It violates the terms, it's exactly what tenant
+security tooling looks for, and it can get an account flagged. Not building
+on that.
 
-- Auth: authorization code + PKCE in a `BrowserWindow`, loopback redirect.
-  Public client, no client secret shipped in the app.
-- Token storage: refresh token through `safeStorage`, exactly the shape
-  `settings.ts` already uses for the ClickUp token and the iCal URL.
-- Sync: `GET /me/mailFolders/inbox/messages/delta` gives cheap incremental
-  pulls — same "fetch, diff against a local snapshot" pattern the ClickUp
-  changelog already uses in `clickup.ts`.
-- Drafts: `POST /me/messages/{id}/createReply`, then PATCH the body. The
-  draft lands in Outlook; the user sends it from there.
+## Route B: Power Automate ↔ OneDrive bridge — the one that works
 
-Rough effort: the mail code is a day. The OAuth plumbing and the
-token-refresh edge cases are the other two.
+No app registration, no consent prompt, no OAuth code in Rowan at all.
+Power Automate's Microsoft 365 Outlook connector runs as *you*, with a
+connection you authorize yourself. Files land in OneDrive, the OneDrive
+client syncs them to disk, and Rowan reads a local folder — which is a
+better fit for a local-first app than a token-refresh loop anyway.
 
-### B. Local Outlook COM (Windows only) — works today, has an expiry date
+**Inbound (read mail):**
 
-If classic Outlook for Windows is installed, the app can drive
-`Outlook.Application` over COM (via a PowerShell bridge) to read the inbox
-and create drafts. No app registration, no IT approval, no tokens — it
-borrows the session of the Outlook the user is already signed into.
+- Trigger: *When a new email arrives (V3)* — webhook-based, near-instant.
+- Action: *Create file* in OneDrive at `/Apps/Rowan/in/{messageId}.json`
+  with subject, from, to, received time, conversation ID, `webLink`, and
+  body.
+- Rowan: `fs.watch` on the synced folder. Same shape as the existing
+  calendar poll, minus the network.
 
-The problem: **new Outlook does not support COM, VBA, or MAPI at all.**
-Classic Outlook is supported through 2029 and the classic/new toggle is not
-being removed before 2028, but this is a path with a known end date, and it
-breaks the day IT flips someone to new Outlook. Reasonable as a stopgap;
-bad as the foundation.
+**Outbound (reply drafts):**
 
-### C. IMAP with an app password — dead end
+- Rowan writes `/Apps/Rowan/out/{id}.json` with the conversation ID and the
+  drafted body.
+- Trigger: *When a file is created* (OneDrive) — polling, ~1 min.
+- Action: *Draft an email message* (the connector has a real draft action,
+  so nothing gets sent), then delete the file.
+- The draft appears in Outlook. You review and send it there. Rowan never
+  sends mail.
 
-Basic auth for IMAP against Exchange Online is off. IMAP with OAuth needs
-the same app registration and the same admin consent as route A, with a
-worse API. No shortcut here.
+**What can still block this:** a DLP policy on the Outlook or OneDrive
+connectors, or Power Automate switched off tenant-wide. You'll find out in
+about two minutes at make.powerautomate.com, again without asking anyone.
 
-## The privacy question
+**Honest tradeoffs:** ~1 min latency on the outbound hop. Mail bodies pass
+through Power Automate and sit in your OneDrive — still entirely inside
+your own M365 tenant, so no worse than where that mail already lives, but
+it is a copy, and flows are visible to an admin who goes looking. This is
+sanctioned self-service tooling, not a workaround, but it isn't invisible
+either.
 
-This is a bigger deal than the calendar was. The guiding constraint in
-ROADMAP.md is that transcripts and audio stay local, and only what you
-explicitly send leaves the machine. Mail bodies are exactly the kind of
-content that constraint exists to protect.
+## Route C: Outlook web add-in — only for in-context replies
 
-Proposed posture, same as today's:
+Works on new Outlook, self-installable by you (Settings → Add-ins → Custom
+Addins → Add from file; needs the *My Custom Apps* Exchange role, which
+users have by default, plus Developer Mode in Trust Center). Load-from-URL
+was disabled for security, so it's file-manifest only, and the add-in page
+itself has to be hosted over HTTPS — GitHub Pages would do.
 
-- Mail is cached locally (encrypted at rest alongside settings).
-- Nothing goes to a model on a timer. A thread reaches Claude/OpenAI only
-  when the user clicks "draft a reply" or "recap my day" on it.
-- Drafts are written back to Outlook as drafts. **The app never sends.**
-  Send-from-app is the last thing to build, if ever.
+It reads the message you're currently looking at via Office.js with no
+Graph consent at all, and can call Rowan on `http://localhost` (Chromium
+exempts localhost from mixed-content blocking). Good for a "draft a reply
+with Rowan's context" button living inside Outlook. Useless for daily
+recaps, because it only ever sees the open message — and the old way around
+that, EWS, is being blocked starting October 1 2026.
 
-## What's actually worth building
+## Definitively dead
 
-Ranked by value per unit of work, once auth exists:
+- **COM / `Outlook.Application`** — new Outlook has no COM, VBA, or MAPI.
+  This was the no-approval-needed answer for classic Outlook only.
+- **IMAP with an app password** — basic auth is off; IMAP OAuth needs the
+  same consent as Route A.
+- **EWS** — blocked from October 1 2026 without a tenant allowlist.
+- **Reading a local mail store** — new Outlook keeps no accessible `.ost`.
+
+## Recommendation
+
+1. Run the Route A test. Ten minutes, and it either saves the whole bridge
+   or closes the question for good.
+2. Assuming it fails, build Route B. Start read-only: one flow, one folder,
+   inbox triage on the Today screen. That proves the pipe with almost no
+   code in Rowan — a folder watcher and a JSON parse.
+3. Add the outbound draft flow once reading feels good.
+4. Route C later, only if you want the button inside Outlook rather than
+   inside Rowan.
+
+## What's worth building on top
+
+Ranked by value per unit of work, once mail is reachable by any route:
 
 1. **Inbox on Today** — a triage strip, not a mail client. Unread, flagged,
-   and "you asked a question and nobody answered." The app should never try
-   to replace Outlook; it should tell you what Outlook is hiding from you.
-2. **Draft replies** — the follow-up email drafting on the meeting page
-   already does this shape of work. The difference is context: a reply draft
-   can be fed the thread *plus* the person's page *plus* the open action
-   items that person owns. That's a draft no mail client can write.
+   and "you asked a question and nobody answered." Rowan should tell you
+   what Outlook is hiding, not replace it.
+2. **Draft replies** — the follow-up email drafting on the meeting page is
+   already this shape. The difference is context: a reply draft can be fed
+   the thread *plus* the person's page *plus* the open action items that
+   person owes you. No mail client can write that draft.
 3. **Daily recap** — `digest.ts` already assembles a weekly review locally
-   from the library, with no model call. Add mail as another input and the
-   daily version writes itself: what landed, what needs an answer, what you
-   promised in writing today, merged with meeting action items and the
-   calendar.
+   with no model call. Add mail as an input and the daily version writes
+   itself: what landed, what needs an answer, what you promised in writing,
+   merged with meeting action items and the calendar.
 4. **Email ↔ meeting ↔ ClickUp** — the thing nothing else can do, because
    nothing else has all three. "Turn this email into a ClickUp task" is now
-   a two-line change (the push dialog was made standalone for the Projects
-   page). "This thread belongs to the Tuesday budget series" links mail into
-   the meeting history. Person pages gain a mail column next to meetings and
-   action items.
+   nearly free (the push dialog is standalone as of the Projects page work).
+   Threads can join a meeting series; person pages gain a mail column.
 5. **Follow-up chasing** — sent mail where you asked something and the
-   thread died. Pairs with the aging action items the digest already tracks.
-6. **Richer pre-meeting briefs** — the Today brief already pulls decisions
-   and open items from past meetings; recent mail with the attendees is the
-   obvious missing input.
+   thread died, alongside the aging action items the digest already tracks.
+6. **Richer pre-meeting briefs** — recent mail with the attendees is the
+   obvious missing input to the Today brief.
 
-## Suggested order
+## Privacy posture
 
-- **Phase 0** — ask IT about an app registration with `Mail.Read` +
-  `Mail.ReadWrite`. Costs nothing, decides everything.
-- **Phase 1** — OAuth + read-only inbox + Today triage.
-- **Phase 2** — reply drafts (written to Outlook drafts, never sent).
-- **Phase 3** — daily recap, follow-up chasing, cross-links into meetings,
-  people, and ClickUp.
-
-If Phase 0 comes back "no", route B (COM against classic Outlook) makes
-Phases 1–2 possible on Tyler's machine alone, with the understanding that
-it dies when he moves to new Outlook.
+Whatever the route, keep the ROADMAP constraint intact: mail is cached
+locally, nothing goes to a model on a timer, and a thread reaches
+Claude/OpenAI only when you click "draft a reply" or "recap my day" on it.
+Drafts are written back as drafts. The app never sends.
