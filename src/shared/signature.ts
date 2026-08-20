@@ -86,8 +86,13 @@ export function sanitizeSignatureHtml(raw: string): string {
  * blank block Outlook parks after a signature sits *inside* the wrapper div,
  * so the sweep has to see past the closing tags to find it.
  */
-const TRAILING_BLANK =
-  /(<(p|div)[^>]*>(?:\s|&nbsp;|<br\s*\/?>)*<\/\2>\s*)(?=(?:<\/(?:div|p|td|tr|table)>\s*)*$)/i
+const BLANK_INSIDE =
+  '(?:\\s|&nbsp;|<br\\s*/?>|</?(?:span|b|i|u|em|strong|font|small)[^>]*>)*'
+
+const TRAILING_BLANK = new RegExp(
+  `(<(p|div)[^>]*>${BLANK_INSIDE}</\\2>\\s*)(?=(?:</(?:div|p|td|tr|table)>\\s*)*$)`,
+  'i'
+)
 
 function collapse(html: string): string {
   let out = html.replace(/\s*\n\s*/g, ' ')
