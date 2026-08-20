@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.23.0': [
+    'Reply drafts now land inside the conversation they answer. Until now a draft went to Outlook as a brand new message with RE: in the subject and nothing tying it to the original, so it sat apart from the thread. Rowan asks Outlook to build a real reply instead, which arrives already addressed, already in the thread, with the original quoted underneath. The drafts flow in Power Automate needs rebuilding for this — Settings → Mail → setup guide walks through the two actions that replace the old one.',
+    'Your signature goes on every draft. Outlook only signs what you compose yourself, so drafts filed by Rowan used to arrive bare. Paste your signature once into Settings → Mail and it rides along on everything Rowan files. Copy it straight out of an Outlook message and the formatting comes with it.',
+    'A Copy button on reply drafts, for when you would rather paste it somewhere yourself than send it to Outlook.',
+    'Dialogs use the room they are given. Every popup in the app — replying, editing a query, editing a person — was pinned to the width of a small yes/no box no matter how much was in it. They now take three quarters of the window, so a SQL query is readable without scrolling sideways.'
+  ],
   '0.22.2': [
     'Recordings really do play and skip around now. The 0.22.1 fix loaded a recording into memory so that seeking would be instant, but the app’s own security policy blocked it from doing that, so every meeting quietly fell back to the slow path the fix existed to replace — and that path cannot jump ahead in a long recording at all. It waits for the audio to arrive in order, which on a 55-minute meeting never finishes. Checked end to end this time, against a recording the size of a full hour.'
   ],
