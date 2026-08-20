@@ -28,7 +28,7 @@ function Snippet({ text }: { text: string }): React.JSX.Element {
 
 const PARSE_SCHEMA = `{"type":"object","properties":{"kind":{"type":"string"},"messageId":{"type":"string"},"conversationId":{"type":["string","null"]},"to":{"type":"string"},"subject":{"type":"string"},"body":{"type":"string"},"bodyHtml":{"type":"string"},"queuedAt":{"type":"string"}},"required":["kind","messageId","to","subject","body"]}`
 
-const PATCH_BODY = `{"body":{"contentType":"HTML","content":"@{concat('<div>', coalesce(body('Parse_JSON')?['bodyHtml'], body('Parse_JSON')?['body']), '</div><br>', body('Create_reply')?['body']?['content'])}"}}`
+const PATCH_BODY = `setProperty(json('{}'), 'body', setProperty(json('{"contentType":"HTML"}'), 'content', concat('<div>', coalesce(body('Parse_JSON')?['bodyHtml'], body('Parse_JSON')?['body']), '</div><br>', body('Create_reply')?['body']?['content'])))`
 
 export function MailGuideDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null)
@@ -137,8 +137,18 @@ export function MailGuideDialog({ onClose }: { onClose: () => void }): React.JSX
             <code>application/json</code>), and this URL:
           </p>
           <Snippet text="concat('https://graph.microsoft.com/v1.0/me/messages/', encodeUriComponent(body('Create_reply')?['id']))" />
-          <p>And in the Body box:</p>
+          <p>
+            And the Body box, which has to go on the <em>expression</em> tab — this builds
+            an object rather than typing out JSON:
+          </p>
           <Snippet text={PATCH_BODY} />
+          <p className="guide-why">
+            Written as literal JSON with the reply dropped into a string, this fails on the
+            first real email. Message HTML is full of double quotes, and each one closes the
+            string early — Graph answers 400, &ldquo;unable to read JSON request
+            payload&rdquo;. Building the object with <code>setProperty</code> hands the
+            escaping to Power Automate, which gets it right.
+          </p>
           <p className="guide-why">
             <code>createReply</code> makes an empty draft that is already inside the
             conversation, already addressed, with the original quoted underneath. The PATCH
@@ -220,6 +230,12 @@ export function MailGuideDialog({ onClose }: { onClose: () => void }): React.JSX
               when it moves between folders, so a reply drafted long after the mail was
               filed away can point at an id that no longer exists. Answering from the Mail
               page while the message is still in the Inbox avoids it.
+            </li>
+            <li>
+              <strong>&ldquo;Unable to read JSON request payload&rdquo; on Fill reply</strong>{' '}
+              — the Body box holds literal JSON instead of the{' '}
+              <code>setProperty</code> expression above. Quotes inside the message HTML break
+              a hand-written payload every time.
             </li>
             <li>
               <strong>The reply is empty, or the quoted history is missing</strong> — the

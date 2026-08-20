@@ -369,16 +369,18 @@ email message* with two actions:
 
       concat('https://graph.microsoft.com/v1.0/me/messages/', encodeUriComponent(body('Create_reply')?['id']))
 
-  Headers `Content-Type: application/json`, Body:
+  Headers `Content-Type: application/json`, and Body as an **expression**:
 
-      {
-        "body": {
-          "contentType": "HTML",
-          "content": "@{concat('<div>', coalesce(body('Parse_JSON')?['bodyHtml'], body('Parse_JSON')?['body']), '</div><br>', body('Create_reply')?['body']?['content'])}"
-        }
-      }
+      setProperty(json('{}'), 'body', setProperty(json('{"contentType":"HTML"}'), 'content', concat('<div>', coalesce(body('Parse_JSON')?['bodyHtml'], body('Parse_JSON')?['body']), '</div><br>', body('Create_reply')?['body']?['content'])))
 
   Rowan's text goes first, the quoted history Graph generated follows.
+
+  It has to be built as an object. The obvious version — literal JSON with
+  `"content": "@{concat(…)}"` — passes a hand test and then fails on the
+  first real message: email HTML is full of double quotes, every one of
+  them ends the JSON string early, and Graph replies 400 "Unable to read
+  JSON request payload". `setProperty` leaves the escaping to Logic Apps,
+  which serializes the object correctly whatever is inside it.
 
 *Get file content*, *Parse JSON*, and *Delete file* are untouched. The
 payload's `to` and `subject` stop being read — `createReply` sets both from
