@@ -5,7 +5,7 @@ import { aiChat } from './ai'
 import { mailOutDir, readMailbox } from './mail'
 import { personProfile } from './people'
 import { detailsFor, readDirectory } from './directory'
-import { getSettings } from './settings'
+import { getMailSignature, getSettings } from './settings'
 import { stripDashes, VOICE_RULES } from './voice'
 import type { MailDraftInput, MailDraftResult, MailMessage } from '../shared/types'
 
@@ -206,15 +206,24 @@ export function queueMailDraft(input: MailDraftInput): { ok: boolean; error?: st
 
     const message = readMailbox().find((m) => m.id === input.messageId)
     const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 17)
+
+    // Outlook only applies a signature to what you compose yourself, so a
+    // draft the flow creates arrives bare. Rowan appends its own copy.
+    const signature = getMailSignature()
+    const body = signature.text ? `${input.body}\n\n${signature.text}` : input.body
+    const bodyHtml = signature.html
+      ? `${toHtml(input.body)}<br><br>${signature.html}`
+      : toHtml(input.body)
+
     const payload = {
       kind: 'reply',
       messageId: input.messageId,
       conversationId: message?.conversationId ?? null,
       to: message?.from ?? '',
       subject: message ? `RE: ${message.subject}` : 'RE:',
-      body: input.body,
+      body,
       /** the same text as HTML, for the connector's rich-text body field */
-      bodyHtml: toHtml(input.body),
+      bodyHtml,
       queuedAt: new Date().toISOString()
     }
     writeFileSync(join(dir, `${stamp}-${randomUUID()}.json`), JSON.stringify(payload, null, 2))

@@ -28,6 +28,8 @@ function Snippet({ text }: { text: string }): React.JSX.Element {
 
 const PARSE_SCHEMA = `{"type":"object","properties":{"kind":{"type":"string"},"messageId":{"type":"string"},"conversationId":{"type":["string","null"]},"to":{"type":"string"},"subject":{"type":"string"},"body":{"type":"string"},"bodyHtml":{"type":"string"},"queuedAt":{"type":"string"}},"required":["kind","messageId","to","subject","body"]}`
 
+const PATCH_BODY = `setProperty(json('{}'), 'body', setProperty(json('{"contentType":"HTML"}'), 'content', concat('<div>', coalesce(body('Parse_JSON')?['bodyHtml'], body('Parse_JSON')?['body']), '</div><br>', body('Create_reply')?['body']?['content'])))`
+
 export function MailGuideDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null)
 
@@ -53,7 +55,7 @@ export function MailGuideDialog({ onClose }: { onClose: () => void }): React.JSX
           grant yourself. So mail comes the long way round: a Power Automate flow files each
           message into OneDrive, OneDrive syncs it to this PC, and Rowan reads the folder. No
           password, no tokens, nothing to approve. A second flow carries replies back the
-          other way as Outlook drafts.
+          other way, landing them in Outlook as drafts inside the thread they answer.
         </p>
 
         <section className="guide-step">
@@ -117,18 +119,52 @@ export function MailGuideDialog({ onClose }: { onClose: () => void }): React.JSX
             on any draft where one isn&rsquo;t.
           </p>
           <p>
-            <strong>Draft an email message</strong> — To takes the <code>to</code> field from
-            Parse JSON (make sure it&rsquo;s the token, not the literal word), Subject takes{' '}
-            <code>subject</code>, and Body takes an expression:
+            <strong>Create reply</strong> — connector{' '}
+            <strong>HTTP with Microsoft Entra ID (preauthorized)</strong>, action{' '}
+            <em>Invoke an HTTP request</em>. The first time, it asks for a connection: put{' '}
+            <code>https://graph.microsoft.com</code> in <em>both</em> the Entra ID Resource
+            URI and the Base Resource URL boxes, then sign in as yourself. Method{' '}
+            <strong>POST</strong>, no headers, no body, and the URL on the expression tab:
           </p>
-          <Snippet text="coalesce(body('Parse_JSON')?['bodyHtml'], body('Parse_JSON')?['body'])" />
+          <Snippet text="concat('https://graph.microsoft.com/v1.0/me/messages/', encodeUriComponent(body('Parse_JSON')?['messageId']), '/createReply')" />
           <p className="guide-why">
-            The Body box is a rich-text field, so the HTML version keeps your line breaks.
-            The fallback covers drafts queued by an older version of Rowan.
+            Rename this action to exactly <em>Create reply</em>. The next step calls it by
+            name, and Power Automate turns the space into an underscore behind the scenes.
+          </p>
+          <p>
+            <strong>Fill reply</strong> — a second <em>Invoke an HTTP request</em>. Method{' '}
+            <strong>PATCH</strong>, one header (<code>Content-Type</code> /{' '}
+            <code>application/json</code>), and this URL:
+          </p>
+          <Snippet text="concat('https://graph.microsoft.com/v1.0/me/messages/', encodeUriComponent(body('Create_reply')?['id']))" />
+          <p>
+            And the Body box, which has to go on the <em>expression</em> tab — this builds
+            an object rather than typing out JSON:
+          </p>
+          <Snippet text={PATCH_BODY} />
+          <p className="guide-why">
+            Written as literal JSON with the reply dropped into a string, this fails on the
+            first real email. Message HTML is full of double quotes, and each one closes the
+            string early — Graph answers 400, &ldquo;unable to read JSON request
+            payload&rdquo;. Building the object with <code>setProperty</code> hands the
+            escaping to Power Automate, which gets it right.
+          </p>
+          <p className="guide-why">
+            <code>createReply</code> makes an empty draft that is already inside the
+            conversation, already addressed, with the original quoted underneath. The PATCH
+            drops your reply in above it. The Outlook connector cannot do this — its draft
+            action builds a brand new message, which is why replies used to land detached
+            from the thread they answered.
           </p>
           <p>
             <strong>Delete file</strong> — the trigger&rsquo;s <code>Identifier</code> again.
             Skip this and the folder fills up and every rerun makes a duplicate draft.
+          </p>
+          <p className="guide-why">
+            Power Automate marks this connector premium, and the flow checker will warn that
+            the owner needs a Premium license. The flow still saved and ran without one when
+            this was set up. If that ever changes, the fallback is the Copy button on a draft:
+            paste it into a reply you start in Outlook yourself.
           </p>
         </section>
 
@@ -140,6 +176,30 @@ export function MailGuideDialog({ onClose }: { onClose: () => void }): React.JSX
             <em>contains</em> <code>in</code>, not <code>in</code> itself.
           </p>
           <p>Send yourself a test email. It should appear on the Mail page within a minute.</p>
+        </section>
+
+        <section className="guide-step">
+          <h4>5. Your signature</h4>
+          <p>
+            Outlook only puts a signature on a message you compose yourself, so a draft the
+            flow creates arrives without one. Rowan carries its own copy instead.
+          </p>
+          <p>
+            Open a new message in Outlook, select the signature, copy it, and paste it into
+            the <strong>Signature</strong> box under Settings → Mail. The formatting comes
+            across with it — the clipboard carries Outlook&rsquo;s own HTML alongside the
+            plain text.
+          </p>
+          <p className="guide-why">
+            Images are dropped on purpose. A pasted logo arrives as a reference to a
+            temporary file on this PC, which resolves to nothing by the time the draft
+            reaches Outlook, so the choice was a broken image or none. Everything else —
+            fonts, colours, sizes, links — survives.
+          </p>
+          <p>
+            Worth reading what lands in the box rather than trusting it. Signatures get
+            copied between colleagues and quietly keep the wrong address behind the link.
+          </p>
         </section>
 
         <section className="guide-step">
@@ -166,9 +226,22 @@ export function MailGuideDialog({ onClose }: { onClose: () => void }): React.JSX
               present.
             </li>
             <li>
-              <strong>Drafts go to the wrong person</strong> — the To box is a people picker
-              and will happily match a directory name. It has to hold the{' '}
-              <code>to</code> token from Parse JSON.
+              <strong>404 from Create reply</strong> — Exchange changes a message&rsquo;s id
+              when it moves between folders, so a reply drafted long after the mail was
+              filed away can point at an id that no longer exists. Answering from the Mail
+              page while the message is still in the Inbox avoids it.
+            </li>
+            <li>
+              <strong>&ldquo;Unable to read JSON request payload&rdquo; on Fill reply</strong>{' '}
+              — the Body box holds literal JSON instead of the{' '}
+              <code>setProperty</code> expression above. Quotes inside the message HTML break
+              a hand-written payload every time.
+            </li>
+            <li>
+              <strong>The reply is empty, or the quoted history is missing</strong> — the
+              PATCH is naming the previous action wrongly. It has to be{' '}
+              <code>Create_reply</code>, underscore and all, matching whatever the action is
+              actually called.
             </li>
           </ul>
         </section>

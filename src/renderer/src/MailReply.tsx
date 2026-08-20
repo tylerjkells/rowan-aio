@@ -19,10 +19,15 @@ export function MailReplyDialog({
   const [drafting, setDrafting] = useState(false)
   const [queued, setQueued] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [signed, setSigned] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     ref.current?.showModal()
+    // the signature is appended on the way out, so say so rather than
+    // pasting it into a box the model is about to rewrite
+    window.scribe.settings.get().then((s) => setSigned(!!s.mailSignatureHtml))
   }, [])
 
   async function draft(): Promise<void> {
@@ -42,6 +47,13 @@ export function MailReplyDialog({
     setBusy(false)
     if (result.ok) setQueued(true)
     else setError(result.error ?? 'Could not file the draft')
+  }
+
+  async function copyDraft(): Promise<void> {
+    if (!body.trim()) return
+    await navigator.clipboard.writeText(body.trim())
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1800)
   }
 
   return (
@@ -76,20 +88,35 @@ export function MailReplyDialog({
         </span>
       </div>
 
-      <label className="pd-field">
-        <span>Draft</span>
+      <div className="pd-field">
+        <div className="mail-reply-draft-head">
+          <label htmlFor="mail-reply-draft">Draft</label>
+          <button
+            type="button"
+            className="btn btn-ghost mail-reply-copy"
+            onClick={copyDraft}
+            disabled={!body.trim()}
+          >
+            {copied ? 'Copied ✓' : 'Copy'}
+          </button>
+        </div>
         <textarea
+          id="mail-reply-draft"
           className="text-input mail-reply-body"
           value={body}
           onChange={(e) => {
             setBody(e.target.value)
             setQueued(false)
+            setCopied(false)
           }}
           rows={14}
           placeholder="Draft a reply above, or write one yourself."
         />
-      </label>
+      </div>
 
+      {signed && !queued && (
+        <p className="field-note">Your signature is added when this is filed.</p>
+      )}
       {error && <p className="field-note error">{error}</p>}
       {queued && (
         <p className="field-note ok">

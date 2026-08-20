@@ -174,7 +174,9 @@ that, EWS, is being blocked starting October 1 2026.
 3. ~~Build the read side.~~ Done — `src/main/mail.ts` plus a Mail view.
 4. ~~Reply drafting, summaries, morning brief.~~ Done — see below. The
    outbound flow still needs building in Power Automate.
-5. Next: capturing Sent Items so "you asked and nobody answered" works, and
+5. ~~Reply drafts that join the thread.~~ Done — the drafts flow calls
+   Graph's `createReply` through the preauthorized Entra ID connector.
+6. Next: capturing Sent Items so "you asked and nobody answered" works, and
    pruning the bridge folder.
 
 ## How the read side is wired
@@ -267,6 +269,123 @@ contains `<`, `>` or `&`, which Logic Apps string functions would mangle.
 guess from a sample: generating from a file that happens to have one
 produces `"type": "string"`, and the flow then fails on any draft where it
 came back null.
+
+### The signature
+
+Outlook applies a signature when *you* open a compose window. A draft the
+flow creates never passes through that code path, so it arrives bare — and
+the connector has no signature setting to turn on.
+
+So Rowan carries the signature itself. Settings → Mail has a paste box: copy
+the signature out of a new Outlook message and paste it there. The clipboard
+carries Outlook's HTML alongside the plain text, so the formatting survives
+the trip. `src/shared/signature.ts` strips it back to inline markup —
+stylesheets, `mso-` classes, conditional comments, and namespaced Word tags
+all go, because none of them mean anything in a mail body. Scripts, event
+handlers, and `javascript:` hrefs go for the obvious reason: the same HTML
+is put back into the Settings page's DOM.
+
+Images are dropped on purpose. A pasted logo arrives as `cid:image001.png`
+or a path into `%TEMP%\msohtmlclip1`, neither of which resolves once the
+draft reaches Outlook, so the choice is a broken image icon or no image.
+
+`queueMailDraft()` appends it to both `body` and `bodyHtml`, so the draft
+carries a signature whichever field the flow reads. Nothing in the flow
+changes.
+
+### Why drafts don't join the thread — and the fix
+
+*Draft an email message* creates a **new** message. Exchange stamps a
+conversation onto an item when it is created, so a fresh draft gets its own
+`ConversationId` and `ConversationIndex` and never joins the original. The
+`RE:` subject makes it *look* like a reply and nothing more; the recipient's
+client has no `In-Reply-To` or `References` headers to thread on either, and
+the connector gives no way to set them.
+
+Nothing Rowan writes into the file can fix that — the threading is decided
+by *which Outlook action creates the draft*, and no action in the Office 365
+Outlook connector creates a draft in an existing thread. *Reply to email
+(V3)* threads correctly and **sends**, which breaks the one rule this whole
+design exists to keep.
+
+The action that does both is Graph's `createReply`, reachable from a flow
+through the **HTTP with Microsoft Entra ID (preauthorized)** connector. It
+runs as you with a connection you authorize yourself — the same posture as
+the Outlook connector, so still no app registration and no admin approval
+for `Rowan-AIO`. The preauthorized variant is the one to pick: it is a
+Microsoft first-party app already consented for Graph, which is exactly the
+wall Route A hit.
+
+**Tested 20 Aug 2026 — all three checks passed.** Sign-in completed with no
+consent prompt, `GET /me/messages` returned 200, a message id straight out
+of the bridge's `in` folder resolved 200 against Graph, and `createReply`
+returned 201 with a properly threaded draft appearing in Outlook.
+
+One caveat: the connector is flagged premium, and the flow checker warns
+that the owner needs a Power Automate Premium license. The flow saved and
+ran anyway. Microsoft enforces this inconsistently and can start enforcing
+it later, so this is working-but-not-guaranteed rather than settled. The
+free fallback is the Copy button on a reply draft, pasted into a reply
+started in Outlook — which threads and signs itself for the same reason
+Outlook always has.
+
+**The checks, kept for when this has to be re-run:**
+
+1. make.powerautomate.com → **Create** → **Instant cloud flow** → *Manually
+   trigger a flow*.
+2. New step → **HTTP with Microsoft Entra ID** → *Invoke an HTTP request*.
+3. Create the connection: Base Resource URL and Microsoft Entra ID Resource
+   URI both `https://graph.microsoft.com`. Sign in.
+   *"Need admin approval" here would mean the route is closed. It didn't
+   ask.*
+4. Method `GET`, URL:
+
+       https://graph.microsoft.com/v1.0/me/messages?$top=1&$select=subject
+
+   Save and run. A 200 with a subject in it means the route is open.
+5. One more check, because the whole rebuild rests on it: open any file in
+   the bridge's `in` folder, copy its `id`, and GET
+
+       https://graph.microsoft.com/v1.0/me/messages/{that id}
+
+   The connector's message ids share Graph's id space, so this should also
+   come back 200. If it 404s, the flow has to look the message up by
+   `internetMessageId` instead and the payload needs that field added.
+
+**The rebuild.** Only the drafts flow changes; the
+inbound flow and everything in Rowan stay as they are. Replace *Draft an
+email message* with two actions:
+
+- **Invoke an HTTP request** (rename it `Create reply`) — Method `POST`,
+  URL an expression:
+
+      concat('https://graph.microsoft.com/v1.0/me/messages/', encodeUriComponent(body('Parse_JSON')?['messageId']), '/createReply')
+
+  No body. This creates a real draft, already in the thread, already
+  addressed, with the quoted original underneath.
+
+- **Invoke an HTTP request** (rename it `Fill reply`) — Method `PATCH`,
+  URL:
+
+      concat('https://graph.microsoft.com/v1.0/me/messages/', encodeUriComponent(body('Create_reply')?['id']))
+
+  Headers `Content-Type: application/json`, and Body as an **expression**:
+
+      setProperty(json('{}'), 'body', setProperty(json('{"contentType":"HTML"}'), 'content', concat('<div>', coalesce(body('Parse_JSON')?['bodyHtml'], body('Parse_JSON')?['body']), '</div><br>', body('Create_reply')?['body']?['content'])))
+
+  Rowan's text goes first, the quoted history Graph generated follows.
+
+  It has to be built as an object. The obvious version — literal JSON with
+  `"content": "@{concat(…)}"` — passes a hand test and then fails on the
+  first real message: email HTML is full of double quotes, every one of
+  them ends the JSON string early, and Graph replies 400 "Unable to read
+  JSON request payload". `setProperty` leaves the escaping to Logic Apps,
+  which serializes the object correctly whatever is inside it.
+
+*Get file content*, *Parse JSON*, and *Delete file* are untouched. The
+payload's `to` and `subject` stop being read — `createReply` sets both from
+the original message — but they stay in the file, because a flow that falls
+back to *Draft an email message* still needs them.
 
 ## House voice
 

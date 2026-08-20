@@ -1210,10 +1210,6 @@ a.rollup-task:hover {
   color: var(--ink-soft);
 }
 
-.sql-edit {
-  width: min(680px, 94vw);
-}
-
 .sql-input {
   font-family: var(--font-mono);
   font-size: 12.5px;
@@ -1224,17 +1220,6 @@ a.rollup-task:hover {
 /* real queries need real room: the edit dialog opens near-full-screen and its
    corner grip resizes it in BOTH directions; the SQL box fills whatever space
    the dialog has */
-dialog.sql-edit {
-  width: min(1000px, 94vw);
-  height: min(720px, 88vh);
-  max-width: 96vw;
-  max-height: 92vh;
-  min-width: 420px;
-  min-height: 340px;
-  resize: both;
-  overflow: auto;
-}
-
 .sql-edit form {
   display: flex;
   flex-direction: column;
@@ -1384,10 +1369,6 @@ dialog.sql-edit {
 }
 
 /* add/edit dialog */
-.person-edit {
-  width: min(520px, 92vw);
-}
-
 .pd-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2756,6 +2737,65 @@ select.text-input {
   }
 }
 
+/* ---------- mail signature ---------- */
+
+.sig-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
+}
+
+.sig-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.sig-head .card-subhead {
+  margin-top: 0;
+}
+
+.sig-clear {
+  padding: 2px var(--s2);
+  font-size: 11.5px;
+}
+
+/*
+ * A signature is styled for a white mail body, so preview it on one whatever
+ * the app theme is — colors picked against white look wrong on a dark card,
+ * and this is the only place in Rowan showing mail exactly as it will send.
+ */
+.sig-box {
+  min-height: 96px;
+  max-height: 260px;
+  overflow: auto;
+  padding: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: #ffffff;
+  color: #201f1e;
+  font-family: Aptos, Calibri, 'Segoe UI', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sig-box:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.sig-box a {
+  color: #0563c1;
+}
+
+.sig-box:empty::before {
+  content: 'Paste your Outlook signature here';
+  color: #8a8886;
+}
+
 .card-subhead {
   font-size: 11px;
   font-weight: 650;
@@ -3926,6 +3966,32 @@ dialog.confirm {
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: var(--r-card);
+}
+
+/*
+ * Anything with content in it gets three quarters of the window. Only the bare
+ * yes/no confirm above stays narrow, because width buys it nothing.
+ *
+ * These have to be written as `dialog.confirm.x`, not `.x`. The base rule is
+ * `dialog.confirm`, which outranks a bare class however far down the file it
+ * sits — so every modifier that set its own width was silently losing, and
+ * every dialog in the app rendered at that 440px confirm width. On a wide
+ * monitor it read as a sliver.
+ */
+dialog.confirm.person-edit,
+dialog.confirm.mail-reply,
+dialog.confirm.mail-guide,
+dialog.confirm.sql-edit {
+  width: 75vw;
+  min-width: min(440px, 92vw);
+}
+
+dialog.confirm.sql-edit {
+  height: min(80vh, 860px);
+  max-height: 92vh;
+  min-height: 340px;
+  resize: both;
+  overflow: auto;
 }
 
 dialog.confirm[open] {
@@ -5137,16 +5203,23 @@ button.speaker-chip-btn:hover {
   vertical-align: 1px;
 }
 
-.mail-reply {
-  max-width: 720px;
-  width: 92vw;
-}
-
 .mail-reply-actions {
   display: flex;
   align-items: center;
   gap: var(--s3);
   margin: var(--s3) 0;
+}
+
+.mail-reply-draft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.mail-reply-copy {
+  padding: 2px var(--s2);
+  font-size: 11.5px;
 }
 
 .mail-reply-body {
@@ -5224,11 +5297,6 @@ button.speaker-chip-btn:hover {
 }
 
 /* ---- mail setup guide ---- */
-
-.mail-guide {
-  max-width: 760px;
-  width: 92vw;
-}
 
 .guide-scroll {
   max-height: 68vh;
