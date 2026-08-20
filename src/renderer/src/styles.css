@@ -2756,6 +2756,65 @@ select.text-input {
   }
 }
 
+/* ---------- mail signature ---------- */
+
+.sig-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
+}
+
+.sig-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.sig-head .card-subhead {
+  margin-top: 0;
+}
+
+.sig-clear {
+  padding: 2px var(--s2);
+  font-size: 11.5px;
+}
+
+/*
+ * A signature is styled for a white mail body, so preview it on one whatever
+ * the app theme is — colors picked against white look wrong on a dark card,
+ * and this is the only place in Rowan showing mail exactly as it will send.
+ */
+.sig-box {
+  min-height: 96px;
+  max-height: 260px;
+  overflow: auto;
+  padding: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: #ffffff;
+  color: #201f1e;
+  font-family: Aptos, Calibri, 'Segoe UI', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sig-box:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.sig-box a {
+  color: #0563c1;
+}
+
+.sig-box:empty::before {
+  content: 'Paste your Outlook signature here';
+  color: #8a8886;
+}
+
 .card-subhead {
   font-size: 11px;
   font-weight: 650;

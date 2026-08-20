@@ -20,10 +20,14 @@ export function MailReplyDialog({
   const [queued, setQueued] = useState(false)
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [signed, setSigned] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     ref.current?.showModal()
+    // the signature is appended on the way out, so say so rather than
+    // pasting it into a box the model is about to rewrite
+    window.scribe.settings.get().then((s) => setSigned(!!s.mailSignatureHtml))
   }, [])
 
   async function draft(): Promise<void> {
@@ -110,6 +114,9 @@ export function MailReplyDialog({
         />
       </div>
 
+      {signed && !queued && (
+        <p className="field-note">Your signature is added when this is filed.</p>
+      )}
       {error && <p className="field-note error">{error}</p>}
       {queued && (
         <p className="field-note ok">

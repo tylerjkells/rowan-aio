@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MailGuideDialog } from '../MailGuide'
+import { sanitizeSignatureHtml } from '../../../shared/signature'
 import type {
   AppSettings,
   AppTheme,
@@ -165,6 +166,93 @@ function OptRow({
       </span>
       {tag && <span className="opt-tag">{tag}</span>}
     </button>
+  )
+}
+
+/**
+ * The signature Rowan puts on every reply draft.
+ *
+ * Outlook only applies a signature to a message you compose yourself, so a
+ * draft the bridge flow creates arrives without one. Pasting the real thing
+ * here keeps its formatting — the clipboard carries Outlook's HTML, which is
+ * stripped back to inline markup a mail client will actually render.
+ */
+function MailSignature({
+  settings,
+  onChange
+}: {
+  settings: AppSettings
+  onChange: (s: AppSettings) => void
+}): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const [saved, setSaved] = useState(false)
+
+  // uncontrolled on purpose: React must not re-render a box the user is typing
+  // in, so the saved value is only pushed in on mount and after a clear
+  useEffect(() => {
+    if (ref.current) ref.current.innerHTML = settings.mailSignatureHtml
+  }, [])
+
+  async function save(html: string): Promise<void> {
+    if (html === settings.mailSignatureHtml) return
+    onChange(await window.scribe.settings.update({ mailSignatureHtml: html }))
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1800)
+  }
+
+  function paste(e: React.ClipboardEvent<HTMLDivElement>): void {
+    const html = e.clipboardData.getData('text/html')
+    const plain = e.clipboardData.getData('text/plain')
+    if (!html && !plain) return
+    e.preventDefault()
+    const clean = html
+      ? sanitizeSignatureHtml(html)
+      : plain
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\r\n|\r|\n/g, '<br>')
+    document.execCommand('insertHTML', false, clean)
+  }
+
+  async function clear(): Promise<void> {
+    if (ref.current) ref.current.innerHTML = ''
+    onChange(await window.scribe.settings.update({ mailSignatureHtml: '' }))
+  }
+
+  return (
+    <div className="sig-block">
+      <div className="sig-head">
+        <span className="card-subhead">Signature</span>
+        {settings.mailSignatureHtml && (
+          <button className="btn btn-ghost sig-clear" onClick={clear}>
+            Clear
+          </button>
+        )}
+      </div>
+      <p className="opt-desc">
+        Open a new message in Outlook, select your signature, copy it, and paste it here.
+        Rowan appends it to every reply draft it files. Formatting comes across; images
+        don&rsquo;t, because a logo would arrive in the draft as a broken reference.
+      </p>
+      <div
+        ref={ref}
+        className="sig-box"
+        contentEditable
+        suppressContentEditableWarning
+        role="textbox"
+        aria-label="Email signature"
+        onPaste={paste}
+        onBlur={(e) => save(sanitizeSignatureHtml(e.currentTarget.innerHTML))}
+      />
+      <p className="field-note">
+        {saved
+          ? 'Saved ✓'
+          : settings.mailSignatureHtml
+            ? 'Edit it here like any text box — it saves when you click away.'
+            : 'Nothing set, so drafts go out with just the reply.'}
+      </p>
+    </div>
   )
 }
 
@@ -1201,6 +1289,7 @@ export function SettingsView({
               </>
             )}
           </div>
+          <MailSignature settings={settings} onChange={onChange} />
         </div>
       </section>
 

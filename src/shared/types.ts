@@ -528,6 +528,10 @@ export interface AppSettings {
   personAliases: Record<string, string>
   /** OneDrive-synced folder the mail bridge reads; null = not set up */
   mailFolder: string | null
+  /** signature appended to every reply draft, as sanitized inline HTML */
+  mailSignatureHtml: string
+  /** the same signature as plain text, derived from the HTML */
+  mailSignatureText: string
 }
 
 /** one message, as filed by the Power Automate bridge (see docs/OUTLOOK.md) */

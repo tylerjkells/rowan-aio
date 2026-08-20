@@ -1,6 +1,7 @@
 import { app, safeStorage } from 'electron'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
+import { sanitizeSignatureHtml, signatureToText } from '../shared/signature'
 import type { AppSettings, AppTheme, WhisperModel } from '../shared/types'
 
 interface StoredSettings {
@@ -29,6 +30,8 @@ interface StoredSettings {
   backupSkipAudio: boolean
   /** OneDrive-synced folder the Power Automate mail bridge writes into */
   mailFolder: string | null
+  /** signature appended to reply drafts, stored as sanitized inline HTML */
+  mailSignatureHtml: string
   /** epoch ms of the last automatic backup */
   lastBackupAt: number
   people: string[]
@@ -71,6 +74,7 @@ const DEFAULTS: StoredSettings = {
   backupFolder: null,
   backupSkipAudio: true,
   mailFolder: null,
+  mailSignatureHtml: '',
   lastBackupAt: 0,
   people: [],
   yourName: '',
@@ -133,6 +137,8 @@ export function getSettings(): AppSettings {
     backupFolder: s.backupFolder ?? null,
     backupSkipAudio: s.backupSkipAudio !== false,
     mailFolder: s.mailFolder ?? null,
+    mailSignatureHtml: s.mailSignatureHtml ?? '',
+    mailSignatureText: signatureToText(s.mailSignatureHtml ?? ''),
     people: s.people ?? [],
     yourName: s.yourName ?? '',
     personAliases: s.personAliases ?? {},
@@ -186,6 +192,7 @@ export function updateSettings(
       | 'backupFolder'
       | 'backupSkipAudio'
       | 'mailFolder'
+      | 'mailSignatureHtml'
       | 'people'
       | 'yourName'
     >
@@ -235,6 +242,10 @@ export function updateSettings(
     )
   if (patch.backupFolder !== undefined) s.backupFolder = patch.backupFolder
   if (patch.mailFolder !== undefined) s.mailFolder = patch.mailFolder
+  // sanitize on the way in: what is stored is what gets mailed, and what the
+  // Settings page puts back into the DOM
+  if (typeof patch.mailSignatureHtml === 'string')
+    s.mailSignatureHtml = sanitizeSignatureHtml(patch.mailSignatureHtml)
   if (typeof patch.backupSkipAudio === 'boolean') s.backupSkipAudio = patch.backupSkipAudio
   if (Array.isArray(patch.people)) {
     s.people = dedupeNames(patch.people)
@@ -259,6 +270,12 @@ function dedupeNames(names: string[]): string[] {
 
 export function getMailFolder(): string | null {
   return load().mailFolder ?? null
+}
+
+/** The signature to append to outbound drafts, in both flavours. */
+export function getMailSignature(): { html: string; text: string } {
+  const html = load().mailSignatureHtml ?? ''
+  return { html, text: signatureToText(html) }
 }
 
 export function getLastBackupAt(): number {

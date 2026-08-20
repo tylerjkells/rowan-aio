@@ -268,6 +268,108 @@ guess from a sample: generating from a file that happens to have one
 produces `"type": "string"`, and the flow then fails on any draft where it
 came back null.
 
+### The signature
+
+Outlook applies a signature when *you* open a compose window. A draft the
+flow creates never passes through that code path, so it arrives bare — and
+the connector has no signature setting to turn on.
+
+So Rowan carries the signature itself. Settings → Mail has a paste box: copy
+the signature out of a new Outlook message and paste it there. The clipboard
+carries Outlook's HTML alongside the plain text, so the formatting survives
+the trip. `src/shared/signature.ts` strips it back to inline markup —
+stylesheets, `mso-` classes, conditional comments, and namespaced Word tags
+all go, because none of them mean anything in a mail body. Scripts, event
+handlers, and `javascript:` hrefs go for the obvious reason: the same HTML
+is put back into the Settings page's DOM.
+
+Images are dropped on purpose. A pasted logo arrives as `cid:image001.png`
+or a path into `%TEMP%\msohtmlclip1`, neither of which resolves once the
+draft reaches Outlook, so the choice is a broken image icon or no image.
+
+`queueMailDraft()` appends it to both `body` and `bodyHtml`, so the draft
+carries a signature whichever field the flow reads. Nothing in the flow
+changes.
+
+### Why drafts don't join the thread — and the fix
+
+*Draft an email message* creates a **new** message. Exchange stamps a
+conversation onto an item when it is created, so a fresh draft gets its own
+`ConversationId` and `ConversationIndex` and never joins the original. The
+`RE:` subject makes it *look* like a reply and nothing more; the recipient's
+client has no `In-Reply-To` or `References` headers to thread on either, and
+the connector gives no way to set them.
+
+Nothing Rowan writes into the file can fix that — the threading is decided
+by *which Outlook action creates the draft*, and no action in the Office 365
+Outlook connector creates a draft in an existing thread. *Reply to email
+(V3)* threads correctly and **sends**, which breaks the one rule this whole
+design exists to keep.
+
+The action that does both is Graph's `createReply`, reachable from a flow
+through the **HTTP with Microsoft Entra ID** connector. That connector is
+standard, not premium, and it runs as you with a connection you authorize
+yourself — the same posture as the Outlook connector, and still no app
+registration and no admin approval for `Rowan-AIO`. What it *does* need is
+consent for Microsoft's own connector app, which this tenant may or may not
+have already granted. Ten minutes settles it.
+
+**The test, before rebuilding anything:**
+
+1. make.powerautomate.com → **Create** → **Instant cloud flow** → *Manually
+   trigger a flow*.
+2. New step → **HTTP with Microsoft Entra ID** → *Invoke an HTTP request*.
+3. Create the connection: Base Resource URL and Microsoft Entra ID Resource
+   URI both `https://graph.microsoft.com`. Sign in.
+   *"Need admin approval" here means this route is closed too, and the
+   drafts stay standalone.*
+4. Method `GET`, URL:
+
+       https://graph.microsoft.com/v1.0/me/messages?$top=1&$select=subject
+
+   Save and run. A 200 with a subject in it means the route is open.
+5. One more check, because the whole rebuild rests on it: open any file in
+   the bridge's `in` folder, copy its `id`, and GET
+
+       https://graph.microsoft.com/v1.0/me/messages/{that id}
+
+   The connector's message ids share Graph's id space, so this should also
+   come back 200. If it 404s, the flow has to look the message up by
+   `internetMessageId` instead and the payload needs that field added.
+
+**The rebuild, once the test passes.** Only the drafts flow changes; the
+inbound flow and everything in Rowan stay as they are. Replace *Draft an
+email message* with two actions:
+
+- **Invoke an HTTP request** (rename it `Create reply`) — Method `POST`,
+  URL an expression:
+
+      concat('https://graph.microsoft.com/v1.0/me/messages/', encodeUriComponent(body('Parse_JSON')?['messageId']), '/createReply')
+
+  No body. This creates a real draft, already in the thread, already
+  addressed, with the quoted original underneath.
+
+- **Invoke an HTTP request** (rename it `Fill reply`) — Method `PATCH`,
+  URL:
+
+      concat('https://graph.microsoft.com/v1.0/me/messages/', encodeUriComponent(body('Create_reply')?['id']))
+
+  Headers `Content-Type: application/json`, Body:
+
+      {
+        "body": {
+          "contentType": "HTML",
+          "content": "@{concat('<div>', coalesce(body('Parse_JSON')?['bodyHtml'], body('Parse_JSON')?['body']), '</div><br>', body('Create_reply')?['body']?['content'])}"
+        }
+      }
+
+  Rowan's text goes first, the quoted history Graph generated follows.
+
+*Get file content*, *Parse JSON*, and *Delete file* are untouched. The
+payload's `to` and `subject` stop being read — `createReply` sets both from
+the original message — but they stay in the file, because a flow that falls
+back to *Draft an email message* still needs them.
+
 ## House voice
 
 Anything the model writes for Tyler to read or send goes through
