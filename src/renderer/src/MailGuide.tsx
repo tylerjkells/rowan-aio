@@ -55,7 +55,7 @@ export function MailGuideDialog({ onClose }: { onClose: () => void }): React.JSX
           grant yourself. So mail comes the long way round: a Power Automate flow files each
           message into OneDrive, OneDrive syncs it to this PC, and Rowan reads the folder. No
           password, no tokens, nothing to approve. A second flow carries replies back the
-          other way as Outlook drafts.
+          other way, landing them in Outlook as drafts inside the thread they answer.
         </p>
 
         <section className="guide-step">
@@ -166,6 +166,30 @@ export function MailGuideDialog({ onClose }: { onClose: () => void }): React.JSX
             <em>contains</em> <code>in</code>, not <code>in</code> itself.
           </p>
           <p>Send yourself a test email. It should appear on the Mail page within a minute.</p>
+        </section>
+
+        <section className="guide-step">
+          <h4>5. Your signature</h4>
+          <p>
+            Outlook only puts a signature on a message you compose yourself, so a draft the
+            flow creates arrives without one. Rowan carries its own copy instead.
+          </p>
+          <p>
+            Open a new message in Outlook, select the signature, copy it, and paste it into
+            the <strong>Signature</strong> box under Settings → Mail. The formatting comes
+            across with it — the clipboard carries Outlook&rsquo;s own HTML alongside the
+            plain text.
+          </p>
+          <p className="guide-why">
+            Images are dropped on purpose. A pasted logo arrives as a reference to a
+            temporary file on this PC, which resolves to nothing by the time the draft
+            reaches Outlook, so the choice was a broken image or none. Everything else —
+            fonts, colours, sizes, links — survives.
+          </p>
+          <p>
+            Worth reading what lands in the box rather than trusting it. Signatures get
+            copied between colleagues and quietly keep the wrong address behind the link.
+          </p>
         </section>
 
         <section className="guide-step">
