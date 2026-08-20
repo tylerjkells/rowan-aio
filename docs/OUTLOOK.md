@@ -174,7 +174,9 @@ that, EWS, is being blocked starting October 1 2026.
 3. ~~Build the read side.~~ Done — `src/main/mail.ts` plus a Mail view.
 4. ~~Reply drafting, summaries, morning brief.~~ Done — see below. The
    outbound flow still needs building in Power Automate.
-5. Next: capturing Sent Items so "you asked and nobody answered" works, and
+5. ~~Reply drafts that join the thread.~~ Done — the drafts flow calls
+   Graph's `createReply` through the preauthorized Entra ID connector.
+6. Next: capturing Sent Items so "you asked and nobody answered" works, and
    pruning the bridge folder.
 
 ## How the read side is wired
@@ -307,22 +309,35 @@ Outlook connector creates a draft in an existing thread. *Reply to email
 design exists to keep.
 
 The action that does both is Graph's `createReply`, reachable from a flow
-through the **HTTP with Microsoft Entra ID** connector. That connector is
-standard, not premium, and it runs as you with a connection you authorize
-yourself — the same posture as the Outlook connector, and still no app
-registration and no admin approval for `Rowan-AIO`. What it *does* need is
-consent for Microsoft's own connector app, which this tenant may or may not
-have already granted. Ten minutes settles it.
+through the **HTTP with Microsoft Entra ID (preauthorized)** connector. It
+runs as you with a connection you authorize yourself — the same posture as
+the Outlook connector, so still no app registration and no admin approval
+for `Rowan-AIO`. The preauthorized variant is the one to pick: it is a
+Microsoft first-party app already consented for Graph, which is exactly the
+wall Route A hit.
 
-**The test, before rebuilding anything:**
+**Tested 20 Aug 2026 — all three checks passed.** Sign-in completed with no
+consent prompt, `GET /me/messages` returned 200, a message id straight out
+of the bridge's `in` folder resolved 200 against Graph, and `createReply`
+returned 201 with a properly threaded draft appearing in Outlook.
+
+One caveat: the connector is flagged premium, and the flow checker warns
+that the owner needs a Power Automate Premium license. The flow saved and
+ran anyway. Microsoft enforces this inconsistently and can start enforcing
+it later, so this is working-but-not-guaranteed rather than settled. The
+free fallback is the Copy button on a reply draft, pasted into a reply
+started in Outlook — which threads and signs itself for the same reason
+Outlook always has.
+
+**The checks, kept for when this has to be re-run:**
 
 1. make.powerautomate.com → **Create** → **Instant cloud flow** → *Manually
    trigger a flow*.
 2. New step → **HTTP with Microsoft Entra ID** → *Invoke an HTTP request*.
 3. Create the connection: Base Resource URL and Microsoft Entra ID Resource
    URI both `https://graph.microsoft.com`. Sign in.
-   *"Need admin approval" here means this route is closed too, and the
-   drafts stay standalone.*
+   *"Need admin approval" here would mean the route is closed. It didn't
+   ask.*
 4. Method `GET`, URL:
 
        https://graph.microsoft.com/v1.0/me/messages?$top=1&$select=subject
@@ -337,7 +352,7 @@ have already granted. Ten minutes settles it.
    come back 200. If it 404s, the flow has to look the message up by
    `internetMessageId` instead and the payload needs that field added.
 
-**The rebuild, once the test passes.** Only the drafts flow changes; the
+**The rebuild.** Only the drafts flow changes; the
 inbound flow and everything in Rowan stay as they are. Replace *Draft an
 email message* with two actions:
 
