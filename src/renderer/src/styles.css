@@ -5149,6 +5149,18 @@ button.speaker-chip-btn:hover {
   margin: var(--s3) 0;
 }
 
+.mail-reply-draft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.mail-reply-copy {
+  padding: 2px var(--s2);
+  font-size: 11.5px;
+}
+
 .mail-reply-body {
   resize: vertical;
   line-height: 1.6;
