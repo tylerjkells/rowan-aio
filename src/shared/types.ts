@@ -246,6 +246,8 @@ export interface ClickupTask {
   dateUpdated: string | null
   /** assignee display names */
   assignees: string[]
+  /** ISO timestamp of completion, only on tasks from the Done fetch */
+  dateDone: string | null
 }
 
 /** one entry in the local ClickUp changelog, produced by diffing refreshes */

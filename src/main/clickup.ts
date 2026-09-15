@@ -71,6 +71,8 @@ interface RawTask {
   status: { status: string; color: string | null; type?: string }
   due_date: string | null
   date_updated?: string | null
+  date_done?: string | null
+  date_closed?: string | null
   url: string
   list: { id: string; name: string }
   folder: { name: string; hidden?: boolean } | null
@@ -155,11 +157,9 @@ interface FetchedTasks {
   truncated: boolean
 }
 
-/** Open tasks ordered by due date: the token user's, or everyone's. */
-async function fetchTasks(scope: 'mine' | 'all'): Promise<FetchedTasks> {
-  const { user } = await req<{ user: { id: number } }>('/user')
+/** page through a team task query, stopping (and saying so) at the cap */
+async function fetchRaw(query: string): Promise<{ raws: RawTask[]; truncated: boolean }> {
   const t = await team()
-  const filter = scope === 'mine' ? `&assignees[]=${user.id}` : ''
   const raws: RawTask[] = []
   let truncated = false
   for (let page = 0; ; page++) {
@@ -168,13 +168,16 @@ async function fetchTasks(scope: 'mine' | 'all'): Promise<FetchedTasks> {
       break
     }
     const r = await req<{ tasks: RawTask[]; last_page?: boolean }>(
-      `/team/${t.id}/task?page=${page}${filter}&include_closed=false&subtasks=true&order_by=due_date`
+      `/team/${t.id}/task?page=${page}${query}&subtasks=true`
     )
     raws.push(...r.tasks)
     if (r.last_page || r.tasks.length === 0) break
   }
+  return { raws, truncated }
+}
 
-  // subtasks name their parent; look up the ones we can't see, a few per fetch
+/** name the parents of subtasks whose parent isn't in the fetched set, a few per fetch */
+async function nameParents(raws: RawTask[]): Promise<Map<string, string>> {
   const known = new Map(raws.map((r) => [r.id, r.name]))
   let lookups = 15
   for (const raw of raws) {
@@ -188,6 +191,42 @@ async function fetchTasks(scope: 'mine' | 'all'): Promise<FetchedTasks> {
       // deleted or inaccessible parent: leave it unnamed
     }
   }
+  return known
+}
+
+function toTask(raw: RawTask, known: Map<string, string>): ClickupTask {
+  const desc = raw.text_content?.trim() ?? ''
+  const doneMs = raw.date_done ?? raw.date_closed ?? null
+  return {
+    id: raw.id,
+    name: raw.name,
+    parentName: raw.parent ? (known.get(raw.parent) ?? parentNames.get(raw.parent) ?? null) : null,
+    requestor: requestorOf(raw.custom_fields),
+    description: desc
+      ? desc.length > DESCRIPTION_MAX
+        ? `${desc.slice(0, DESCRIPTION_MAX).trimEnd()} …`
+        : desc
+      : null,
+    status: raw.status.status,
+    statusColor: raw.status.color,
+    dueDate: toIsoDate(raw.due_date),
+    url: raw.url,
+    listId: raw.list.id,
+    listName: raw.list.name,
+    folderName: raw.folder && !raw.folder.hidden ? raw.folder.name : null,
+    priority: raw.priority?.priority ?? null,
+    dateUpdated: raw.date_updated ?? null,
+    assignees: (raw.assignees ?? []).map((a) => a.username ?? a.email),
+    dateDone: doneMs && !isNaN(Number(doneMs)) ? new Date(Number(doneMs)).toISOString() : null
+  }
+}
+
+/** Open tasks ordered by due date: the token user's, or everyone's. */
+async function fetchTasks(scope: 'mine' | 'all'): Promise<FetchedTasks> {
+  const { user } = await req<{ user: { id: number } }>('/user')
+  const filter = scope === 'mine' ? `&assignees[]=${user.id}` : ''
+  const { raws, truncated } = await fetchRaw(`${filter}&include_closed=false&order_by=due_date`)
+  const known = await nameParents(raws)
 
   const tasks: ClickupTask[] = []
   const assigneeIds = new Map<string, number[]>()
@@ -196,34 +235,31 @@ async function fetchTasks(scope: 'mine' | 'all'): Promise<FetchedTasks> {
     // ClickUp doesn't count it as closed — without this, tasks marked done
     // linger in the open list and reappear in the changelog as "new"
     if (raw.status.type === 'done' || raw.status.type === 'closed') continue
-    const desc = raw.text_content?.trim() ?? ''
     assigneeIds.set(
       raw.id,
       (raw.assignees ?? []).map((a) => a.id)
     )
-    tasks.push({
-      id: raw.id,
-      name: raw.name,
-      parentName: raw.parent ? (known.get(raw.parent) ?? parentNames.get(raw.parent) ?? null) : null,
-      requestor: requestorOf(raw.custom_fields),
-      description: desc
-        ? desc.length > DESCRIPTION_MAX
-          ? `${desc.slice(0, DESCRIPTION_MAX).trimEnd()} …`
-          : desc
-        : null,
-      status: raw.status.status,
-      statusColor: raw.status.color,
-      dueDate: toIsoDate(raw.due_date),
-      url: raw.url,
-      listId: raw.list.id,
-      listName: raw.list.name,
-      folderName: raw.folder && !raw.folder.hidden ? raw.folder.name : null,
-      priority: raw.priority?.priority ?? null,
-      dateUpdated: raw.date_updated ?? null,
-      assignees: (raw.assignees ?? []).map((a) => a.username ?? a.email)
-    })
+    tasks.push(toTask(raw, known))
   }
   return { tasks, assigneeIds, userId: user.id, truncated }
+}
+
+/** how far back the Done view reaches */
+const DONE_WINDOW_MS = 30 * 86_400_000
+
+/** Tasks finished in the last month, newest first: the token user's, or everyone's. */
+export async function fetchClickupDone(scope: 'mine' | 'all'): Promise<ClickupTask[]> {
+  const { user } = await req<{ user: { id: number } }>('/user')
+  const filter = scope === 'mine' ? `&assignees[]=${user.id}` : ''
+  const since = Date.now() - DONE_WINDOW_MS
+  const { raws } = await fetchRaw(
+    `${filter}&include_closed=true&date_done_gt=${since}&order_by=updated&reverse=true`
+  )
+  const done = raws.filter((r) => r.status.type === 'done' || r.status.type === 'closed')
+  const known = await nameParents(done)
+  return done
+    .map((r) => toTask(r, known))
+    .sort((a, b) => (b.dateDone ?? '').localeCompare(a.dateDone ?? ''))
 }
 
 export async function fetchClickupTasks(scope: 'mine' | 'all'): Promise<ClickupTask[]> {

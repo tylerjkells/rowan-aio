@@ -538,3 +538,52 @@ export function BackIcon(): React.JSX.Element {
     </svg>
   )
 }
+
+/** a stable hue per name, so avatars are recognisable at a glance */
+export function hueFor(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return h % 360
+}
+
+export function initialsOf(name: string): string {
+  const parts = name
+    .replace(/<.*>/, '')
+    .trim()
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+/** initials in a coloured circle; `size` in px */
+export function Avatar({
+  name,
+  size = 24,
+  className = '',
+  title
+}: {
+  name: string
+  size?: number
+  className?: string
+  title?: string
+}): React.JSX.Element {
+  return (
+    <span
+      className={`avatar ${className}`}
+      style={
+        {
+          '--avatar-hue': hueFor(name.toLowerCase()),
+          width: size,
+          height: size,
+          fontSize: Math.round(size * 0.38)
+        } as React.CSSProperties
+      }
+      title={title ?? name}
+      aria-hidden={title ? undefined : true}
+    >
+      {initialsOf(name)}
+    </span>
+  )
+}
