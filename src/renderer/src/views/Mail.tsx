@@ -9,6 +9,7 @@ import type {
 import { ClickupPushDialog } from '../ClickupPush'
 import { MailGuideDialog } from '../MailGuide'
 import { MailCompose } from '../MailCompose'
+import { Avatar as UiAvatar } from '../ui'
 
 // ---------------------------------------------------------------------------
 // The mail client. Three panes the way Gmail lays them out: a folder rail,
@@ -150,34 +151,8 @@ function MailBody({ text }: { text: string }): React.JSX.Element {
   )
 }
 
-/** a stable hue per sender, so avatars are recognisable at a glance */
-function hueFor(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
-  return h % 360
-}
-
-function initials(name: string): string {
-  const parts = name
-    .replace(/<.*>/, '')
-    .trim()
-    .split(/[\s._-]+/)
-    .filter(Boolean)
-  if (parts.length === 0) return '?'
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-}
-
 function Avatar({ name }: { name: string }): React.JSX.Element {
-  return (
-    <span
-      className="mailc-avatar"
-      style={{ '--avatar-hue': hueFor(name.toLowerCase()) } as React.CSSProperties}
-      aria-hidden="true"
-    >
-      {initials(name)}
-    </span>
-  )
+  return <UiAvatar name={name} size={36} className="mailc-avatar" />
 }
 
 function StarIcon({ on }: { on: boolean }): React.JSX.Element {
@@ -1222,7 +1197,7 @@ function ReplyBox({
   return (
     <div className="mailc-replybox">
       <div className="mailc-replybox-head">
-        <Avatar name={message.fromName ?? message.from} />
+        <UiAvatar name={message.fromName ?? message.from} size={28} />
         <span className="mailc-replybox-to">
           ↩ Reply to <strong>{message.fromName ?? message.from}</strong>
           {message.fromName && <span className="mail-addr-raw"> &lt;{message.from}&gt;</span>}

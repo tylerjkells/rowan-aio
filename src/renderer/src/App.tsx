@@ -246,7 +246,7 @@ export default function App(): React.JSX.Element {
       </nav>
 
       <main
-        className={`main ${view.name === 'mail' ? 'main-flush' : ''}`}
+        className={`main ${view.name === 'mail' || view.name === 'projects' ? 'main-flush' : ''}`}
         key={
           view.name +
           ('id' in view ? view.id : '') +
@@ -256,7 +256,12 @@ export default function App(): React.JSX.Element {
       >
         <div
           className="view-enter"
-          style={{ height: view.name === 'record' || view.name === 'mail' ? '100%' : undefined }}
+          style={{
+            height:
+              view.name === 'record' || view.name === 'mail' || view.name === 'projects'
+                ? '100%'
+                : undefined
+          }}
         >
           {view.name === 'today' && (
             <TodayView

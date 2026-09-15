@@ -22,6 +22,7 @@ export function ClickupPushDialog({
   task = '',
   owner = null,
   dueDate = null,
+  listId: initialListId,
   meetingTitle,
   description: initialDescription,
   onDone,
@@ -30,6 +31,8 @@ export function ClickupPushDialog({
   task?: string
   owner?: string | null
   dueDate?: string | null
+  /** start on this list instead of the remembered one */
+  listId?: string
   /** the meeting this came from; omitted for a task typed from scratch */
   meetingTitle?: string
   /** starting description, for sources other than a meeting (e.g. an email) */
@@ -40,7 +43,9 @@ export function ClickupPushDialog({
 }): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null)
   const [lists, setLists] = useState<ClickupList[] | null>(null)
-  const [listId, setListId] = useState(() => localStorage.getItem('clickupPushList') ?? '')
+  const [listId, setListId] = useState(
+    () => initialListId ?? localStorage.getItem('clickupPushList') ?? ''
+  )
   const [name, setName] = useState(task)
   const [description, setDescription] = useState(
     initialDescription ?? (meetingTitle ? `From meeting: ${meetingTitle}` : '')

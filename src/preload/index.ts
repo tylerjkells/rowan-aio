@@ -360,6 +360,8 @@ const api = {
     refresh: (
       scope: 'mine' | 'all'
     ): Promise<ClickupRefreshResult> => ipcRenderer.invoke('clickup:refresh', scope),
+    /** tasks finished in the last month */
+    done: (scope: 'mine' | 'all'): Promise<ClickupTask[]> => ipcRenderer.invoke('clickup:done', scope),
     lists: (): Promise<ClickupList[]> => ipcRenderer.invoke('clickup:lists'),
     listFields: (listId: string): Promise<ClickupDropdownField[]> =>
       ipcRenderer.invoke('clickup:listFields', listId),
