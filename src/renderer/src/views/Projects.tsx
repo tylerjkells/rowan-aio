@@ -252,7 +252,16 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'due', dir: 1 })
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
-  const [treeOpen, setTreeOpen] = useState<Set<string>>(() => new Set())
+  /** collapsed spaces and folders in the tree; everything starts open */
+  const [treeClosed, setTreeClosed] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem('clickupTreeClosed') ?? '[]') as string[])
+    } catch {
+      return new Set()
+    }
+  })
+  /** only lists that hold something assigned to you */
+  const [treeMine, setTreeMine] = useState(() => localStorage.getItem('clickupTreeMine') === '1')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [pop, setPop] = useState<{ id: string; kind: 'status' | 'assignee' | 'due' | 'priority'; where: 'row' | 'panel' } | null>(null)
   const [completing, setCompleting] = useState<ClickupTask | null>(null)
@@ -532,10 +541,12 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     }
   }, [mine, all, done, today])
 
-  /** the workspace tree: space > folder > lists */
+  /** the workspace tree: space > folder > lists, optionally only the lists with your tasks */
   const tree = useMemo(() => {
+    const myLists = new Set((mine ?? []).map((t) => t.listId))
     const spaces = new Map<string, Map<string, ClickupList[]>>()
     for (const l of lists) {
+      if (treeMine && !myLists.has(l.id)) continue
       const folders = spaces.get(l.space) ?? new Map<string, ClickupList[]>()
       const key = l.folder ?? ''
       folders.set(key, [...(folders.get(key) ?? []), l])
@@ -549,7 +560,22 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([folder, ls]) => ({ folder, lists: [...ls].sort((a, b) => a.name.localeCompare(b.name)) }))
       }))
-  }, [lists])
+  }, [lists, mine, treeMine])
+
+  function toggleTree(key: string): void {
+    setTreeClosed((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      localStorage.setItem('clickupTreeClosed', JSON.stringify([...next]))
+      return next
+    })
+  }
+
+  function switchTreeMine(on: boolean): void {
+    setTreeMine(on)
+    localStorage.setItem('clickupTreeMine', on ? '1' : '0')
+  }
 
   // ---- edits ----
   const patchTask = (id: string, patch: Partial<ClickupTask>): void => {
@@ -1019,45 +1045,79 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
           {unread > 0 && <span className="cuc-rail-badge">{unread}</span>}
         </button>
       </nav>
-      <div className="cuc-rail-head">Workspace</div>
+      <div className="cuc-rail-head">
+        <span>Workspace</span>
+        <div className="cuc-tree-filter" role="radiogroup" aria-label="Which lists">
+          <button
+            className={treeMine ? '' : 'active'}
+            role="radio"
+            aria-checked={!treeMine}
+            onClick={() => switchTreeMine(false)}
+            title="Every list in the workspace"
+          >
+            All
+          </button>
+          <button
+            className={treeMine ? 'active' : ''}
+            role="radio"
+            aria-checked={treeMine}
+            onClick={() => switchTreeMine(true)}
+            title="Only lists holding a task assigned to you"
+          >
+            Mine
+          </button>
+        </div>
+      </div>
       <nav className="cuc-tree" aria-label="Lists">
-        {tree.length === 0 && <span className="cuc-rail-note">Loading lists…</span>}
+        {lists.length === 0 && <span className="cuc-rail-note">Loading lists…</span>}
+        {lists.length > 0 && tree.length === 0 && (
+          <span className="cuc-rail-note">None of your open tasks sit in a list yet.</span>
+        )}
         {tree.map(({ space, folders }) => {
-          const spaceOpen = treeOpen.has(`s:${space}`) || tree.length === 1
+          const spaceKey = `s:${space}`
+          const spaceOpen = !treeClosed.has(spaceKey)
           return (
             <div key={space} className="cuc-tree-space">
               <button
                 className="cuc-tree-head"
-                onClick={() =>
-                  setTreeOpen((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(`s:${space}`)) next.delete(`s:${space}`)
-                    else next.add(`s:${space}`)
-                    return next
-                  })
-                }
+                onClick={() => toggleTree(spaceKey)}
                 aria-expanded={spaceOpen}
               >
                 <span className={`cuc-chev ${spaceOpen ? 'open' : ''}`}>›</span>
                 {space}
               </button>
               {spaceOpen &&
-                folders.map(({ folder, lists: ls }) => (
-                  <div key={folder || '(none)'} className="cuc-tree-folder">
-                    {folder && <div className="cuc-tree-folder-name">{folder}</div>}
-                    {ls.map((l) => (
-                      <button
-                        key={l.id}
-                        className={`cuc-rail-item list ${view === `list:${l.id}` ? 'active' : ''}`}
-                        onClick={() => changeView(`list:${l.id}`)}
-                        title={`${l.space}${l.folder ? ` / ${l.folder}` : ''} / ${l.name}`}
-                      >
-                        <span>{l.name}</span>
-                        {railCount(all ? (counts.byList.get(l.id) ?? 0) : null)}
-                      </button>
-                    ))}
-                  </div>
-                ))}
+                folders.map(({ folder, lists: ls }) => {
+                  const folderKey = `f:${space}/${folder}`
+                  const folderOpen = !folder || !treeClosed.has(folderKey)
+                  return (
+                    <div key={folder || '(none)'} className="cuc-tree-folder">
+                      {folder && (
+                        <button
+                          className="cuc-tree-folder-name"
+                          onClick={() => toggleTree(folderKey)}
+                          aria-expanded={folderOpen}
+                        >
+                          <span className={`cuc-chev ${folderOpen ? 'open' : ''}`}>›</span>
+                          {folder}
+                          {!folderOpen && <span className="cuc-rail-n">{ls.length}</span>}
+                        </button>
+                      )}
+                      {folderOpen &&
+                        ls.map((l) => (
+                          <button
+                            key={l.id}
+                            className={`cuc-rail-item list ${view === `list:${l.id}` ? 'active' : ''}`}
+                            onClick={() => changeView(`list:${l.id}`)}
+                            title={`${l.space}${l.folder ? ` / ${l.folder}` : ''} / ${l.name}`}
+                          >
+                            <span>{l.name}</span>
+                            {railCount(all ? (counts.byList.get(l.id) ?? 0) : null)}
+                          </button>
+                        ))}
+                    </div>
+                  )
+                })}
             </div>
           )
         })}

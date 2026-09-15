@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.29.1': [
+    'The ClickUp workspace tree folds properly now: the arrow on a space collapses it, and folders got their own arrows so a big space can be tidied down to the lists you use. What you fold stays folded.',
+    'An All / Mine switch above the tree shows every list in the workspace or only the lists that hold a task assigned to you, so the rail stops listing things that are not yours.'
+  ],
   '0.29.0': [
     'ClickUp is a real task client now. A rail on the left holds your views (My tasks, Today, Overdue, Unassigned, Everyone, Done, Activity) and the workspace tree of spaces, folders, and lists with counts; the middle is a proper table with sortable columns and a Group control (due date, list, status, assignee, priority); and clicking a task slides in a detail panel on the right with the title editable in place, its properties, the description, and the comment thread.',
     'Edit a task where it sits. Click the status pill, the assignee avatar, the due date, or the priority flag on any row for a small picker that writes straight to ClickUp. The due picker has Today, Tomorrow, Next Monday, and In a week; the assignee picker searches your workspace and has Me and Unassign.',
