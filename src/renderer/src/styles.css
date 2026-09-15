@@ -6877,6 +6877,7 @@ button.speaker-chip-btn:hover {
   background: var(--bg-sidebar);
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .cuc-new {
   justify-content: flex-start;
@@ -6958,12 +6959,40 @@ button.speaker-chip-btn:hover {
 }
 .cuc-rail-head {
   margin-top: var(--s3);
-  padding: 0 var(--s3);
+  padding: 0 var(--s2) 0 var(--s3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
   font-size: 11px;
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: var(--ink-faint);
+}
+.cuc-tree-filter {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--bg-raised);
+}
+.cuc-tree-filter button {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.cuc-tree-filter button:hover {
+  color: var(--ink);
+}
+.cuc-tree-filter button.active {
+  background: var(--bg-overlay);
+  color: var(--ink);
 }
 .cuc-tree-head {
   display: flex;
@@ -6998,11 +7027,24 @@ button.speaker-chip-btn:hover {
   padding-left: var(--s2);
 }
 .cuc-tree-folder-name {
-  padding: 4px var(--s2) 1px;
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  width: 100%;
+  padding: 4px var(--s2) 2px 0;
+  border-radius: var(--r-ctl);
   font-size: 11.5px;
   color: var(--ink-faint);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  text-align: left;
+}
+.cuc-tree-folder-name:hover {
+  color: var(--ink);
+}
+.cuc-tree-folder-name .cuc-rail-n {
+  margin-left: auto;
+  font-size: 11px;
 }
 .cuc-rail-note {
   padding: 0 var(--s3);
