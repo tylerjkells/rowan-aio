@@ -101,6 +101,8 @@ import {
   ensureMailDirs,
   mailStatus,
   readMailTriage,
+  readFiledDrafts,
+  setMailStarred,
   readMailbox,
   setMailHandled,
   setMailRead,
@@ -109,6 +111,7 @@ import {
 } from './mail'
 import {
   draftMailReply,
+  draftNewMail,
   queueMailDraft,
   queueNewMailDraft,
   recipientsFor,
@@ -176,6 +179,7 @@ import type {
   LinkEntry,
   MailDraftInput,
   MailNewDraftInput,
+  MailComposeDraftInput,
   Meeting,
   PersonDetails,
   RecordingMode,
@@ -973,6 +977,11 @@ function registerIpc(): void {
   ipcMain.handle('mail:setRead', (_e, messageIds: string[], read: boolean) =>
     setMailRead(messageIds, read)
   )
+  ipcMain.handle('mail:setStarred', (_e, messageIds: string[], starred: boolean) =>
+    setMailStarred(messageIds, starred)
+  )
+  ipcMain.handle('mail:drafts', () => readFiledDrafts())
+  ipcMain.handle('mail:draftNew', (_e, input: MailComposeDraftInput) => draftNewMail(input))
 
   // --- daily recap ---
   ipcMain.handle('recap:build', () => todaysBrief())
