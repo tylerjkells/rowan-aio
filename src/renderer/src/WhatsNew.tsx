@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.29.0': [
+    'ClickUp is a real task client now. A rail on the left holds your views (My tasks, Today, Overdue, Unassigned, Everyone, Done, Activity) and the workspace tree of spaces, folders, and lists with counts; the middle is a proper table with sortable columns and a Group control (due date, list, status, assignee, priority); and clicking a task slides in a detail panel on the right with the title editable in place, its properties, the description, and the comment thread.',
+    'Edit a task where it sits. Click the status pill, the assignee avatar, the due date, or the priority flag on any row for a small picker that writes straight to ClickUp. The due picker has Today, Tomorrow, Next Monday, and In a week; the assignee picker searches your workspace and has Me and Unassign.',
+    'A Board layout lays the current view out by status and lets you drag a card between columns to move it. A “+ Add task” row at the foot of a group adds a task by name and Enter. Done shows what you finished in the last month, grouped by the day it closed.',
+    'Keyboard, the same shape as Mail: j and k move, x marks done, s status, d due, a assign, p priority, c jumps to the comment box, n new task, o opens it in ClickUp, / searches, Esc closes.'
+  ],
   '0.28.0': [
     'Mail is a real mail client now, laid out the way Gmail is. A folder rail on the left (Inbox, Starred, Handled, Automated, Drafts) with a Compose button, a tight conversation list in the middle, and a reading pane on the right, so a thread opens beside the list instead of pushing it down. Messages in a thread read oldest to newest with the earlier ones folded to a line, and hovering a row reveals handled and read/unread buttons where the date sits.',
     'Reply without leaving the thread. The reply box opens at the foot of the conversation, with the “how should this be answered?” brief and the Draft it button inside it; the draft is written with what Rowan knows about the sender and files to Outlook drafts as before. Compose opens a card in the corner of the window: name people from your directory or type addresses, brief Rowan on what it should say, and it drafts the message with its context on each recipient.',
