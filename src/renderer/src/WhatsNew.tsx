@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.28.0': [
+    'Mail is a real mail client now, laid out the way Gmail is. A folder rail on the left (Inbox, Starred, Handled, Automated, Drafts) with a Compose button, a tight conversation list in the middle, and a reading pane on the right, so a thread opens beside the list instead of pushing it down. Messages in a thread read oldest to newest with the earlier ones folded to a line, and hovering a row reveals handled and read/unread buttons where the date sits.',
+    'Reply without leaving the thread. The reply box opens at the foot of the conversation, with the “how should this be answered?” brief and the Draft it button inside it; the draft is written with what Rowan knows about the sender and files to Outlook drafts as before. Compose opens a card in the corner of the window: name people from your directory or type addresses, brief Rowan on what it should say, and it drafts the message with its context on each recipient.',
+    'Star a conversation to keep it close. Stars live in Rowan only; Outlook never sees them. Drafts lists what you have filed that the flow has not yet turned into an Outlook draft, so you can see it went.',
+    'Keyboard shortcuts, the Gmail set: j and k move through the list, e marks handled, s stars, u marks unread, r replies, c composes, / jumps to search, Esc closes. The empty reading pane shows the cheat sheet.'
+  ],
   '0.27.0': [
     'Send a meeting’s follow-up email straight to Outlook. With mail set up, the Follow-up email panel gains a To field and a Send to Outlook button. The recipients are filled from the meeting’s participants using the emails on their People pages — anyone without one on file is pointed out so you can add it — and the draft lands in Outlook within about a minute for you to review and send.'
   ],
