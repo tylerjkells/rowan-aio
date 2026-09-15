@@ -12,7 +12,7 @@ import {
 import { join } from 'path'
 import { getMailFolder } from './settings'
 import { readDirectory } from './directory'
-import type { MailMessage, MailStatus, MailTriage } from '../shared/types'
+import type { MailFiledDraft, MailMessage, MailStatus, MailTriage } from '../shared/types'
 
 // ---------------------------------------------------------------------------
 // Mail bridge: Rowan never talks to Exchange. A Power Automate flow drops one
@@ -308,10 +308,11 @@ export function readMailTriage(): MailTriage {
     const raw = JSON.parse(readFileSync(triageFile(), 'utf8')) as Partial<MailTriage>
     return {
       handled: raw.handled && typeof raw.handled === 'object' ? raw.handled : {},
+      starred: raw.starred && typeof raw.starred === 'object' ? raw.starred : {},
       read: raw.read && typeof raw.read === 'object' ? raw.read : {}
     }
   } catch {
-    return { handled: {}, read: {} }
+    return { handled: {}, starred: {}, read: {} }
   }
 }
 
@@ -320,6 +321,9 @@ function writeMailTriage(triage: MailTriage, keep: Set<string>): MailTriage {
   const live = new Set(readMailbox().map((m) => m.id))
   for (const id of Object.keys(triage.handled)) {
     if (!live.has(id) && !keep.has(id)) delete triage.handled[id]
+  }
+  for (const id of Object.keys(triage.starred)) {
+    if (!live.has(id) && !keep.has(id)) delete triage.starred[id]
   }
   for (const id of Object.keys(triage.read)) {
     if (!live.has(id) && !keep.has(id)) delete triage.read[id]
@@ -338,6 +342,46 @@ export function setMailHandled(messageIds: string[], handled: boolean): MailTria
     else delete triage.handled[id]
   }
   return writeMailTriage(triage, ids)
+}
+
+export function setMailStarred(messageIds: string[], starred: boolean): MailTriage {
+  const triage = readMailTriage()
+  const now = new Date().toISOString()
+  const ids = new Set(messageIds)
+  for (const id of ids) {
+    if (starred) triage.starred[id] = now
+    else delete triage.starred[id]
+  }
+  return writeMailTriage(triage, ids)
+}
+
+/**
+ * Drafts Rowan has filed to the outbound folder, newest first. The flow
+ * deletes each file once it has made the Outlook draft, so this is "waiting
+ * to be picked up" more than a sent folder; it still answers "did that go?"
+ */
+export function readFiledDrafts(): MailFiledDraft[] {
+  const dir = mailOutDir()
+  if (!dir || !existsSync(dir)) return []
+  const out: MailFiledDraft[] = []
+  for (const name of readdirSync(dir)) {
+    if (!name.toLowerCase().endsWith('.json')) continue
+    try {
+      const o = JSON.parse(readFileSync(join(dir, name), 'utf8')) as Record<string, unknown>
+      out.push({
+        id: name,
+        kind: o.kind === 'reply' ? 'reply' : 'new',
+        to: asText(o.to),
+        subject: asText(o.subject),
+        body: asText(o.body),
+        queuedAt: asText(o.queuedAt) || statSync(join(dir, name)).mtime.toISOString()
+      })
+    } catch {
+      // a file the flow is mid-way through deleting
+    }
+  }
+  out.sort((a, b) => b.queuedAt.localeCompare(a.queuedAt))
+  return out
 }
 
 export function setMailRead(messageIds: string[], read: boolean): MailTriage {
@@ -366,6 +410,7 @@ export function ensureMailDirs(): void {
 // ---------------------------------------------------------------------------
 
 let watcher: FSWatcher | null = null
+let outWatcher: FSWatcher | null = null
 let debounce: NodeJS.Timeout | null = null
 
 function announce(): void {
@@ -375,6 +420,8 @@ function announce(): void {
 export function stopMailWatch(): void {
   watcher?.close()
   watcher = null
+  outWatcher?.close()
+  outWatcher = null
   if (debounce) clearTimeout(debounce)
   debounce = null
 }
@@ -384,12 +431,22 @@ export function startMailWatch(): void {
   stopMailWatch()
   const dir = mailInDir()
   if (!dir || !existsSync(dir)) return
+  const ping = (): void => {
+    if (debounce) clearTimeout(debounce)
+    debounce = setTimeout(announce, 800)
+  }
   try {
-    watcher = watch(dir, () => {
-      if (debounce) clearTimeout(debounce)
-      debounce = setTimeout(announce, 800)
-    })
+    watcher = watch(dir, ping)
   } catch {
     // an unwatchable path just means the Mail view refreshes on its own
+  }
+  // the flow deleting a filed draft is worth a refresh of the Drafts folder too
+  const out = mailOutDir()
+  if (out && existsSync(out)) {
+    try {
+      outWatcher = watch(out, ping)
+    } catch {
+      // same as above
+    }
   }
 }

@@ -30,6 +30,8 @@ import type {
   LinkEntry,
   MailDraftInput,
   MailNewDraftInput,
+  MailComposeDraftInput,
+  MailFiledDraft,
   MailRecipients,
   MailDraftResult,
   MailMessage,
@@ -313,6 +315,13 @@ const api = {
       ipcRenderer.invoke('mail:setHandled', messageIds, handled),
     setRead: (messageIds: string[], read: boolean): Promise<MailTriage> =>
       ipcRenderer.invoke('mail:setRead', messageIds, read),
+    setStarred: (messageIds: string[], starred: boolean): Promise<MailTriage> =>
+      ipcRenderer.invoke('mail:setStarred', messageIds, starred),
+    /** drafts filed to the outbound folder that the flow has not picked up yet */
+    drafts: (): Promise<MailFiledDraft[]> => ipcRenderer.invoke('mail:drafts'),
+    /** ask the model for a fresh message from the compose card */
+    draftNew: (input: MailComposeDraftInput): Promise<MailDraftResult> =>
+      ipcRenderer.invoke('mail:draftNew', input),
     summarize: (messageId: string): Promise<MailDraftResult> =>
       ipcRenderer.invoke('mail:summarize', messageId),
     /** file the draft for the outbound flow to turn into an Outlook draft */

@@ -622,6 +622,8 @@ export interface MailMessage {
  */
 export interface MailTriage {
   handled: Record<string, string>
+  /** message id -> when it was starred; local only, Outlook never sees it */
+  starred: Record<string, string>
   /**
    * Rowan's own read state, layered over Outlook's one-way flag: true once a
    * message was opened here, false when explicitly marked unread again.
@@ -651,6 +653,24 @@ export interface MailNewDraftInput {
   to: string[]
   subject: string
   body: string
+}
+
+/** what the model needs to write a fresh message from the compose card */
+export interface MailComposeDraftInput {
+  to: string[]
+  subject: string
+  /** what the message should say, in the user's words */
+  instruction: string
+}
+
+/** a draft Rowan filed to the outbound folder, waiting for or already picked up by the flow */
+export interface MailFiledDraft {
+  id: string
+  kind: 'reply' | 'new'
+  to: string
+  subject: string
+  body: string
+  queuedAt: string
 }
 
 /** meeting participants resolved to addresses via the people directory */

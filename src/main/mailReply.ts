@@ -8,6 +8,7 @@ import { detailsFor, readDirectory } from './directory'
 import { getMailSignature, getSettings } from './settings'
 import { stripDashes, VOICE_RULES } from './voice'
 import type {
+  MailComposeDraftInput,
   MailDraftInput,
   MailDraftResult,
   MailMessage,
@@ -129,6 +130,73 @@ export async function draftMailReply(
       messages: [{ role: 'user', content: parts.filter((p) => p !== '').join('\n') }]
     })
 
+    const text = stripDashes(result.text.trim())
+    if (!text) return { ok: false, error: 'The model came back empty. Try again.' }
+    return { ok: true, body: text }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+const COMPOSE_SYSTEM = `You write emails on behalf of the user, in their voice.
+
+${VOICE_RULES}
+
+Rules:
+- Write only the message body. No subject line, no "Here's a draft", no commentary.
+- Say what the user asked you to say and nothing more. A short ask is a short email.
+- Never invent facts, dates, numbers, commitments, or attachments. Leave an obvious
+  [bracketed placeholder] where the user has to fill something in.
+- You may use what you are told about the recipient — outstanding commitments,
+  past meetings — only where it genuinely belongs in the message.
+- Plain text. No markdown, no bullet characters unless the message really is a list.
+- Open with the recipient's first name where you know it. Sign off with the user's
+  first name alone.
+- Write it the way a busy person actually types an email, not the way an assistant
+  would compose one. No "I hope this email finds you well", no "Please don't
+  hesitate to reach out".`
+
+/** What Rowan knows about each recipient of a fresh message. */
+function recipientContext(addresses: string[]): string {
+  const blocks: string[] = []
+  for (const address of addresses) {
+    const name = nameForAddress(address)
+    if (!name) continue
+    blocks.push(
+      senderContext({
+        from: address,
+        fromName: name
+      } as MailMessage)
+    )
+  }
+  return blocks.filter(Boolean).join('\n\n')
+}
+
+/** Draft a fresh message from the compose card. */
+export async function draftNewMail(input: MailComposeDraftInput): Promise<MailDraftResult> {
+  try {
+    const instruction = input.instruction.trim()
+    if (!instruction) return { ok: false, error: 'Say what the email should say first.' }
+    const yourName = getSettings().yourName.trim()
+    const to = input.to.map((a) => a.trim()).filter(Boolean)
+    const named = to.map((a) => {
+      const name = nameForAddress(a)
+      return name ? `${name} <${a}>` : a
+    })
+    const parts = [
+      yourName ? `You are writing as ${yourName}.` : '',
+      recipientContext(to),
+      '',
+      named.length ? `To: ${named.join(', ')}` : 'To: (not chosen yet)',
+      input.subject.trim() ? `Subject: ${input.subject.trim()}` : '',
+      '',
+      `What the email should say: ${instruction}`
+    ]
+    const result = await aiChat({
+      maxTokens: 1200,
+      system: COMPOSE_SYSTEM,
+      messages: [{ role: 'user', content: parts.filter((p) => p !== '').join('\n') }]
+    })
     const text = stripDashes(result.text.trim())
     if (!text) return { ok: false, error: 'The model came back empty. Try again.' }
     return { ok: true, body: text }

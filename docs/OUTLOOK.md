@@ -200,10 +200,12 @@ that, EWS, is being blocked starting October 1 2026.
 
 ### The outbound half
 
-Rowan never sends mail. "Draft a reply" (and "Send to Outlook" on a meeting's
-follow-up email) writes a JSON file into the bridge's `out` folder and stops
-there; a second flow turns it into a real Outlook draft, which the user
-reviews and sends themselves.
+Rowan never sends mail. Replying in the Mail view, composing a new message
+there, and "Send to Outlook" on a meeting's follow-up email all write a JSON
+file into the bridge's `out` folder and stop there; a second flow turns it
+into a real Outlook draft, which the user reviews and sends themselves. Until
+the flow picks a file up it shows under Drafts in the Mail view, so "did
+that go?" has an answer.
 
 The file looks like:
 
