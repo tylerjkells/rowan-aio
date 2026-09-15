@@ -10,10 +10,20 @@
 #   1. Bump "version" in package.json on main (the web editor works fine)
 #   2. Actions tab -> Release -> Run workflow
 #   3. When it finishes, open Releases, review the draft, click Publish
+#
+# Or, to skip the review step, run it with "publish" ticked: the release is
+# created published and marked Latest in one go, so the in-app updater
+# picks it up straight away. Re-running with publish on for a version that
+# already has a draft publishes that draft rather than making a second one.
 name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish immediately and mark as Latest (skips the draft)'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -49,10 +59,11 @@ jobs:
         shell: bash
         run: node scripts/whatsnew-notes.js "${{ steps.version.outputs.version }}" > release-body.md
 
-      - name: Create draft release with all artifacts
+      - name: Create release with all artifacts
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          draft: ${{ !inputs.publish }}
+          make_latest: ${{ inputs.publish && 'true' || 'false' }}
           tag_name: v${{ steps.version.outputs.version }}
           name: ${{ steps.version.outputs.version }}
           body_path: release-body.md

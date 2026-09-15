@@ -7,8 +7,7 @@ branch triggers the Test Build workflow, which produces a portable test exe
 as a workflow artifact (isolated data folder, no self-update, TEST badge —
 see docs/TESTING.md). After pushing a feature, tell Tyler a test build is
 ready in the Actions tab so he can try it; only merge to main once he's
-happy with it. Claude sessions cannot dispatch workflows themselves (403),
-but the push trigger makes that unnecessary.
+happy with it.
 
 ## Release process
 
@@ -28,7 +27,11 @@ Do all of these together:
 4. Run `npm run typecheck` (install deps first if `node_modules` is missing;
    `ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci` avoids the Electron binary download).
 5. Push to `main`.
-6. Tell Tyler it's ready — he triggers the release himself: Actions tab →
-   Release → Run workflow, then reviews the draft release and publishes it.
-   (The GitHub integration available to Claude sessions cannot dispatch
-   workflows — it gets a 403 — so don't try to trigger it.)
+6. Dispatch the Release workflow on `main` with the GitHub Actions tool
+   (`actions_run_trigger`, `workflow_id: release.yml`). When Tyler has asked
+   for the release to go out, pass the input `publish: true`: the release is
+   created already published and marked Latest, so the in-app updater picks
+   it up. Without that input it lands as a draft for him to review and
+   publish from the Releases page. Watch the run with `actions_list` and
+   report the outcome; a red run is yours to fix.
+   (An older note here said dispatching got a 403; that is no longer true.)
