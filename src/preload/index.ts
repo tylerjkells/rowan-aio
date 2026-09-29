@@ -45,6 +45,9 @@ import type {
   PersonSummary,
   RecordingMode,
   SeriesData,
+  TicketDesk,
+  TicketNote,
+  TicketSyncResult,
   ToolboxData,
   TranscriptSegment,
   UsageSummary,
@@ -267,6 +270,19 @@ const api = {
     autoThumb: (id: string): Promise<{ links?: LinkEntry[]; error?: string }> =>
       ipcRenderer.invoke('links:autoThumb', id),
     clearThumb: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:clearThumb', id)
+  },
+  tickets: {
+    get: (): Promise<TicketDesk> => ipcRenderer.invoke('tickets:get'),
+    /** merge a pasted ServiceNow JSONv2 page (or a Ticket Desk notes export) */
+    apply: (text: string): Promise<TicketSyncResult> => ipcRenderer.invoke('tickets:apply', text),
+    /** the same, straight from the clipboard */
+    applyClipboard: (): Promise<TicketSyncResult> => ipcRenderer.invoke('tickets:applyClipboard'),
+    setNote: (number: string, patch: Partial<TicketNote>): Promise<TicketNote> =>
+      ipcRenderer.invoke('tickets:setNote', number, patch)
+  },
+  clipboard: {
+    writeRich: (html: string, text: string): Promise<void> =>
+      ipcRenderer.invoke('clipboard:writeRich', html, text)
   },
   brand: {
     get: (): Promise<BrandData> => ipcRenderer.invoke('brand:get'),

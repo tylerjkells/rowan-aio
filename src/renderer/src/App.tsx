@@ -3,8 +3,10 @@ import type {
   AppSettings,
   AutoEndReason,
   EngineStatus,
-  MeetingListItem
+  MeetingListItem,
+  NavTab
 } from '../../shared/types'
+import { NAV_TABS } from '../../shared/tabs'
 import type { RecorderHandles } from './recorder'
 import { LibraryView } from './views/Library'
 import { RecordView } from './views/Record'
@@ -21,6 +23,7 @@ import { ProjectsView } from './views/Projects'
 import { MailView } from './views/Mail'
 import { ToolboxView } from './views/Toolbox'
 import { SeriesView } from './views/Series'
+import { TicketsView } from './views/Tickets'
 import { AskWidget } from './AskWidget'
 import { Digest } from './Digest'
 import { WhatsNew } from './WhatsNew'
@@ -35,6 +38,7 @@ import {
   PaletteIcon,
   BoardIcon,
   MailIcon,
+  TicketIcon,
   WrenchIcon,
   formatDuration
 } from './ui'
@@ -51,6 +55,7 @@ export type View =
   | { name: 'brand' }
   | { name: 'projects' }
   | { name: 'mail' }
+  | { name: 'tickets' }
   | { name: 'toolbox' }
   | { name: 'series'; title: string }
   | { name: 'import' }
@@ -138,6 +143,14 @@ export default function App(): React.JSX.Element {
     [rec, finishing, refreshMeetings]
   )
 
+  // tabs switched off in Settings leave the sidebar; their pages stay
+  // reachable from links elsewhere (Today's brief, for one)
+  const hiddenTabs = new Set(settings?.hiddenTabs ?? [])
+  const shows = (tab: NavTab): boolean => !hiddenTabs.has(tab)
+  const groupShows = (group: 'Meetings' | 'Workspace'): boolean =>
+    NAV_TABS.some((t) => t.group === group && shows(t.id))
+  const flush = view.name === 'mail' || view.name === 'projects' || view.name === 'tickets'
+
   return (
     <div className="shell">
       <nav className="sidebar">
@@ -152,63 +165,87 @@ export default function App(): React.JSX.Element {
         >
           <TodayIcon /> Today
         </button>
-        <div className="nav-section">Meetings</div>
-        <button
-          className={`nav-btn ${
-            view.name === 'library' ||
-            view.name === 'meeting' ||
-            view.name === 'series' ||
-            view.name === 'import'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() => setView({ name: 'library' })}
-        >
-          <ListIcon /> Library
-        </button>
-        <button
-          className={`nav-btn ${view.name === 'actions' ? 'active' : ''}`}
-          onClick={() => setView({ name: 'actions' })}
-        >
-          <CheckIcon /> Action items
-        </button>
-        <div className="nav-section">Workspace</div>
-        <button
-          className={`nav-btn ${view.name === 'people' || view.name === 'person' ? 'active' : ''}`}
-          onClick={() => setView({ name: 'people' })}
-        >
-          <UsersIcon /> People
-        </button>
-        <button
-          className={`nav-btn ${view.name === 'projects' ? 'active' : ''}`}
-          onClick={() => setView({ name: 'projects' })}
-        >
-          <BoardIcon /> ClickUp
-        </button>
-        <button
-          className={`nav-btn ${view.name === 'mail' ? 'active' : ''}`}
-          onClick={() => setView({ name: 'mail' })}
-        >
-          <MailIcon /> Mail
-        </button>
-        <button
-          className={`nav-btn ${view.name === 'links' ? 'active' : ''}`}
-          onClick={() => setView({ name: 'links' })}
-        >
-          <LinkIcon /> Links
-        </button>
-        <button
-          className={`nav-btn ${view.name === 'brand' ? 'active' : ''}`}
-          onClick={() => setView({ name: 'brand' })}
-        >
-          <PaletteIcon /> Brand
-        </button>
-        <button
-          className={`nav-btn ${view.name === 'toolbox' ? 'active' : ''}`}
-          onClick={() => setView({ name: 'toolbox' })}
-        >
-          <WrenchIcon /> Toolbox
-        </button>
+        {groupShows('Meetings') && <div className="nav-section">Meetings</div>}
+        {shows('library') && (
+          <button
+            className={`nav-btn ${
+              view.name === 'library' ||
+              view.name === 'meeting' ||
+              view.name === 'series' ||
+              view.name === 'import'
+                ? 'active'
+                : ''
+            }`}
+            onClick={() => setView({ name: 'library' })}
+          >
+            <ListIcon /> Library
+          </button>
+        )}
+        {shows('actions') && (
+          <button
+            className={`nav-btn ${view.name === 'actions' ? 'active' : ''}`}
+            onClick={() => setView({ name: 'actions' })}
+          >
+            <CheckIcon /> Action items
+          </button>
+        )}
+        {groupShows('Workspace') && <div className="nav-section">Workspace</div>}
+        {shows('people') && (
+          <button
+            className={`nav-btn ${view.name === 'people' || view.name === 'person' ? 'active' : ''}`}
+            onClick={() => setView({ name: 'people' })}
+          >
+            <UsersIcon /> People
+          </button>
+        )}
+        {shows('projects') && (
+          <button
+            className={`nav-btn ${view.name === 'projects' ? 'active' : ''}`}
+            onClick={() => setView({ name: 'projects' })}
+          >
+            <BoardIcon /> ClickUp
+          </button>
+        )}
+        {shows('mail') && (
+          <button
+            className={`nav-btn ${view.name === 'mail' ? 'active' : ''}`}
+            onClick={() => setView({ name: 'mail' })}
+          >
+            <MailIcon /> Mail
+          </button>
+        )}
+        {shows('tickets') && (
+          <button
+            className={`nav-btn ${view.name === 'tickets' ? 'active' : ''}`}
+            onClick={() => setView({ name: 'tickets' })}
+          >
+            <TicketIcon /> Tickets
+          </button>
+        )}
+        {shows('links') && (
+          <button
+            className={`nav-btn ${view.name === 'links' ? 'active' : ''}`}
+            onClick={() => setView({ name: 'links' })}
+          >
+            <LinkIcon /> Links
+          </button>
+        )}
+        {shows('brand') && (
+          <button
+            className={`nav-btn ${view.name === 'brand' ? 'active' : ''}`}
+            onClick={() => setView({ name: 'brand' })}
+          >
+            <PaletteIcon /> Brand
+          </button>
+        )}
+        {shows('toolbox') && (
+          <button
+            className={`nav-btn ${view.name === 'toolbox' ? 'active' : ''}`}
+            onClick={() => setView({ name: 'toolbox' })}
+          >
+            <WrenchIcon /> Toolbox
+          </button>
+        )}
         <div className="sidebar-spacer" />
         <button
           className={`nav-btn ${view.name === 'settings' ? 'active' : ''}`}
@@ -246,7 +283,7 @@ export default function App(): React.JSX.Element {
       </nav>
 
       <main
-        className={`main ${view.name === 'mail' || view.name === 'projects' ? 'main-flush' : ''}`}
+        className={`main ${flush ? 'main-flush' : ''}`}
         key={
           view.name +
           ('id' in view ? view.id : '') +
@@ -257,10 +294,7 @@ export default function App(): React.JSX.Element {
         <div
           className="view-enter"
           style={{
-            height:
-              view.name === 'record' || view.name === 'mail' || view.name === 'projects'
-                ? '100%'
-                : undefined
+            height: view.name === 'record' || flush ? '100%' : undefined
           }}
         >
           {view.name === 'today' && (
@@ -339,6 +373,7 @@ export default function App(): React.JSX.Element {
               onOpenPerson={(person) => setView({ name: 'person', person })}
             />
           )}
+          {view.name === 'tickets' && <TicketsView yourName={settings?.yourName ?? ''} />}
           {view.name === 'toolbox' && <ToolboxView />}
           {view.name === 'import' && (
             <ImportView

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { MailGuideDialog } from '../MailGuide'
 import { sanitizeSignatureHtml } from '../../../shared/signature'
+import { NAV_TABS } from '../../../shared/tabs'
 import type {
   AppSettings,
   AppTheme,
@@ -544,6 +545,36 @@ export function SettingsView({
               </button>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <header className="settings-label">
+          <h2>Tabs</h2>
+          <p className="hint">
+            Choose which tabs show in the sidebar, so tools you haven&apos;t set up stay out of the
+            way. Hiding a tab keeps everything in it; switch it back on anytime. Today and Settings
+            always show.
+          </p>
+        </header>
+        <div className="settings-body">
+          {NAV_TABS.map((t) => (
+            <SwitchRow
+              key={t.id}
+              title={t.label}
+              desc={t.desc}
+              checked={!settings.hiddenTabs.includes(t.id)}
+              onToggle={async (on) =>
+                onChange(
+                  await window.scribe.settings.update({
+                    hiddenTabs: on
+                      ? settings.hiddenTabs.filter((id) => id !== t.id)
+                      : [...settings.hiddenTabs, t.id]
+                  })
+                )
+              }
+            />
+          ))}
         </div>
       </section>
 
