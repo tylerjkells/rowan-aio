@@ -11,6 +11,10 @@ happy with it.
 
 ## Release process
 
+Never start any of this on your own. After pushing a feature, stop at the test
+build and wait for Tyler to say to merge or release; approval of one release
+doesn't carry over to the next change.
+
 When Tyler asks to merge work to main so he can cut a release, merging alone is
 not enough — the Release workflow names its draft release after the version in
 `package.json`, so an unbumped version silently produces no new release.

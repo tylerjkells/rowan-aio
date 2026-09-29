@@ -63,6 +63,7 @@ import {
 } from './links'
 import { getBrand, saveBrand } from './brand'
 import { applyTicketPaste, readDesk, setTicketNote } from './tickets'
+import { applyTeamPaste, readTeamDesk } from './team'
 import {
   addToolboxFiles,
   addToolboxGuide,
@@ -929,6 +930,9 @@ function registerIpc(): void {
   ipcMain.handle('tickets:setNote', (_e, number: string, patch: Partial<TicketNote>) =>
     setTicketNote(number, patch)
   )
+  ipcMain.handle('team:get', () => readTeamDesk())
+  ipcMain.handle('team:apply', (_e, text: string) => applyTeamPaste(text))
+  ipcMain.handle('team:applyClipboard', () => applyTeamPaste(clipboard.readText()))
   // html + plain text together, so a pasted link shows as its label in
   // Outlook, Teams and Webex and as the bare URL anywhere else
   ipcMain.handle('clipboard:writeRich', (_e, html: string, text: string) => {

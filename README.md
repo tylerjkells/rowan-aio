@@ -31,7 +31,11 @@ module of several.)
   Waiting, a next step and private notes per ticket, flags for "no reply yet",
   "they replied", "updated" and "quiet 30+ days", the cleaned-up comment
   history, copy-as-link ticket numbers for Outlook/Teams/Webex, and a monthly
-  recap of closed tickets ready to paste into email. Nothing is written back
+  recap of closed tickets ready to paste into email. A Service report view
+  covers the whole RO Operations group: opened vs closed, median time to
+  close, who closed what, top requesters, request types and the open queue
+  by age, for a week, a month, month to date or 12 months, each against the
+  period before, with a full-screen Present mode. Nothing is written back
   to ServiceNow.
 - **Action items** — every follow-up from every meeting in one place: dated
   items grouped by when, undated ones grouped by meeting, stale ones folded
@@ -109,7 +113,7 @@ carry over):
 - `meetings\<id>\audio.webm` — compressed audio for playback
 - `engine\` — whisper.cpp binary and models
 - `directory.json`, `links.json`, `brand.json`, `link-thumbs\`, `toolbox\`,
-  `tickets.json` — the workspace modules
+  `tickets.json`, `team-tickets.json` — the workspace modules
 - `clickup-activity.json` — the local ClickUp changelog snapshot
 
 Delete a meeting in the app (or delete its folder) and it's gone. There is no cloud copy.

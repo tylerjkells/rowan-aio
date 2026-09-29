@@ -452,6 +452,38 @@ export interface TicketSyncSummary {
   notesImported: number
 }
 
+/** one incident in the team's queue, slimmed to what the service report counts */
+export interface TeamTicket {
+  number: string
+  sysId: string
+  title: string
+  caller: string
+  /** who it's assigned to, display name ("Last, First") or '' */
+  assignee: string
+  state: string
+  active: boolean
+  /** ISO times; closedAt is '' while open */
+  openedAt: string
+  closedAt: string
+  updatedAt: string
+  /** the request type (u_incident_item) and how it came in (contact_type) */
+  type: string
+  channel: string
+  /** was open, then dropped out of the group's list: reassigned elsewhere */
+  gone?: boolean
+}
+
+export interface TeamDesk {
+  tickets: TeamTicket[]
+  syncedAt: string | null
+  /** ISO start of the history the stored data covers */
+  coverageStart: string | null
+}
+
+export type TeamSyncResult =
+  | { ok: true; desk: TeamDesk; summary: { count: number; added: number; changed: number; left: number } }
+  | { ok: false; error: string }
+
 export type TicketSyncResult =
   | { ok: true; desk: TicketDesk; summary: TicketSyncSummary }
   | { ok: false; error: string }
