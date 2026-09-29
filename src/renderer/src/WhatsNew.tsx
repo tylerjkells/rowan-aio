@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.31.0': [
+    'Tickets has a team view. Service report, in the Tickets rail, shows the whole RO Operations group for last week, last month, month to date or the last 12 months: tickets opened and closed, median time to close, how many closed within 14 days and what is open now, each against the period before, plus opened vs closed over time, who closed what, top requesters, request types, the open queue by age and status, and every ticket closed in the period. Present takes it full screen for a meeting. My tickets is still where the tab opens.',
+    'The team view has its own Update button with the group\'s ServiceNow link, and each update adds to the history already stored, so trends build up over time.',
+    'Both ServiceNow update popups now start by asking you to sign in to ServiceNow the usual way, since the ticket list link only works once you are already signed in.'
+  ],
   '0.30.1': [
     'Every ClickUp task shows which project it belongs to. Board cards lead with the project, list rows show it under the task name, and the task panel has a Project line, each with a colored dot so projects are easy to tell apart at a glance. Board cards used to lose it when Group was set to List.',
     'The Done and ClickUp buttons at the top of a task panel no longer wrap onto two lines.'
