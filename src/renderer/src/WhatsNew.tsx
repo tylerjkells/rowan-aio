@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.30.0': [
+    'A Tickets tab for your ServiceNow incidents. Click Update tickets, open your list in ServiceNow from the link it gives you, press Ctrl+A then Ctrl+C there, and choose Apply from clipboard. Sort tickets into Now, Next, Later and Waiting, keep a next step and private notes on each, and let the flags tell you which ones you have not answered yet, where someone replied after you, what changed since you last looked, and what has gone quiet for a month. Click a ticket for its whole comment history with the email clutter stripped out. Nothing is ever written back to ServiceNow.',
+    'Copy link on a ticket puts its number on the clipboard as a link, so it pastes into Outlook, Teams or Webex as the ticket number and opens the ticket when clicked. Monthly recap lists everything you closed in a month, grouped by requester if you like, ready to paste into an email.',
+    'Choose your tabs. Settings → Tabs has a switch for every tab in the sidebar except Today and Settings, so the tools you have not set up, like Mail or ClickUp, stay out of the way. Hiding a tab keeps everything in it; switch it back on anytime.'
+  ],
   '0.29.1': [
     'The ClickUp workspace tree folds properly now: the arrow on a space collapses it, and folders got their own arrows so a big space can be tidied down to the lists you use. What you fold stays folded.',
     'An All / Mine switch above the tree shows every list in the workspace or only the lists that hold a task assigned to you, so the rail stops listing things that are not yours.'
