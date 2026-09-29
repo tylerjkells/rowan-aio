@@ -98,20 +98,53 @@ function requestorOf(fields: RawCustomField[] | undefined): string | null {
 
 const DESCRIPTION_MAX = 4000
 
-let teamCache: RawTeam | null = null
-async function team(): Promise<RawTeam> {
-  if (teamCache) return teamCache
-  const { teams } = await req<{ teams: RawTeam[] }>('/team')
-  if (!teams.length) throw new Error('No ClickUp workspace on this token')
-  teamCache = teams[0]
-  return teamCache
+interface RawUser {
+  id: number
+  username: string | null
+  email: string
+}
+
+// who the token belongs to and its workspace, looked up once a session and
+// shared by callers that ask at the same moment; a failure is not kept
+let userPromise: Promise<RawUser> | null = null
+function me(): Promise<RawUser> {
+  userPromise ??= req<{ user: RawUser }>('/user').then(
+    (r) => r.user,
+    (err) => {
+      userPromise = null
+      throw err
+    }
+  )
+  return userPromise
+}
+
+let teamPromise: Promise<RawTeam> | null = null
+function team(): Promise<RawTeam> {
+  teamPromise ??= req<{ teams: RawTeam[] }>('/team').then(
+    ({ teams }) => {
+      if (!teams.length) throw new Error('No ClickUp workspace on this token')
+      return teams[0]
+    },
+    (err) => {
+      teamPromise = null
+      throw err
+    }
+  )
+  return teamPromise
+}
+
+/** a new or removed token starts every per-session cache over */
+function resetCaches(): void {
+  userPromise = null
+  teamPromise = null
+  listsCache = null
+  parentNames.clear()
 }
 
 export async function clickupStatus(): Promise<ClickupStatus> {
   if (!getClickupToken()) return { connected: false }
   try {
-    const { user } = await req<{ user: { username: string | null; email: string } }>('/user')
-    const t = await team()
+    const [user, t] = await Promise.all([me(), team()])
     return {
       connected: true,
       userName: user.username ?? user.email,
@@ -125,15 +158,18 @@ export async function clickupStatus(): Promise<ClickupStatus> {
 
 /** Save the token only if it actually works. */
 export async function connectClickup(token: string): Promise<ClickupStatus> {
-  teamCache = null
+  resetCaches()
   setClickupToken(token)
   const status = await clickupStatus()
-  if (!status.connected) setClickupToken(null)
+  if (!status.connected) {
+    setClickupToken(null)
+    resetCaches()
+  }
   return status
 }
 
 export function disconnectClickup(): void {
-  teamCache = null
+  resetCaches()
   setClickupToken(null)
 }
 
@@ -179,18 +215,23 @@ async function fetchRaw(query: string): Promise<{ raws: RawTask[]; truncated: bo
 /** name the parents of subtasks whose parent isn't in the fetched set, a few per fetch */
 async function nameParents(raws: RawTask[]): Promise<Map<string, string>> {
   const known = new Map(raws.map((r) => [r.id, r.name]))
-  let lookups = 15
+  const missing = new Set<string>()
   for (const raw of raws) {
     const p = raw.parent
-    if (!p || known.has(p) || parentNames.has(p) || lookups <= 0) continue
-    lookups--
-    try {
-      const parent = await req<{ name: string }>(`/task/${p}`)
-      parentNames.set(p, parent.name)
-    } catch {
-      // deleted or inaccessible parent: leave it unnamed
-    }
+    if (p && !known.has(p) && !parentNames.has(p)) missing.add(p)
+    if (missing.size >= 15) break
   }
+  // looked up side by side rather than one after another
+  await Promise.all(
+    [...missing].map(async (p) => {
+      try {
+        const parent = await req<{ name: string }>(`/task/${p}`)
+        parentNames.set(p, parent.name)
+      } catch {
+        // deleted or inaccessible parent: leave it unnamed
+      }
+    })
+  )
   return known
 }
 
@@ -223,7 +264,7 @@ function toTask(raw: RawTask, known: Map<string, string>): ClickupTask {
 
 /** Open tasks ordered by due date: the token user's, or everyone's. */
 async function fetchTasks(scope: 'mine' | 'all'): Promise<FetchedTasks> {
-  const { user } = await req<{ user: { id: number } }>('/user')
+  const user = await me()
   const filter = scope === 'mine' ? `&assignees[]=${user.id}` : ''
   const { raws, truncated } = await fetchRaw(`${filter}&include_closed=false&order_by=due_date`)
   const known = await nameParents(raws)
@@ -249,7 +290,7 @@ const DONE_WINDOW_MS = 30 * 86_400_000
 
 /** Tasks finished in the last month, newest first: the token user's, or everyone's. */
 export async function fetchClickupDone(scope: 'mine' | 'all'): Promise<ClickupTask[]> {
-  const { user } = await req<{ user: { id: number } }>('/user')
+  const user = await me()
   const filter = scope === 'mine' ? `&assignees[]=${user.id}` : ''
   const since = Date.now() - DONE_WINDOW_MS
   const { raws } = await fetchRaw(
@@ -285,27 +326,43 @@ interface RawFolder {
 }
 
 let listsCache: { at: number; lists: ClickupList[] } | null = null
+let listsInFlight: Promise<ClickupList[]> | null = null
 
 /** Every list in the workspace, cached briefly so the push picker is snappy. */
-export async function clickupLists(): Promise<ClickupList[]> {
-  if (listsCache && Date.now() - listsCache.at < 5 * 60_000) return listsCache.lists
+export function clickupLists(): Promise<ClickupList[]> {
+  if (listsCache && Date.now() - listsCache.at < 5 * 60_000) return Promise.resolve(listsCache.lists)
+  // the rail and the push picker can ask together; they share one walk
+  listsInFlight ??= walkLists().finally(() => {
+    listsInFlight = null
+  })
+  return listsInFlight
+}
+
+/** spaces, then each space's folders and folderless lists, all spaces at once */
+async function walkLists(): Promise<ClickupList[]> {
   const t = await team()
   const { spaces } = await req<{ spaces: { id: string; name: string }[] }>(
     `/team/${t.id}/space?archived=false`
   )
-  const lists: ClickupList[] = []
-  for (const space of spaces) {
-    const { folders } = await req<{ folders: RawFolder[] }>(`/space/${space.id}/folder?archived=false`)
-    for (const folder of folders) {
-      for (const list of folder.lists ?? []) {
-        lists.push({ id: list.id, name: list.name, folder: folder.name, space: space.name })
+  const perSpace = await Promise.all(
+    spaces.map(async (space) => {
+      const [{ folders }, folderless] = await Promise.all([
+        req<{ folders: RawFolder[] }>(`/space/${space.id}/folder?archived=false`),
+        req<{ lists: RawList[] }>(`/space/${space.id}/list?archived=false`)
+      ])
+      const lists: ClickupList[] = []
+      for (const folder of folders) {
+        for (const list of folder.lists ?? []) {
+          lists.push({ id: list.id, name: list.name, folder: folder.name, space: space.name })
+        }
       }
-    }
-    const folderless = await req<{ lists: RawList[] }>(`/space/${space.id}/list?archived=false`)
-    for (const list of folderless.lists) {
-      lists.push({ id: list.id, name: list.name, folder: null, space: space.name })
-    }
-  }
+      for (const list of folderless.lists) {
+        lists.push({ id: list.id, name: list.name, folder: null, space: space.name })
+      }
+      return lists
+    })
+  )
+  const lists = perSpace.flat()
   listsCache = { at: Date.now(), lists }
   return lists
 }
@@ -436,8 +493,27 @@ interface RawComment {
  * everyone scope "mine" is derived from the full set rather than fetched
  * again.
  */
+// Activity diffs run one at a time, in fetch order, behind the task list
+let activityChain: Promise<void> = Promise.resolve()
+
+/**
+ * Fetch the open tasks and hand them straight back. Working out what changed
+ * since last time (which can mean a dozen comment and task lookups) runs
+ * afterwards; clickupActivity() waits for it.
+ */
 export async function refreshClickup(scope: 'mine' | 'all' = 'mine'): Promise<ClickupRefreshResult> {
   const fetched = await fetchTasks(scope)
+  activityChain = activityChain.then(() => diffActivity(scope, fetched)).catch(() => {})
+  return { tasks: fetched.tasks, events: readActivity().events, truncated: fetched.truncated }
+}
+
+/** The Activity changelog once the latest refresh's diff has landed. */
+export async function clickupActivity(): Promise<ClickupActivityEvent[]> {
+  await activityChain
+  return readActivity().events
+}
+
+async function diffActivity(scope: 'mine' | 'all', fetched: FetchedTasks): Promise<void> {
   // a capped everyone fetch can't be trusted to contain all of yours, and a
   // missing task would be logged as "gone" — fetch yours directly in that case
   const tasks =
@@ -524,7 +600,6 @@ export async function refreshClickup(scope: 'mine' | 'all' = 'mine'): Promise<Cl
   store.snapshot = next
   store.events = [...fresh, ...store.events].slice(0, MAX_EVENTS)
   writeActivity(store)
-  return { tasks: fetched.tasks, events: store.events, truncated: fetched.truncated }
 }
 
 /** The newest comments on a task's thread, oldest first. */

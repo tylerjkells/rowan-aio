@@ -297,26 +297,34 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
       if (!quiet) setRefreshing(true)
       setError(null)
       try {
+        // the tasks are asked for alongside the connection check rather than
+        // after it; when not connected the check says so and this is ignored
+        const doneP = view === 'done' ? window.scribe.clickup.done('mine') : null
+        const refreshP = view === 'done' ? null : window.scribe.clickup.refresh(view === 'activity' ? 'mine' : scope)
+        doneP?.catch(() => {})
+        refreshP?.catch(() => {})
         const st = await window.scribe.clickup.status()
         if (seq !== loadSeq.current) return
         setStatus(st)
         if (!st.connected) return
-        if (view === 'done') {
-          const d = await window.scribe.clickup.done('mine')
+        if (doneP) {
+          const d = await doneP
           if (seq !== loadSeq.current) return
           setDone(d)
-        } else if (view !== 'activity') {
-          const r = await window.scribe.clickup.refresh(scope)
+        } else if (refreshP) {
+          const r = await refreshP
           if (seq !== loadSeq.current) return
-          if (scope === 'all') setAll(r.tasks)
-          else setMine(r.tasks)
+          if (view === 'activity' || scope === 'mine') setMine(r.tasks)
+          else setAll(r.tasks)
           setEvents(r.events)
-          setTruncated(r.truncated)
-        } else {
-          const r = await window.scribe.clickup.refresh('mine')
-          if (seq !== loadSeq.current) return
-          setMine(r.tasks)
-          setEvents(r.events)
+          if (view !== 'activity') setTruncated(r.truncated)
+          // what changed since last time lands a moment after the list does
+          window.scribe.clickup
+            .activity()
+            .then((ev) => {
+              if (seq === loadSeq.current) setEvents(ev)
+            })
+            .catch(() => {})
         }
         setLastRefresh(new Date().toISOString())
       } catch (err) {
@@ -335,8 +343,9 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     return () => clearInterval(t)
   }, [load])
 
+  // the workspace tree starts loading as the tab opens, not once the
+  // connection check is back; a second ask when it connects is shared or cached
   useEffect(() => {
-    if (!status?.connected) return
     window.scribe.clickup.lists().then(setLists).catch(() => {})
     window.scribe.clickup.members().then(setMembers).catch(() => {})
   }, [status?.connected])
