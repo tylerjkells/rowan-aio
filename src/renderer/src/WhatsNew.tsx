@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.31.1': [
+    'ClickUp loads faster. Your tasks and the workspace list no longer wait on each other or on the connection check, spaces load side by side, and the Activity changelog is worked out after your tasks are already on screen.',
+    'Subtasks are easier to tell apart from the task they belong to. When a subtask and its parent are in the same column or group, the subtask sits right under the parent, indented; elsewhere it says "Subtask of" and the parent\'s name. Parents show how many subtasks they have, and the task panel links both ways.',
+    'Clicking a list in the workspace shows every open task in it. Lists used to come from a capped download of the whole workspace and could be missing tasks; now each list is fetched on its own. The notice about a partial load only appears on Everyone and Unassigned, and says what it means.'
+  ],
   '0.31.0': [
     'Tickets has a team view. Service report, in the Tickets rail, shows the whole RO Operations group for last week, last month, month to date or the last 12 months: tickets opened and closed, median time to close, how many closed within 14 days and what is open now, each against the period before, plus opened vs closed over time, who closed what, top requesters, request types, the open queue by age and status, and every ticket closed in the period. Present takes it full screen for a meeting. My tickets is still where the tab opens.',
     'The team view has its own Update button with the group\'s ServiceNow link, and each update adds to the history already stored, so trends build up over time.',
