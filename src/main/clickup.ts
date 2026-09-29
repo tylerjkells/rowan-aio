@@ -241,6 +241,7 @@ function toTask(raw: RawTask, known: Map<string, string>): ClickupTask {
   return {
     id: raw.id,
     name: raw.name,
+    parentId: raw.parent ?? null,
     parentName: raw.parent ? (known.get(raw.parent) ?? parentNames.get(raw.parent) ?? null) : null,
     requestor: requestorOf(raw.custom_fields),
     description: desc

@@ -7693,6 +7693,94 @@ button.speaker-chip-btn:hover {
 .cuc-card.dragging {
   opacity: 0.5;
 }
+/* subtasks: nested under their parent where it's on screen, labelled where it isn't */
+.cuc-card.sub {
+  position: relative;
+  margin-left: calc(var(--depth, 1) * 16px);
+}
+.cuc-card.sub::before {
+  content: '';
+  position: absolute;
+  left: -11px;
+  top: -9px;
+  width: 9px;
+  height: 27px;
+  border-left: 1.5px solid var(--line-strong);
+  border-bottom: 1.5px solid var(--line-strong);
+  border-bottom-left-radius: 6px;
+}
+.cuc-subof {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cuc-card.sub .cuc-subof {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.cuc-subof b,
+.cuc-subof-link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 650;
+  color: var(--ink);
+}
+.cuc-kids {
+  flex: none;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.cuc-tr.sub .cuc-td-name {
+  padding-left: calc(var(--depth, 1) * 18px);
+}
+.cuc-sub-glyph {
+  margin-right: 6px;
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+.cuc-subtasks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cuc-subtask {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 5px var(--s2);
+  border-radius: var(--r-ctl);
+  text-align: left;
+  font-size: 13px;
+  color: var(--ink);
+}
+.cuc-subtask:hover {
+  background: var(--bg-overlay);
+}
+.cuc-subtask .cuc-pill-dot {
+  flex: none;
+}
+.cuc-subtask-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cuc-project {
   display: inline-flex;
   align-items: center;

@@ -227,7 +227,8 @@ export interface WeeklyDigest {
 export interface ClickupTask {
   id: string
   name: string
-  /** the parent task's name when this is a subtask */
+  /** the parent task's id and name when this is a subtask */
+  parentId: string | null
   parentName: string | null
   /** the list's "Requestor" dropdown value, where the list has that field */
   requestor: string | null
