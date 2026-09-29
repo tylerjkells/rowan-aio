@@ -3765,12 +3765,49 @@ select.text-input {
 }
 
 .whatsnew-box {
-  width: min(520px, 92vw);
+  width: min(560px, 92vw);
 }
 
-.whatsnew-actions {
+.whatsnew-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+
+/* one version's notes: the version number heads its bullets */
+.whatsnew-version h3 {
   display: flex;
-  justify-content: flex-end;
+  align-items: baseline;
+  gap: var(--s2);
+  margin: 0 0 var(--s2);
+  font-size: 13.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.whatsnew-yours {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-tint);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
+/* pinned under the notes, so a long catch-up list never hides the buttons */
+.whatsnew-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s5);
+  border-top: 1px solid var(--line-soft);
+}
+
+.whatsnew-all {
+  font-size: 12.5px;
 }
 
 /* ---------- ask widget (floating assistant) ---------- */
@@ -8450,6 +8487,41 @@ dialog.confirm p.tk-hint,
 }
 .tk-recap-preview a {
   color: var(--accent-strong);
+}
+/* the agenda draft: plain text, edited in place, bullets and indents kept */
+.tk-agenda-draft {
+  width: 100%;
+  max-height: 50vh;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  resize: vertical;
+}
+.tk-agenda-draft:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.cuc-rail-foot .link-btn {
+  align-self: flex-start;
+}
+/* your topic on a ticket row: a quiet label, not a flag */
+.tk-topic {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 17px;
+  color: var(--ink-soft);
+  vertical-align: 1px;
 }
 
 /* ---------- Team service report ----------

@@ -422,6 +422,8 @@ export interface Ticket {
   closeNotes: string
   /** newest first, as ServiceNow lists it */
   thread: TicketEntry[]
+  /** the request type (u_incident_item), '' when unset; missing on tickets stored before 0.33 */
+  type?: string
 }
 
 /** your own working state for a ticket; never sent to ServiceNow */
@@ -429,6 +431,8 @@ export interface TicketNote {
   plan: TicketPlan
   next: string
   notes: string
+  /** your own label for tickets that belong together, e.g. "RO KPI Dashboard"; groups them in the agenda summary */
+  topic?: string
   /** the updatedAt you last opened the ticket at; '' = never opened */
   seen: string
 }
