@@ -10,7 +10,7 @@ import type {
 } from '../../../shared/types'
 import { ClickupCompleteDialog } from '../ClickupComplete'
 import { ClickupPushDialog } from '../ClickupPush'
-import { Avatar } from '../ui'
+import { Avatar, hueFor } from '../ui'
 
 // ---------------------------------------------------------------------------
 // The ClickUp client. Laid out like a task tool: a rail of views and lists on
@@ -1153,11 +1153,9 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
 
   const row = (t: ClickupTask): React.JSX.Element => {
     const active = selectedId === t.id
-    const where = [
-      groupBy !== 'list' && !viewListId ? (t.folderName ? `${t.folderName} / ${t.listName}` : t.listName) : '',
-      t.parentName ? `↳ ${t.parentName}` : '',
-      t.requestor ? `for ${t.requestor}` : ''
-    ]
+    // the group header already names the list when grouping by it
+    const showProject = groupBy !== 'list' && !viewListId
+    const where = [t.parentName ? `↳ ${t.parentName}` : '', t.requestor ? `for ${t.requestor}` : '']
       .filter(Boolean)
       .join(' · ')
     return (
@@ -1188,7 +1186,13 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
         </span>
         <span className="cuc-td cuc-td-name">
           <span className="cuc-name">{t.name}</span>
-          {where && <span className="cuc-where">{where}</span>}
+          {(showProject || where) && (
+            <span className="cuc-where">
+              {showProject && <ProjectLabel task={t} />}
+              {showProject && where && ' · '}
+              {where}
+            </span>
+          )}
         </span>
         <span className="cuc-td cuc-td-status">{statusPicker(t, 'row', true)}</span>
         <span className="cuc-td cuc-td-assignee">{assigneePicker(t, 'row')}</span>
@@ -1357,12 +1361,13 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
                     }}
                     onClick={() => openTask(t)}
                   >
-                    <div className="cuc-card-name">{t.name}</div>
-                    {(t.parentName || (!viewListId && groupBy !== 'list')) && (
+                    {!viewListId && (
                       <div className="cuc-where">
-                        {[t.parentName ? `↳ ${t.parentName}` : '', !viewListId ? t.listName : ''].filter(Boolean).join(' · ')}
+                        <ProjectLabel task={t} />
                       </div>
                     )}
+                    <div className="cuc-card-name">{t.name}</div>
+                    {t.parentName && <div className="cuc-where">↳ {t.parentName}</div>}
                     <div className="cuc-card-foot">
                       {t.assignees.length > 0 ? (
                         <span className="cuc-card-avatars">
@@ -1537,9 +1542,12 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
         <button className="mailc-ic" onClick={() => setSelectedId(null)} title="Close (Esc)" aria-label="Close">
           ×
         </button>
-        <span className="cuc-panel-crumb">
-          {selected.folderName ? `${selected.folderName} / ` : ''}
+        <span
+          className="cuc-panel-crumb"
+          title={selected.folderName ? `${selected.folderName} / ${selected.listName}` : selected.listName}
+        >
           {selected.listName}
+          {selected.folderName ? ` · ${selected.folderName}` : ''}
         </span>
         <span className="mailc-read-bar-gap" />
         {view !== 'done' && (
@@ -1579,6 +1587,10 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
           </h2>
         )}
         <div className="cuc-props">
+          <span className="cuc-prop-k">Project</span>
+          <span className="cuc-prop-v cuc-prop-text">
+            <ProjectLabel task={selected} />
+          </span>
           <span className="cuc-prop-k">Status</span>
           <span className="cuc-prop-v">{statusPicker(selected, 'panel')}</span>
           <span className="cuc-prop-k">Assignee</span>
@@ -1730,5 +1742,19 @@ function AssigneeMenu({
         </button>
       )}
     </>
+  )
+}
+
+/** the list a task lives in, which is how projects are kept here, with a dot to tell them apart at a glance */
+function ProjectLabel({ task }: { task: ClickupTask }): React.JSX.Element {
+  return (
+    <span
+      className="cuc-project"
+      style={{ '--project-hue': hueFor(task.listName.toLowerCase()) } as React.CSSProperties}
+      title={task.folderName ? `${task.folderName} / ${task.listName}` : task.listName}
+    >
+      <span className="cuc-project-dot" aria-hidden="true" />
+      <span className="cuc-project-name">{task.listName}</span>
+    </span>
   )
 }
