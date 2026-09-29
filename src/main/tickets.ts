@@ -66,6 +66,7 @@ export function setTicketNote(number: string, patch: Partial<TicketNote>): Ticke
   if (patch.plan !== undefined && PLANS.includes(patch.plan)) cur.plan = patch.plan
   if (typeof patch.next === 'string') cur.next = patch.next.slice(0, 500)
   if (typeof patch.notes === 'string') cur.notes = patch.notes.slice(0, 20000)
+  if (typeof patch.topic === 'string') cur.topic = patch.topic.slice(0, 80)
   if (typeof patch.seen === 'string') cur.seen = patch.seen
   d.notes[number] = cur
   persist()

@@ -8510,6 +8510,19 @@ dialog.confirm p.tk-hint,
 .cuc-rail-foot .link-btn {
   align-self: flex-start;
 }
+/* your topic on a ticket row: a quiet label, not a flag */
+.tk-topic {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 17px;
+  color: var(--ink-soft);
+  vertical-align: 1px;
+}
 
 /* ---------- Team service report ----------
    KPIs for the RO Operations group. Two series run through every chart:

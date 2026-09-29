@@ -431,6 +431,8 @@ export interface TicketNote {
   plan: TicketPlan
   next: string
   notes: string
+  /** your own label for tickets that belong together, e.g. "RO KPI Dashboard"; groups them in the agenda summary */
+  topic?: string
   /** the updatedAt you last opened the ticket at; '' = never opened */
   seen: string
 }

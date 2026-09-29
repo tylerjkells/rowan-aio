@@ -213,6 +213,15 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
 
   const tickets = desk?.tickets ?? []
   const byNumber = useMemo(() => new Map(tickets.map((t) => [t.number, t])), [tickets])
+  /** every topic in use, once each, for the panel's suggestions */
+  const topics = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const n of Object.values(notes)) {
+      const t = n.topic?.trim()
+      if (t && !seen.has(topicKey(t))) seen.set(topicKey(t), t)
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b))
+  }, [notes])
   const isMe = useMemo(() => makeIsMe(desk?.me ?? null, yourName), [desk?.me, yourName])
   const selected = selectedId ? (byNumber.get(selectedId) ?? null) : null
 
@@ -301,7 +310,7 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
       if (caller && t.caller !== caller) return false
       if (stateFilter && t.state !== stateFilter) return false
       if (!needle) return true
-      const hay = `${t.number} ${t.title} ${t.caller} ${person(t.caller)} ${notes[t.number]?.next ?? ''}`
+      const hay = `${t.number} ${t.title} ${t.caller} ${person(t.caller)} ${notes[t.number]?.next ?? ''} ${notes[t.number]?.topic ?? ''}`
       return hay.toLowerCase().includes(needle)
     })
     const key =
@@ -491,6 +500,7 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
         <span className="tk-td tk-c-req">
           <span className="tk-name">{t.title}</span>
           <span className="tk-caller">
+            {note?.topic?.trim() && <span className="tk-topic">{note.topic.trim()}</span>}
             {/* number and date ride along here when the table is too narrow for their columns */}
             <span className="tk-inline">{t.number} · </span>
             {person(t.caller)}
@@ -670,6 +680,7 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
           key={selected.number}
           ticket={selected}
           note={notes[selected.number] ?? EMPTY_NOTE}
+          topics={topics}
           isMe={isMe}
           copied={copied === selected.number}
           onCopy={() => copyLink(selected)}
@@ -689,6 +700,7 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
 function TicketPanel({
   ticket: t,
   note,
+  topics,
   isMe,
   copied,
   onCopy,
@@ -697,6 +709,7 @@ function TicketPanel({
 }: {
   ticket: Ticket
   note: TicketNote
+  topics: string[]
   isMe: (who: string) => boolean
   copied: boolean
   onCopy: () => void
@@ -704,6 +717,7 @@ function TicketPanel({
   onClose: () => void
 }): React.JSX.Element {
   const [next, setNext] = useState(note.next)
+  const [topic, setTopic] = useState(note.topic ?? '')
   const [text, setText] = useState(note.notes)
   const [saveState, setSaveState] = useState<'' | 'Saving…' | 'Saved'>('')
   const pending = useRef<Partial<TicketNote>>({})
@@ -795,6 +809,26 @@ function TicketPanel({
                 queue({ next: e.target.value })
               }}
             />
+          </label>
+        )}
+        {!t.closed && (
+          <label className="pd-field">
+            <span>Topic</span>
+            <input
+              className="text-input"
+              value={topic}
+              list="tk-topics"
+              placeholder="e.g. RO KPI Dashboard. Same topic, same line in the agenda summary"
+              onChange={(e) => {
+                setTopic(e.target.value)
+                queue({ topic: e.target.value })
+              }}
+            />
+            <datalist id="tk-topics">
+              {topics.map((x) => (
+                <option key={x} value={x} />
+              ))}
+            </datalist>
           </label>
         )}
         <label className="pd-field">
@@ -1117,6 +1151,9 @@ function readAgendaOpts(): AgendaOpts {
   }
 }
 
+/** topics match whatever their case or spacing */
+const topicKey = (topic: string): string => topic.trim().replace(/\s+/g, ' ').toLowerCase()
+
 /** a ticket title trimmed for a list in parentheses */
 function shortTitle(title: string): string {
   const s = title.replace(/^\s*(\[external\]\s*)?((re|fwd?)\s*:\s*)*/i, '').trim()
@@ -1139,7 +1176,24 @@ function agendaLines(tickets: Ticket[], notes: Record<string, TicketNote>, o: Ag
   // each group's key, its place in the order, and how it reads with its count
   const WAITING = '\u0001waiting'
   const OTHER = '\u0002other'
+  const TOPIC = '\u0003topic:'
+  const topicOf = (t: Ticket): string => notes[t.number]?.topic?.trim() ?? ''
+  // each topic reads as its most common spelling, spacing tidied
+  const spellings = new Map<string, Map<string, number>>()
+  for (const t of open) {
+    const x = topicOf(t).replace(/\s+/g, ' ')
+    if (!x) continue
+    const m = spellings.get(topicKey(x)) ?? new Map<string, number>()
+    m.set(x, (m.get(x) ?? 0) + 1)
+    spellings.set(topicKey(x), m)
+  }
+  const topicLabel = new Map(
+    [...spellings].map(([k, m]) => [k, [...m].sort((a, b) => b[1] - a[1])[0][0]] as const)
+  )
   const keyOf = (t: Ticket): { key: string; rank: number } => {
+    // a topic you gave tickets keeps them together, whatever the grouping
+    const x = topicOf(t)
+    if (x) return { key: TOPIC + topicKey(x), rank: o.by === 'type' ? 1 : -1 }
     switch (o.by) {
       case 'plan':
         return { key: planOf(t), rank: PLAN_ORDER.indexOf(planOf(t)) }
@@ -1155,6 +1209,7 @@ function agendaLines(tickets: Ticket[], notes: Record<string, TicketNote>, o: Ag
   }
   const labelOf = (key: string, ts: Ticket[]): string => {
     const n = ts.length
+    if (key.startsWith(TOPIC)) return `regarding ${topicLabel.get(key.slice(TOPIC.length))}`
     if (o.by === 'plan') return PLAN_PHRASE[key as TicketPlan]
     if (o.by === 'requester') return `from ${key}`
     if (o.by === 'status') return key
@@ -1320,6 +1375,11 @@ function AgendaDialog({
       </div>
       {typesPending && (
         <p className="tk-hint">Request types fill in the next time you update your tickets.</p>
+      )}
+      {!Object.values(notes).some((n) => n.topic?.trim()) && (
+        <p className="tk-hint">
+          To keep related tickets on one line, give them the same Topic in the ticket panel.
+        </p>
       )}
       <textarea
         className="tk-agenda-draft"
