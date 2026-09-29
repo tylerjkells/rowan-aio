@@ -7693,6 +7693,31 @@ button.speaker-chip-btn:hover {
 .cuc-card.dragging {
   opacity: 0.5;
 }
+.cuc-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  color: var(--ink-soft);
+  font-weight: 550;
+  vertical-align: bottom;
+}
+.cuc-project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cuc-project-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: oklch(0.66 0.13 var(--project-hue));
+}
+.cuc-panel .mailc-read-tool {
+  white-space: nowrap;
+}
 .cuc-card-name {
   font-size: 13.5px;
   font-weight: 550;
