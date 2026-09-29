@@ -122,6 +122,9 @@ const SAVED_VIEWS: { id: ViewId; label: string; hint: string }[] = [
   { id: 'done', label: 'Done', hint: 'Yours, finished in the last month' }
 ]
 
+/** drop-target key for the board's Done column; no real status is named this */
+const DONE_COLUMN = '\u0000done'
+
 const GROUP_LABEL: Record<GroupBy, string> = {
   due: 'Due date',
   list: 'List',
@@ -814,7 +817,11 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
       seen.add(k)
       order.push({ status: s.status, color: s.color, type: s.type ?? 'custom' })
     }
-    if (viewListId && listStatuses[viewListId]) listStatuses[viewListId].forEach(push)
+    // finished statuses fold into the board's own Done column, which asks for
+    // the closing note first
+    if (viewListId && listStatuses[viewListId]) {
+      listStatuses[viewListId].filter((s) => s.type !== 'done' && s.type !== 'closed').forEach(push)
+    }
     for (const t of tasks) push({ status: t.status, color: t.statusColor })
     return order
       .map((c) => ({ ...c, tasks: tasks.filter((t) => t.status.toLowerCase() === c.status.toLowerCase()) }))
@@ -1269,6 +1276,40 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   const canDropOn = (t: ClickupTask, statusName: string): boolean =>
     (listStatuses[t.listId] ?? []).some((s) => s.status.toLowerCase() === statusName.toLowerCase())
 
+  // the last column on every board: dropping a task here opens the same
+  // closing-note dialog as ✓ Done, and nothing moves until that's confirmed
+  const doneColumn = (
+    <div
+      className={`cuc-col cuc-col-done ${dropCol === DONE_COLUMN ? 'over' : ''}`}
+      onDragOver={(e) => {
+        if (!dragId) return
+        e.preventDefault()
+        if (dropCol !== DONE_COLUMN) setDropCol(DONE_COLUMN)
+      }}
+      onDragLeave={(e) => {
+        // moving onto the hint inside the column is not leaving it
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null) && dropCol === DONE_COLUMN) setDropCol(null)
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        setDropCol(null)
+        const dragged = dragId ? tasks?.find((t) => t.id === dragId) : null
+        setDragId(null)
+        if (dragged) setCompleting(dragged)
+      }}
+    >
+      <div className="cuc-col-head" style={{ '--pill': 'var(--ok)' } as React.CSSProperties}>
+        <span className="cuc-pill-dot" />
+        <span className="cuc-col-name">Done</span>
+      </div>
+      <div className="cuc-col-body">
+        <p className="cuc-col-hint">
+          Drop a task here to finish it. You&apos;ll be asked for a closing note, as with ✓ Done.
+        </p>
+      </div>
+    </div>
+  )
+
   const board = (
     <div className="cuc-board">
       {boardColumns.map((col) => {
@@ -1356,6 +1397,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
         )
       })}
       {boardColumns.length === 0 && <p className="cuc-empty">Nothing to lay out.</p>}
+      {doneColumn}
     </div>
   )
 

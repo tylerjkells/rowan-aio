@@ -7630,6 +7630,22 @@ button.speaker-chip-btn:hover {
 .cuc-col.blocked {
   opacity: 0.4;
 }
+.cuc-col-done {
+  border-style: dashed;
+  background: transparent;
+}
+.cuc-col-done.over {
+  border-style: solid;
+  border-color: var(--ok);
+  background: color-mix(in oklab, var(--ok) 12%, transparent);
+}
+.cuc-col-hint {
+  margin: 0;
+  padding: var(--s2) var(--s2) var(--s3);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
 .cuc-col-head {
   display: flex;
   align-items: center;
