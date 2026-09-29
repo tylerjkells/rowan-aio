@@ -7,7 +7,8 @@ import {
   desktopCapturer,
   protocol,
   dialog,
-  nativeTheme
+  nativeTheme,
+  clipboard
 } from 'electron'
 import { writeFileSync } from 'fs'
 import { join } from 'path'
@@ -61,6 +62,7 @@ import {
   toggleLinkPin
 } from './links'
 import { getBrand, saveBrand } from './brand'
+import { applyTicketPaste, readDesk, setTicketNote } from './tickets'
 import {
   addToolboxFiles,
   addToolboxGuide,
@@ -184,6 +186,7 @@ import type {
   Meeting,
   PersonDetails,
   RecordingMode,
+  TicketNote,
   WhisperModel
 } from '../shared/types'
 
@@ -918,6 +921,19 @@ function registerIpc(): void {
   ipcMain.handle('links:pickThumb', (_e, id: string) => pickLinkThumb(id))
   ipcMain.handle('links:autoThumb', (_e, id: string) => autoLinkThumb(id))
   ipcMain.handle('links:clearThumb', (_e, id: string) => clearLinkThumb(id))
+
+  ipcMain.handle('tickets:get', () => readDesk())
+  ipcMain.handle('tickets:apply', (_e, text: string) => applyTicketPaste(text))
+  // the JSON page can run to megabytes; reading it here spares the textarea
+  ipcMain.handle('tickets:applyClipboard', () => applyTicketPaste(clipboard.readText()))
+  ipcMain.handle('tickets:setNote', (_e, number: string, patch: Partial<TicketNote>) =>
+    setTicketNote(number, patch)
+  )
+  // html + plain text together, so a pasted link shows as its label in
+  // Outlook, Teams and Webex and as the bare URL anywhere else
+  ipcMain.handle('clipboard:writeRich', (_e, html: string, text: string) => {
+    clipboard.write({ html, text })
+  })
 
   ipcMain.handle('brand:get', () => getBrand())
   ipcMain.handle('brand:save', (_e, data: BrandData) => saveBrand(data))

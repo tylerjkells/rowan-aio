@@ -2,7 +2,8 @@ import { app, safeStorage } from 'electron'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { sanitizeSignatureHtml, signatureToText } from '../shared/signature'
-import type { AppSettings, AppTheme, WhisperModel } from '../shared/types'
+import { isNavTab } from '../shared/tabs'
+import type { AppSettings, AppTheme, NavTab, WhisperModel } from '../shared/types'
 
 interface StoredSettings {
   whisperModel: WhisperModel
@@ -44,6 +45,8 @@ interface StoredSettings {
   workdayEnd: string
   /** calendar-event title fragments to hide everywhere */
   calendarIgnores: string[]
+  /** sidebar tabs switched off */
+  hiddenTabs: NavTab[]
   /** base64 of safeStorage-encrypted API key */
   apiKeyEncrypted: string | null
   /** base64 of safeStorage-encrypted iCal feed URL (the URL is a secret) */
@@ -87,6 +90,7 @@ const DEFAULTS: StoredSettings = {
   workdayStart: '08:00',
   workdayEnd: '16:30',
   calendarIgnores: [],
+  hiddenTabs: [],
   apiKeyEncrypted: null,
   calendarUrlEncrypted: null,
   clickupTokenEncrypted: null,
@@ -153,6 +157,7 @@ export function getSettings(): AppSettings {
     workdayStart: validTime(s.workdayStart, DEFAULTS.workdayStart),
     workdayEnd: validTime(s.workdayEnd, DEFAULTS.workdayEnd),
     calendarIgnores: s.calendarIgnores ?? [],
+    hiddenTabs: (s.hiddenTabs ?? []).filter(isNavTab),
     hasApiKey: !!s.apiKeyEncrypted,
     hasOpenaiKey: !!s.openaiKeyEncrypted,
     aiReady: s.aiProvider === 'openai' ? !!s.openaiKeyEncrypted : !!s.apiKeyEncrypted,
@@ -209,6 +214,7 @@ export function updateSettings(
       | 'calendarIgnores'
       | 'workdayStart'
       | 'workdayEnd'
+      | 'hiddenTabs'
     >
   >
 ): AppSettings {
@@ -280,6 +286,7 @@ export function updateSettings(
       })
       .slice(0, 100)
   }
+  if (Array.isArray(patch.hiddenTabs)) s.hiddenTabs = [...new Set(patch.hiddenTabs.filter(isNavTab))]
   if (typeof patch.yourName === 'string') s.yourName = patch.yourName.trim()
   persist()
   return getSettings()

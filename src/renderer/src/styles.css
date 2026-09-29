@@ -7877,3 +7877,384 @@ button.speaker-chip-btn:hover {
 .cuc.with-panel .cuc-search-wrap {
   max-width: 220px;
 }
+
+/* ---------- Tickets ----------
+   The ClickUp client's frame (rail, table, sliding panel) around ServiceNow
+   incidents. Rows run taller than ClickUp's: each carries the caller, your
+   next step, and flag pills under the title. */
+.tk-table {
+  min-width: 0;
+}
+.tk-thead,
+.tk-tr {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr) 64px 84px 96px 112px;
+  gap: var(--s3);
+  padding: 0 var(--s4);
+}
+.tk.tk-closed .tk-thead,
+.tk.tk-closed .tk-tr {
+  grid-template-columns: 104px minmax(0, 1fr) 96px 96px 72px 140px;
+}
+.tk-thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 32px;
+  align-items: center;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line-soft);
+}
+.tk-th {
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+.tk-tr {
+  align-items: start;
+  padding-top: var(--s3);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line-soft);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease-out);
+}
+.tk-tr:hover {
+  background: var(--bg-raised);
+}
+.tk-tr.active {
+  background: var(--accent-tint);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.tk-td {
+  min-width: 0;
+}
+.tk-num {
+  text-align: right;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tk-th.tk-num {
+  font-size: 11px;
+}
+.tk-c-num {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.tk-copy {
+  padding: 1px var(--s2);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  opacity: 0;
+  transition:
+    opacity var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out),
+    border-color var(--t-fast) var(--ease-out);
+}
+.tk-tr:hover .tk-copy,
+.tk-tr.active .tk-copy,
+.tk-copy:focus-visible,
+.tk-copy.done {
+  opacity: 1;
+}
+.tk-copy:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.tk-copy.done {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.tk-c-req {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tk-name {
+  font-size: 13.5px;
+  font-weight: 550;
+  line-height: 1.35;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tk-caller {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.tk-next {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.tk-next b {
+  color: var(--ok);
+  font-weight: 650;
+}
+.tk-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  margin-top: var(--s1);
+}
+.tk-flag {
+  padding: 0 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.tk-flag-unanswered {
+  color: var(--accent-strong);
+}
+.tk-flag-replied {
+  color: var(--warn);
+}
+.tk-flag-updated {
+  color: var(--ok);
+}
+.tk-flag-stale {
+  color: var(--ink-faint);
+}
+.tk-state {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.tk-state.hold {
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+.tk-plan {
+  width: 100%;
+  margin-top: -3px;
+}
+
+/* the table answers to its own width, which the panel and the window
+   both squeeze: columns drop in two steps, keeping the ones triage needs */
+.tk .cuc-main {
+  container-type: inline-size;
+}
+.tk-inline {
+  display: none;
+}
+@container (max-width: 820px) {
+  .tk-thead,
+  .tk-tr {
+    grid-template-columns: 96px minmax(0, 1fr) 72px 104px;
+  }
+  .tk.tk-closed .tk-thead,
+  .tk.tk-closed .tk-tr {
+    grid-template-columns: 96px minmax(0, 1fr) 92px 120px;
+  }
+  .tk-c-opened,
+  .tk-c-days,
+  .tk:not(.tk-closed) .tk-c-state {
+    display: none;
+  }
+}
+@container (max-width: 560px) {
+  .tk-thead,
+  .tk-tr {
+    grid-template-columns: minmax(0, 1fr) 104px;
+  }
+  .tk-c-num,
+  .tk-c-activity,
+  .tk-c-closed,
+  .tk.tk-closed .tk-c-state {
+    display: none;
+  }
+  .tk-inline {
+    display: inline;
+  }
+  .tk.tk-closed .tk-thead,
+  .tk.tk-closed .tk-tr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tk-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin: var(--s3) var(--s4) 0;
+  padding: var(--s2) var(--s2) var(--s2) var(--s3);
+  border-radius: var(--r-ctl);
+  background: var(--accent-tint);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.tk-banner > span {
+  padding-top: 4px;
+}
+.tk-banner.error {
+  color: var(--accent-strong);
+}
+
+.tk-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s6);
+  padding: var(--s4);
+  border-bottom: 1px solid var(--line-soft);
+}
+.tk-stat b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.tk-stat span {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* panel */
+.tk-panel-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.tk-plan-seg {
+  align-self: flex-start;
+  flex-wrap: wrap;
+  padding: 2px;
+  gap: 2px;
+}
+.tk-panel .mailc-read-tool {
+  white-space: nowrap;
+}
+.tk-plan-seg button {
+  padding: 3px var(--s3);
+  font-size: 12.5px;
+}
+.tk-field-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+.tk-save {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+.tk-notes {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.55;
+}
+.tk-kind {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--bg-overlay);
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.tk-mine .cuc-comment-head strong {
+  color: var(--ok);
+}
+.tk-panel .cuc-comment-text a,
+.tk-panel .cuc-desc a {
+  color: var(--accent-strong);
+  overflow-wrap: anywhere;
+}
+
+/* dialogs */
+dialog.confirm.tk-dialog {
+  width: min(680px, 92vw);
+}
+.tk-steps {
+  margin: var(--s2) 0 var(--s4);
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+.tk-steps a {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.tk-paste {
+  min-height: 110px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+dialog.confirm p.tk-hint,
+.tk-hint {
+  margin-top: var(--s2);
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.tk-recap-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3) var(--s5);
+  margin: var(--s4) 0 var(--s3);
+}
+.tk-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.tk-recap-preview {
+  max-height: 45vh;
+  overflow: auto;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.tk-recap-preview h4 {
+  margin: var(--s3) 0 var(--s1);
+  font-size: 13px;
+  color: var(--ink);
+}
+.tk-recap-preview > div:first-child h4 {
+  margin-top: 0;
+}
+.tk-recap-preview ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.tk-recap-preview li {
+  margin: 2px 0;
+}
+.tk-recap-preview a {
+  color: var(--accent-strong);
+}

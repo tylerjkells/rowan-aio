@@ -26,6 +26,13 @@ module of several.)
   search, AI summaries and drafted replies that land in Outlook Drafts, one
   click to a ClickUp task or a colleague's People page, and a warning when
   the flow goes quiet.
+- **Tickets** — your ServiceNow incidents, pasted in from the JSONv2 list
+  (copy the page, click Apply from clipboard): triage into Now / Next / Later /
+  Waiting, a next step and private notes per ticket, flags for "no reply yet",
+  "they replied", "updated" and "quiet 30+ days", the cleaned-up comment
+  history, copy-as-link ticket numbers for Outlook/Teams/Webex, and a monthly
+  recap of closed tickets ready to paste into email. Nothing is written back
+  to ServiceNow.
 - **Action items** — every follow-up from every meeting in one place: dated
   items grouped by when, undated ones grouped by meeting, stale ones folded
   away for a bulk review. Done, dismissed, and snoozed are kept apart; select
@@ -44,6 +51,8 @@ module of several.)
   storable, per-provider model picks.
 - **Six themes** — including Notion and iOS looks that restyle components,
   not just colors.
+- **Your tabs** — Settings → Tabs switches any sidebar tab off (Today and
+  Settings stay), so tools you haven't set up stay out of the way.
 
 ## The meeting companion
 
@@ -99,8 +108,8 @@ carry over):
 - `meetings\<id>\meeting.json` — metadata, transcript, summary
 - `meetings\<id>\audio.webm` — compressed audio for playback
 - `engine\` — whisper.cpp binary and models
-- `directory.json`, `links.json`, `brand.json`, `link-thumbs\`, `toolbox\` —
-  the workspace modules
+- `directory.json`, `links.json`, `brand.json`, `link-thumbs\`, `toolbox\`,
+  `tickets.json` — the workspace modules
 - `clickup-activity.json` — the local ClickUp changelog snapshot
 
 Delete a meeting in the app (or delete its folder) and it's gone. There is no cloud copy.

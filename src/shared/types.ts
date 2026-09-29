@@ -389,6 +389,73 @@ export interface LinkEntry {
   thumb?: string
 }
 
+/** where a ticket sits in your own triage; '' = not triaged yet */
+export type TicketPlan = 'now' | 'next' | 'later' | 'waiting' | ''
+
+/** one comment or work note in a ServiceNow ticket's history */
+export interface TicketEntry {
+  /** ISO time */
+  at: string
+  /** display name as ServiceNow shows it, usually "Last, First" */
+  who: string
+  kind: 'comment' | 'worknote'
+  /** signatures, safelinks and mailto noise stripped */
+  text: string
+}
+
+/** a ServiceNow incident, as pasted from the JSONv2 list (see Tickets view) */
+export interface Ticket {
+  /** INC number; the key everywhere */
+  number: string
+  /** ServiceNow sys_id, for links back; '' when the paste lacked it */
+  sysId: string
+  title: string
+  caller: string
+  state: string
+  /** ISO times */
+  openedAt: string
+  updatedAt: string
+  closed: boolean
+  /** ISO; '' while open */
+  closedAt: string
+  closeNotes: string
+  /** newest first, as ServiceNow lists it */
+  thread: TicketEntry[]
+}
+
+/** your own working state for a ticket; never sent to ServiceNow */
+export interface TicketNote {
+  plan: TicketPlan
+  next: string
+  notes: string
+  /** the updatedAt you last opened the ticket at; '' = never opened */
+  seen: string
+}
+
+export interface TicketDesk {
+  tickets: Ticket[]
+  notes: Record<string, TicketNote>
+  /** your name as ServiceNow shows it (from assigned_to), so your replies can be told apart */
+  me: string | null
+  /** ISO time of the last applied update */
+  syncedAt: string | null
+}
+
+export interface TicketSyncSummary {
+  open: number
+  added: string[]
+  updated: string[]
+  closed: { number: string; title: string }[]
+  /** already-closed tickets new to the desk (history) */
+  archived: number
+  /** plans and notes brought over from the Ticket Desk artifact */
+  notesImported: number
+}
+
+export type TicketSyncResult =
+  | { ok: true; desk: TicketDesk; summary: TicketSyncSummary }
+  | { ok: false; error: string }
+
 /** one color in the brand guide */
 export interface BrandColor {
   name: string
@@ -586,7 +653,21 @@ export interface AppSettings {
   calendarIgnores: string[]
   /** the same signature as plain text, derived from the HTML */
   mailSignatureText: string
+  /** sidebar tabs the user switched off (see shared/tabs.ts) */
+  hiddenTabs: NavTab[]
 }
+
+/** sidebar tabs that can be hidden; Today and Settings always show */
+export type NavTab =
+  | 'library'
+  | 'actions'
+  | 'people'
+  | 'projects'
+  | 'mail'
+  | 'tickets'
+  | 'links'
+  | 'brand'
+  | 'toolbox'
 
 /** one message, as filed by the Power Automate bridge (see docs/OUTLOOK.md) */
 export interface MailMessage {
