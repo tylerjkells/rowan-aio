@@ -7124,7 +7124,8 @@ button.speaker-chip-btn:hover {
   font: inherit;
   font-size: 12.5px;
 }
-.cuc-layout button {
+.cuc-layout button,
+.cuc-who button {
   padding: 4px var(--s3);
   font-size: 12.5px;
 }
@@ -7682,7 +7683,7 @@ button.speaker-chip-btn:hover {
   gap: 4px;
   transition:
     border-color var(--t-fast) var(--ease-out),
-    transform var(--t-fast) var(--ease-out);
+    opacity var(--t-fast) var(--ease-out);
 }
 .cuc-card:hover {
   border-color: var(--line-strong);
@@ -7693,21 +7694,90 @@ button.speaker-chip-btn:hover {
 .cuc-card.dragging {
   opacity: 0.5;
 }
-/* subtasks: nested under their parent where it's on screen, labelled where it isn't */
-.cuc-card.sub {
-  position: relative;
-  margin-left: calc(var(--depth, 1) * 16px);
+/* a subtask's parent, quiet and under its name; pointing at it (or at a
+   parent's subtask count) lights up the family across the board */
+.cuc-card-parent {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  margin-top: -2px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  white-space: nowrap;
 }
-.cuc-card.sub::before {
-  content: '';
+.cuc-card-parent-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cuc-card-parent:hover {
+  color: var(--ink-soft);
+}
+.cuc-board.tracing .cuc-card:not(.kin) {
+  opacity: 0.35;
+}
+.cuc-board.tracing .cuc-card.kin {
+  border-color: var(--accent);
+}
+button.cuc-kids {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  background: transparent;
+}
+button.cuc-kids:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.cuc-kids-caret {
+  font-size: 9px;
+  transition: transform var(--t-fast) var(--ease-out);
+  transform: rotate(-90deg);
+}
+.cuc-kids.open .cuc-kids-caret {
+  transform: none;
+}
+.cuc-card-kids {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 6px calc(-1 * var(--s2)) calc(-1 * var(--s1));
+  padding-top: 6px;
+  border-top: 1px solid var(--line-soft);
+  cursor: default;
+}
+.cuc-card-kid {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 4px var(--s2) 4px calc(var(--s2) + var(--depth, 0) * 14px);
+  border-radius: var(--r-ctl);
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.cuc-card-kid:hover {
+  background: var(--bg-overlay);
+}
+.cuc-card-kid .cuc-pill-dot {
+  flex: none;
+}
+.cuc-card-kid-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sr-only {
   position: absolute;
-  left: -11px;
-  top: -9px;
-  width: 9px;
-  height: 27px;
-  border-left: 1.5px solid var(--line-strong);
-  border-bottom: 1.5px solid var(--line-strong);
-  border-bottom-left-radius: 6px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 .cuc-subof {
   display: flex;
@@ -7719,12 +7789,6 @@ button.speaker-chip-btn:hover {
   color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
-}
-.cuc-card.sub .cuc-subof {
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
 }
 .cuc-subof b,
 .cuc-subof-link {
