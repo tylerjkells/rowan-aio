@@ -200,6 +200,7 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
   const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null)
   const [updating, setUpdating] = useState(false)
   const [recapOpen, setRecapOpen] = useState(false)
+  const [agendaOpen, setAgendaOpen] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -395,6 +396,13 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
         </span>
       </button>
       <div className="cuc-rail-foot">
+        <button
+          className="link-btn"
+          onClick={() => setAgendaOpen(true)}
+          title="Your open tickets summed up for a meeting agenda, ready for Google Sheets"
+        >
+          Agenda summary
+        </button>
         <button className="link-btn" onClick={() => setRecapOpen(true)}>
           Monthly recap
         </button>
@@ -671,6 +679,7 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
       )}
       {updateDialog}
       {recapOpen && <RecapDialog tickets={tickets} onClose={() => setRecapOpen(false)} />}
+      {agendaOpen && <AgendaDialog tickets={tickets} notes={notes} onClose={() => setAgendaOpen(false)} />}
     </div>
   )
 }
@@ -1058,6 +1067,298 @@ function RecapDialog({ tickets, onClose }: { tickets: Ticket[]; onClose: () => v
         </button>
         <button className="btn btn-primary" onClick={copy} disabled={items.length === 0}>
           {copied ? 'Copied' : 'Copy for email'}
+        </button>
+      </div>
+    </dialog>
+  )
+}
+
+// ---- agenda summary ---------------------------------------------------------------
+// Open tickets summed up for a meeting agenda: a count, then groups naming
+// their tickets, with next steps under them. The draft is plain text, edited
+// in place; Google Sheets gets it as a one-cell table so it lands in a single
+// cell, line breaks and all.
+
+type AgendaBy = 'type' | 'plan' | 'status' | 'requester'
+interface AgendaOpts {
+  by: AgendaBy
+  names: boolean
+  steps: boolean
+  closed: boolean
+}
+interface AgendaLine {
+  level: 0 | 1 | 2
+  text: string
+}
+
+const AGENDA_BY: { id: AgendaBy; label: string }[] = [
+  { id: 'type', label: 'Request type' },
+  { id: 'plan', label: 'Your plan' },
+  { id: 'status', label: 'ServiceNow status' },
+  { id: 'requester', label: 'Requester' }
+]
+const PLAN_PHRASE: Record<TicketPlan, string> = {
+  now: 'in progress',
+  next: 'up next',
+  waiting: 'waiting on someone else',
+  later: 'for later',
+  '': 'not triaged yet'
+}
+const PLAN_ORDER: TicketPlan[] = ['now', 'next', 'waiting', 'later', '']
+/** the bullets an agenda already uses, one per level */
+const BULLET = ['', '● ', '    ○ ']
+
+function readAgendaOpts(): AgendaOpts {
+  const d: AgendaOpts = { by: 'type', names: true, steps: true, closed: true }
+  try {
+    return { ...d, ...JSON.parse(localStorage.getItem('agendaOpts') ?? '{}') }
+  } catch {
+    return d
+  }
+}
+
+/** a ticket title trimmed for a list in parentheses */
+function shortTitle(title: string): string {
+  const s = title.replace(/^\s*(\[external\]\s*)?((re|fwd?)\s*:\s*)*/i, '').trim()
+  return s.length > 48 ? s.slice(0, 46).trimEnd() + '…' : s
+}
+
+/** "Data Request" reads "Data Requests" when there are several */
+const pluralize = (label: string, n: number): string =>
+  n === 1 ? label : label.replace(/\b(Request|Issue|Question|Report|Ticket|Update|Change|Problem|Error)$/i, '$1s')
+
+const waitingOnSomeone = (t: Ticket, plan: TicketPlan): boolean =>
+  plan === 'waiting' || /await|pending|on hold/i.test(t.state)
+
+function agendaLines(tickets: Ticket[], notes: Record<string, TicketNote>, o: AgendaOpts): AgendaLine[] {
+  const open = tickets.filter((t) => !t.closed).sort((a, b) => ms(a.openedAt) - ms(b.openedAt))
+  const planOf = (t: Ticket): TicketPlan => notes[t.number]?.plan ?? ''
+  const names = (ts: Ticket[]): string => (o.names ? ` (${ts.map((t) => shortTitle(t.title)).join(', ')})` : '')
+  const out: AgendaLine[] = [{ level: 0, text: `${open.length} open ticket${open.length === 1 ? '' : 's'}` }]
+
+  // each group's key, its place in the order, and how it reads with its count
+  const WAITING = '\u0001waiting'
+  const OTHER = '\u0002other'
+  const keyOf = (t: Ticket): { key: string; rank: number } => {
+    switch (o.by) {
+      case 'plan':
+        return { key: planOf(t), rank: PLAN_ORDER.indexOf(planOf(t)) }
+      case 'status':
+        return { key: t.state || 'No status', rank: 0 }
+      case 'requester':
+        return { key: person(t.caller) || 'Unknown', rank: 0 }
+      default:
+        // waiting tickets are their own agenda item, whatever they are
+        if (waitingOnSomeone(t, planOf(t))) return { key: WAITING, rank: 2 }
+        return t.type ? { key: t.type, rank: 1 } : { key: OTHER, rank: 3 }
+    }
+  }
+  const labelOf = (key: string, ts: Ticket[]): string => {
+    const n = ts.length
+    if (o.by === 'plan') return PLAN_PHRASE[key as TicketPlan]
+    if (o.by === 'requester') return `from ${key}`
+    if (o.by === 'status') return key
+    if (key === OTHER) return n === 1 ? 'other ticket' : 'other tickets'
+    if (key === WAITING) {
+      const types = new Set(ts.map((t) => t.type ?? ''))
+      const only = types.size === 1 ? [...types][0] : ''
+      return only ? `${pluralize(only, n)} waiting on a response` : 'waiting on a response'
+    }
+    return pluralize(key, n)
+  }
+
+  const groups = new Map<string, { rank: number; tickets: Ticket[] }>()
+  for (const t of open) {
+    const { key, rank } = keyOf(t)
+    const g = groups.get(key) ?? { rank, tickets: [] }
+    g.tickets.push(t)
+    groups.set(key, g)
+  }
+  const ordered = [...groups.entries()].sort(
+    ([ka, a], [kb, b]) => a.rank - b.rank || b.tickets.length - a.tickets.length || ka.localeCompare(kb)
+  )
+  for (const [key, g] of ordered) {
+    out.push({ level: 1, text: `${g.tickets.length} ${labelOf(key, g.tickets)}${names(g.tickets)}` })
+    if (o.steps) {
+      const steps = new Set(g.tickets.map((t) => (notes[t.number]?.next ?? '').trim()).filter(Boolean))
+      for (const step of steps) out.push({ level: 2, text: step })
+    }
+  }
+
+  if (o.closed) {
+    const since = Date.now() - 7 * 864e5
+    const done = tickets.filter((t) => t.closed && ms(t.closedAt) >= since)
+    if (done.length) out.push({ level: 0, text: `${done.length} closed in the last week${names(done)}` })
+  }
+  return out
+}
+
+const agendaText = (lines: AgendaLine[]): string => lines.map((l) => BULLET[l.level] + l.text).join('\n')
+
+/** read a (possibly edited) draft back into levels: bullets mark items, indenting marks sub-items */
+function parseAgenda(text: string): AgendaLine[] {
+  return text
+    .split(/\r?\n/)
+    .filter((l) => l.trim())
+    .map((raw) => {
+      const indent = (/^[ \t\u00a0]*/.exec(raw)?.[0] ?? '').replace(/\t/g, '    ').length
+      const rest = raw.trimStart()
+      const bullet = /^[■●•◦○▪*-]\s+/.exec(rest)
+      return {
+        level: !bullet ? 0 : indent >= 2 ? 2 : 1,
+        text: bullet ? rest.slice(bullet[0].length) : rest
+      }
+    })
+}
+
+/** nested bullets for email, Docs and Teams */
+function agendaListHtml(lines: AgendaLine[]): string {
+  interface Node {
+    text: string
+    level: number
+    kids: Node[]
+  }
+  const root: Node = { text: '', level: -1, kids: [] }
+  const stack: Node[] = [root]
+  for (const l of lines) {
+    while (stack.length > 1 && stack[stack.length - 1].level >= l.level) stack.pop()
+    const node: Node = { text: l.text, level: l.level, kids: [] }
+    stack[stack.length - 1].kids.push(node)
+    stack.push(node)
+  }
+  const render = (ns: Node[]): string =>
+    ns.length ? `<ul>${ns.map((n) => `<li>${esc(n.text)}${render(n.kids)}</li>`).join('')}</ul>` : ''
+  return render(root.kids)
+}
+
+/** one table cell, so Google Sheets keeps the whole summary in a single cell */
+const agendaSheetsHtml = (text: string): string =>
+  `<table><tr><td>${text
+    .split(/\r?\n/)
+    .map((l) => esc(l).replace(/^ +/, (m) => '&nbsp;'.repeat(m.length)))
+    .join('<br style="mso-data-placement:same-cell">')}</td></tr></table>`
+
+function AgendaDialog({
+  tickets,
+  notes,
+  onClose
+}: {
+  tickets: Ticket[]
+  notes: Record<string, TicketNote>
+  onClose: () => void
+}): React.JSX.Element {
+  const ref = useRef<HTMLDialogElement>(null)
+  const [opts, setOpts] = useState<AgendaOpts>(readAgendaOpts)
+  const generated = useMemo(() => agendaText(agendaLines(tickets, notes, opts)), [tickets, notes, opts])
+  const [draft, setDraft] = useState(generated)
+  const [edited, setEdited] = useState(false)
+  const [copied, setCopied] = useState<'sheets' | 'list' | null>(null)
+
+  useEffect(() => {
+    ref.current?.showModal()
+  }, [])
+
+  // settings rebuild the draft until it has been edited by hand
+  useEffect(() => {
+    if (!edited) setDraft(generated)
+  }, [generated, edited])
+
+  function change(p: Partial<AgendaOpts>): void {
+    const next = { ...opts, ...p }
+    setOpts(next)
+    localStorage.setItem('agendaOpts', JSON.stringify(next))
+  }
+
+  async function copy(kind: 'sheets' | 'list'): Promise<void> {
+    const html = kind === 'sheets' ? agendaSheetsHtml(draft) : agendaListHtml(parseAgenda(draft))
+    await window.scribe.clipboard.writeRich(html, draft)
+    setCopied(kind)
+    setTimeout(() => setCopied(null), 1600)
+  }
+
+  const open = tickets.filter((t) => !t.closed)
+  const typesPending = opts.by === 'type' && open.length > 0 && open.every((t) => t.type === undefined)
+  const rows = Math.min(18, Math.max(8, draft.split('\n').length + 1))
+
+  return (
+    <dialog
+      ref={ref}
+      className="confirm tk-dialog"
+      onClose={onClose}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose()
+      }}
+    >
+      <h3>Agenda summary</h3>
+      <p>
+        Your open tickets summed up for a meeting agenda. Change the wording below if you like, then
+        copy it.
+      </p>
+      <div className="tk-recap-controls">
+        <label className="cuc-groupby">
+          <span>Group by</span>
+          <select className="cuc-select" value={opts.by} onChange={(e) => change({ by: e.target.value as AgendaBy })}>
+            {AGENDA_BY.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="tk-check">
+          <input type="checkbox" checked={opts.names} onChange={(e) => change({ names: e.target.checked })} /> Name
+          the tickets
+        </label>
+        <label className="tk-check">
+          <input type="checkbox" checked={opts.steps} onChange={(e) => change({ steps: e.target.checked })} /> Next
+          steps
+        </label>
+        <label className="tk-check">
+          <input type="checkbox" checked={opts.closed} onChange={(e) => change({ closed: e.target.checked })} />{' '}
+          Closed this past week
+        </label>
+      </div>
+      {typesPending && (
+        <p className="tk-hint">Request types fill in the next time you update your tickets.</p>
+      )}
+      <textarea
+        className="tk-agenda-draft"
+        value={draft}
+        rows={rows}
+        spellCheck
+        aria-label="Agenda summary"
+        onChange={(e) => {
+          setDraft(e.target.value)
+          setEdited(true)
+        }}
+      />
+      <p className="tk-hint">
+        {edited ? (
+          <>
+            You&apos;ve edited this, so changing the settings above leaves it alone.{' '}
+            <button
+              className="link-btn"
+              onClick={() => {
+                setEdited(false)
+                setDraft(generated)
+              }}
+            >
+              Start over from your tickets
+            </button>
+          </>
+        ) : (
+          'Copy for Google Sheets puts it all in one cell. If Sheets spreads it over several rows, double-click the cell and paste again.'
+        )}
+      </p>
+      <div className="confirm-actions">
+        <button className="btn" onClick={onClose}>
+          Close
+        </button>
+        <button className="btn" onClick={() => copy('list')} title="Nested bullets, for email, Docs or Teams">
+          {copied === 'list' ? 'Copied' : 'Copy as a list'}
+        </button>
+        <button className="btn btn-primary" onClick={() => copy('sheets')}>
+          {copied === 'sheets' ? 'Copied' : 'Copy for Google Sheets'}
         </button>
       </div>
     </dialog>

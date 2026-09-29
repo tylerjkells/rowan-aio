@@ -422,6 +422,8 @@ export interface Ticket {
   closeNotes: string
   /** newest first, as ServiceNow lists it */
   thread: TicketEntry[]
+  /** the request type (u_incident_item), '' when unset; missing on tickets stored before 0.33 */
+  type?: string
 }
 
 /** your own working state for a ticket; never sent to ServiceNow */

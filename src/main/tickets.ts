@@ -227,7 +227,8 @@ function fromRecord(r: SnRecord): Ticket {
     closed,
     closedAt: closed ? snDate(r.closed_at) || snDate(r.resolved_at) || snDate(r.sys_updated_on) : '',
     closeNotes: clean(str(r.close_notes)),
-    thread
+    thread,
+    type: str(r.u_incident_item) === 'None' ? '' : str(r.u_incident_item)
   }
 }
 

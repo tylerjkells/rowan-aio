@@ -8488,6 +8488,28 @@ dialog.confirm p.tk-hint,
 .tk-recap-preview a {
   color: var(--accent-strong);
 }
+/* the agenda draft: plain text, edited in place, bullets and indents kept */
+.tk-agenda-draft {
+  width: 100%;
+  max-height: 50vh;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  resize: vertical;
+}
+.tk-agenda-draft:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.cuc-rail-foot .link-btn {
+  align-self: flex-start;
+}
 
 /* ---------- Team service report ----------
    KPIs for the RO Operations group. Two series run through every chart:

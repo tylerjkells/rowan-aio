@@ -31,8 +31,10 @@ module of several.)
   (copy the page, click Apply from clipboard): triage into Now / Next / Later /
   Waiting, a next step and private notes per ticket, flags for "no reply yet",
   "they replied", "updated" and "quiet 30+ days", the cleaned-up comment
-  history, copy-as-link ticket numbers for Outlook/Teams/Webex, and a monthly
-  recap of closed tickets ready to paste into email. A Service report view
+  history, copy-as-link ticket numbers for Outlook/Teams/Webex, a monthly
+  recap of closed tickets ready to paste into email, and an agenda summary of
+  open tickets (grouped by request type, plan, status or requester, with next
+  steps) that pastes into a single Google Sheets cell. A Service report view
   covers the whole RO Operations group: opened vs resolved, the open queue
   over time, median time to resolve and to first reply, each team member's
   resolved and open work, how tickets ended, request types, top requesters,
