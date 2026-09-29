@@ -2,6 +2,14 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.32.0': [
+    'Click to filter the service report. Click any bar, or a name in the new Team members table, and every number, chart and list on the page narrows to it. Filters stack, show above the numbers with an × to remove each, and stay on in Present.',
+    'Service report times now run to when a ticket was resolved, not closed. ServiceNow closes tickets three days after they are resolved, which was adding three days to every ticket. Click Update once to bring in the new details.',
+    'More in the service report: median time to first reply, the open queue over time, each team member\'s resolved and open tickets, how tickets ended (including when the requester never replied), resolve times by request type, and a Needs attention list of open tickets that are unassigned, quiet for two weeks, still waiting on a reply, or chased by the requester.',
+    'The ClickUp board shows every subtask the same way: its own card with the parent named quietly under the title. Point at that line, or at a parent\'s subtask count, to light up the whole family. A new Subtasks setting on the board can fold subtasks inside their parent\'s card instead.',
+    'Lists in ClickUp have Everyone and Just me, for both the list and the board.',
+    'Mail\'s Starred folder shows every starred conversation again, including ones already marked handled. It used to count them but show nothing.'
+  ],
   '0.31.1': [
     'ClickUp loads faster. Your tasks and the workspace list no longer wait on each other or on the connection check, spaces load side by side, and the Activity changelog is worked out after your tasks are already on screen.',
     'Subtasks are easier to tell apart from the task they belong to. When a subtask and its parent are in the same column or group, the subtask sits right under the parent, indented; elsewhere it says "Subtask of" and the parent\'s name. Parents show how many subtasks they have, and the task panel links both ways.',
