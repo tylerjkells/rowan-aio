@@ -472,6 +472,21 @@ export interface TeamTicket {
   channel: string
   /** was open, then dropped out of the group's list: reassigned elsewhere */
   gone?: boolean
+  // The fields below came in with 0.32; tickets stored before then lack
+  // them until the next update.
+  /** ISO time it was marked resolved; ServiceNow closes it a few days later */
+  resolvedAt?: string
+  /** who marked it resolved; '' when the system did */
+  resolvedBy?: string
+  /** how it ended when that isn't a plain fix, e.g. "No Response from Caller" */
+  closeCode?: string
+  reopens?: number
+  /** times it moved between assignment groups */
+  reassignments?: number
+  /** times the requester asked for a status update */
+  inquiries?: number
+  /** ISO time of the team's first customer-visible reply; '' when none yet */
+  firstReplyAt?: string
 }
 
 export interface TeamDesk {

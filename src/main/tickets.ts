@@ -164,10 +164,16 @@ function clean(text: string, author = ''): string {
 const HEAD_RE =
   /^(\d\d\/\d\d\/\d{2,4} \d\d:\d\d:\d\d(?: [AP]M)?) - (.+?) \((Comments \(Customer Visible\)|Additional comments|Work [Nn]otes)\)$/gm
 
-function parseThread(raw: string): TicketEntry[] {
-  if (!raw) return []
-  const text = raw.replace(/\r/g, '')
-  const heads: { i: number; end: number; at: string; who: string; kind: TicketEntry['kind'] }[] = []
+interface ThreadHead {
+  i: number
+  end: number
+  at: string
+  who: string
+  kind: TicketEntry['kind']
+}
+
+function headsOf(text: string): ThreadHead[] {
+  const heads: ThreadHead[] = []
   let m: RegExpExecArray | null
   HEAD_RE.lastIndex = 0
   while ((m = HEAD_RE.exec(text))) {
@@ -179,6 +185,19 @@ function parseThread(raw: string): TicketEntry[] {
       kind: /^work/i.test(m[3]) ? 'worknote' : 'comment'
     })
   }
+  return heads
+}
+
+/** who wrote each entry of a journal field and when, leaving the text behind */
+export function threadHeads(raw: string): { at: string; who: string; kind: TicketEntry['kind'] }[] {
+  if (!raw) return []
+  return headsOf(raw.replace(/\r/g, '')).map((h) => ({ at: snDate(h.at), who: h.who, kind: h.kind }))
+}
+
+function parseThread(raw: string): TicketEntry[] {
+  if (!raw) return []
+  const text = raw.replace(/\r/g, '')
+  const heads = headsOf(text)
   return heads.map((h, k) => ({
     at: snDate(h.at),
     who: h.who,

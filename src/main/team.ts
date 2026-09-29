@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { CLOSED_RE, extractJson, snDate, str } from './tickets'
+import { CLOSED_RE, extractJson, snDate, str, threadHeads } from './tickets'
 import type { TeamDesk, TeamSyncResult, TeamTicket } from '../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -41,11 +41,36 @@ export function readTeamDesk(): TeamDesk {
 
 const isOpen = (t: TeamTicket): boolean => !t.gone && t.active && !CLOSED_RE.test(t.state)
 
-function fromRecord(r: Record<string, unknown>): TeamTicket {
+const count = (v: unknown): number => {
+  const n = Number(str(v).replace(/,/g, ''))
+  return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * When the team first answered the requester: the earliest customer-visible
+ * comment by someone on the team, leaving out the caller's own and the
+ * opening entry ServiceNow writes as the ticket is created. Only the time is
+ * kept, never the text.
+ */
+function firstReply(r: Record<string, unknown>, team: Set<string>): string {
+  const caller = str(r.caller_id)
+  const opened = Date.parse(snDate(r.opened_at))
+  let first = Infinity
+  for (const h of threadHeads(str(r.comments_and_work_notes) || str(r.comments))) {
+    if (h.kind !== 'comment' || h.who === caller || !team.has(h.who)) continue
+    const t = Date.parse(h.at)
+    if (!Number.isFinite(t) || (Number.isFinite(opened) && t - opened < 120e3)) continue
+    if (t < first) first = t
+  }
+  return Number.isFinite(first) ? new Date(first).toISOString() : ''
+}
+
+function fromRecord(r: Record<string, unknown>, team: Set<string>): TeamTicket {
   const state = str(r.state) || str(r.incident_state)
   const active = str(r.active) === 'true'
   const done = !active || CLOSED_RE.test(state)
-  return {
+  const code = str(r.close_code)
+  const t: TeamTicket = {
     number: str(r.number),
     sysId: str(r.sys_id),
     title: str(r.short_description),
@@ -59,6 +84,17 @@ function fromRecord(r: Record<string, unknown>): TeamTicket {
     type: str(r.u_incident_item),
     channel: str(r.contact_type)
   }
+  // a paste from a link that leaves these out keeps them unknown, not zero
+  if ('resolved_at' in r) {
+    t.resolvedAt = done ? snDate(r.resolved_at) : ''
+    t.resolvedBy = done ? str(r.resolved_by) : ''
+    t.closeCode = done && code !== 'None' ? code : ''
+  }
+  if ('reopen_count' in r) t.reopens = count(r.reopen_count)
+  if ('reassignment_count' in r) t.reassignments = count(r.reassignment_count)
+  if ('u_status_inquiries' in r) t.inquiries = count(r.u_status_inquiries)
+  if ('comments_and_work_notes' in r || 'comments' in r) t.firstReplyAt = firstReply(r, team)
+  return t
 }
 
 const same = (a: TeamTicket, b: TeamTicket): boolean => JSON.stringify(a) === JSON.stringify(b)
@@ -80,7 +116,12 @@ export function applyTeamPaste(text: string): TeamSyncResult {
   }
 
   const d = load()
-  const incoming = records.map(fromRecord)
+  // the team is whoever has had tickets assigned or has resolved them, so a
+  // colleague copied in on a thread doesn't count as the team replying
+  const team = new Set<string>()
+  for (const r of records) for (const who of [str(r.assigned_to), str(r.resolved_by)]) if (who) team.add(who)
+  for (const t of Object.values(d.tickets)) if (t.assignee) team.add(t.assignee)
+  const incoming = records.map((r) => fromRecord(r, team))
   const inSet = new Set(incoming.map((t) => t.number))
   let added = 0
   let changed = 0

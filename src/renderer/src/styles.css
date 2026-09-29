@@ -8517,6 +8517,10 @@ dialog.confirm p.tk-hint,
   margin: 0 0 var(--s3);
 }
 .tkr-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--s1);
   margin: 0 0 var(--s3);
   font-size: 13px;
   color: var(--ink-faint);
@@ -8525,11 +8529,58 @@ dialog.confirm p.tk-hint,
   color: var(--ink);
   font-weight: 650;
 }
+.tkr-hint {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+/* the page's filters: one row above everything they scope */
+.tkr-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 0 var(--s3);
+}
+.tkr-filters-label {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+.tkr-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 6px 3px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-tint);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tkr-chip:hover {
+  border-color: var(--accent-strong);
+}
+.tkr-chip-dim {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+.tkr-chip-x {
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+.tkr-clear {
+  font-size: 12.5px;
+}
 
 /* stat tiles: proportional figures, the same sans as everything else */
 .tkr-kpis {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1px;
   margin-bottom: var(--s4);
   border: 1px solid var(--line-soft);
@@ -8619,15 +8670,14 @@ dialog.confirm p.tk-hint,
   font-size: 12px;
   color: var(--ink-faint);
 }
-@container (max-width: 1000px) {
+@container (max-width: 1100px) {
   .tkr-kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  /* five tiles in rows of three or two: the last one takes up the slack */
-  .tkr-kpi:last-child {
-    grid-column: span 2;
-  }
-  .tkr-card.span-8 {
+}
+@container (max-width: 1000px) {
+  .tkr-card.span-8,
+  .tkr-card.md-12 {
     grid-column: span 12;
   }
   .tkr-card.span-4 {
@@ -8661,6 +8711,35 @@ dialog.confirm p.tk-hint,
 }
 .tkr-hbar:hover {
   background: var(--bg-overlay);
+}
+/* a bar that filters the page: the row is the button */
+button.tkr-hbar {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+button.tkr-hbar:hover {
+  background: var(--bg-overlay);
+}
+button.tkr-hbar:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.tkr-hbar.on {
+  background: var(--bg-overlay);
+}
+.tkr-hbar.on .tkr-hbar-name {
+  color: var(--ink);
+  font-weight: 650;
+}
+.tkr-hbars.has-pick .tkr-hbar:not(.on) {
+  opacity: 0.4;
 }
 .tkr-hbar-name {
   overflow: hidden;
@@ -8753,6 +8832,27 @@ dialog.confirm p.tk-hint,
   fill: transparent;
   outline: none;
 }
+/* the queue line: 2px, round joins, a 10% wash below, dots ringed in the card surface */
+.tkr-line {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.tkr-area {
+  fill: var(--c);
+  fill-opacity: 0.1;
+}
+.tkr-dot {
+  fill: var(--c);
+  stroke: var(--bg-raised);
+  stroke-width: 2;
+}
+.tkr-cross {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
 .tkr-hit:focus-visible {
   stroke: var(--accent);
   stroke-width: 2;
@@ -8769,6 +8869,12 @@ dialog.confirm p.tk-hint,
   font-size: 12px;
   white-space: nowrap;
   pointer-events: none;
+}
+.tkr-tip.from-left {
+  transform: translate(-16px, calc(-100% - 10px));
+}
+.tkr-tip.from-right {
+  transform: translate(calc(-100% + 16px), calc(-100% - 10px));
 }
 .tkr-tip-head {
   margin-bottom: 2px;
@@ -8829,6 +8935,109 @@ dialog.confirm p.tk-hint,
 }
 .tkr-table-compact {
   max-width: 360px;
+}
+.tkr-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+.tkr-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.tkr-tag {
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.tkr-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.tkr-more {
+  margin-top: var(--s2);
+  font-size: 12.5px;
+}
+.tkr-stats {
+  margin: var(--s3) 0 0;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line-soft);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+.tkr-stats b,
+.tkr-facts b {
+  color: var(--ink);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.tkr-facts {
+  margin: var(--s3) 0 0;
+  padding: var(--s2) 0 0;
+  border-top: 1px solid var(--line-soft);
+  list-style: none;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+/* team members: the name is the filter; bars ride inside the count cells */
+.tkr-pick-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.tkr-pick-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tkr-team tr {
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+.tkr-team.has-pick tbody tr:not(.on) {
+  opacity: 0.4;
+}
+.tkr-team tr.on td {
+  background: var(--bg-overlay);
+}
+.tkr-team td {
+  vertical-align: middle;
+}
+.tkr-inbar-cell {
+  min-width: 120px;
+  white-space: nowrap;
+}
+.tkr-inbar-cell b {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.tkr-inbar {
+  display: inline-block;
+  width: calc(100% - 36px);
+  max-width: 140px;
+  margin-right: var(--s2);
+  vertical-align: middle;
+}
+.tkr-inbar i {
+  display: block;
+  height: 12px;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+  background: var(--c);
 }
 
 /* present: the report alone, full screen */
