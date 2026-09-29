@@ -384,6 +384,10 @@ const api = {
     refresh: (
       scope: 'mine' | 'all'
     ): Promise<ClickupRefreshResult> => ipcRenderer.invoke('clickup:refresh', scope),
+    /** the Activity changelog, once the last refresh has worked out what changed */
+    activity: (): Promise<ClickupActivityEvent[]> => ipcRenderer.invoke('clickup:activity'),
+    /** one list's open tasks, fetched from the list itself */
+    listTasks: (listId: string): Promise<ClickupTask[]> => ipcRenderer.invoke('clickup:listTasks', listId),
     /** tasks finished in the last month */
     done: (scope: 'mine' | 'all'): Promise<ClickupTask[]> => ipcRenderer.invoke('clickup:done', scope),
     lists: (): Promise<ClickupList[]> => ipcRenderer.invoke('clickup:lists'),

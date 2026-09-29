@@ -94,6 +94,8 @@ import {
   disconnectClickup,
   pushClickupTask,
   refreshClickup,
+  clickupActivity,
+  fetchClickupListTasks,
   renameClickupTask,
   setClickupTaskAssignee,
   setClickupTaskDue,
@@ -1016,6 +1018,8 @@ function registerIpc(): void {
     return getSettings()
   })
   ipcMain.handle('clickup:refresh', (_e, scope: 'mine' | 'all' = 'mine') => refreshClickup(scope))
+  ipcMain.handle('clickup:activity', () => clickupActivity())
+  ipcMain.handle('clickup:listTasks', (_e, listId: string) => fetchClickupListTasks(listId))
   ipcMain.handle('clickup:done', (_e, scope: 'mine' | 'all' = 'mine') => fetchClickupDone(scope))
   ipcMain.handle('clickup:lists', () => clickupLists())
   ipcMain.handle('clickup:listFields', (_e, listId: string) => clickupListFields(listId))

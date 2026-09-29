@@ -122,6 +122,54 @@ const SAVED_VIEWS: { id: ViewId; label: string; hint: string }[] = [
   { id: 'done', label: 'Done', hint: 'Yours, finished in the last month' }
 ]
 
+/**
+ * Put each subtask straight after its parent when both are in the list, so a
+ * child never reads as a duplicate of the task it belongs to. Order is
+ * otherwise kept; a task whose parent isn't in the list stays where it was.
+ */
+function nestSubtasks(list: ClickupTask[]): ClickupTask[] {
+  const ids = new Set(list.map((t) => t.id))
+  const kids = new Map<string, ClickupTask[]>()
+  const roots: ClickupTask[] = []
+  for (const t of list) {
+    if (t.parentId && t.parentId !== t.id && ids.has(t.parentId)) {
+      kids.set(t.parentId, [...(kids.get(t.parentId) ?? []), t])
+    } else roots.push(t)
+  }
+  const out: ClickupTask[] = []
+  const placed = new Set<string>()
+  const visit = (t: ClickupTask): void => {
+    if (placed.has(t.id)) return
+    placed.add(t.id)
+    out.push(t)
+    for (const k of kids.get(t.id) ?? []) visit(k)
+  }
+  roots.forEach(visit)
+  // a parent loop in the data still shows every task
+  list.forEach(visit)
+  return out
+}
+
+/** how deep each task sits under a parent in the same (already nested) list */
+function depthsIn(list: ClickupTask[], into: Map<string, number>): void {
+  const ids = new Set(list.map((t) => t.id))
+  for (const t of list) {
+    into.set(t.id, t.parentId && ids.has(t.parentId) ? (into.get(t.parentId) ?? 0) + 1 : 0)
+  }
+}
+
+/** how many of a task's ancestors sit in the same list (for board indentation) */
+function ancestorsIn(t: ClickupTask, list: ClickupTask[]): number {
+  const byId = new Map(list.map((x) => [x.id, x]))
+  let n = 0
+  let cur = t
+  while (cur.parentId && byId.has(cur.parentId) && n < 5) {
+    cur = byId.get(cur.parentId)!
+    n++
+  }
+  return n
+}
+
 /** drop-target key for the board's Done column; no real status is named this */
 const DONE_COLUMN = '\u0000done'
 
@@ -236,6 +284,8 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   const [mine, setMine] = useState<ClickupTask[] | null>(null)
   const [all, setAll] = useState<ClickupTask[] | null>(null)
   const [done, setDone] = useState<ClickupTask[] | null>(null)
+  // the list view's own fetch, tagged with the list it belongs to
+  const [listTasks, setListTasks] = useState<{ listId: string; tasks: ClickupTask[] } | null>(null)
   const [events, setEvents] = useState<ClickupActivityEvent[]>([])
   const [truncated, setTruncated] = useState(false)
   const [lists, setLists] = useState<ClickupList[]>([])
@@ -288,7 +338,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   const isListView = view.startsWith('list:')
   const viewListId = isListView ? view.slice(5) : null
   const scope: 'mine' | 'all' =
-    view === 'unassigned' || view === 'everyone' || isListView ? 'all' : 'mine'
+    view === 'unassigned' || view === 'everyone' ? 'all' : 'mine'
 
   // ---- loading ----
   const load = useCallback(
@@ -297,26 +347,41 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
       if (!quiet) setRefreshing(true)
       setError(null)
       try {
+        // the tasks are asked for alongside the connection check rather than
+        // after it; when not connected the check says so and this is ignored
+        const doneP = view === 'done' ? window.scribe.clickup.done('mine') : null
+        const listP = viewListId ? window.scribe.clickup.listTasks(viewListId) : null
+        const refreshP =
+          view === 'done' || viewListId ? null : window.scribe.clickup.refresh(view === 'activity' ? 'mine' : scope)
+        doneP?.catch(() => {})
+        listP?.catch(() => {})
+        refreshP?.catch(() => {})
         const st = await window.scribe.clickup.status()
         if (seq !== loadSeq.current) return
         setStatus(st)
         if (!st.connected) return
-        if (view === 'done') {
-          const d = await window.scribe.clickup.done('mine')
+        if (doneP) {
+          const d = await doneP
           if (seq !== loadSeq.current) return
           setDone(d)
-        } else if (view !== 'activity') {
-          const r = await window.scribe.clickup.refresh(scope)
+        } else if (listP && viewListId) {
+          const ts = await listP
           if (seq !== loadSeq.current) return
-          if (scope === 'all') setAll(r.tasks)
-          else setMine(r.tasks)
-          setEvents(r.events)
-          setTruncated(r.truncated)
-        } else {
-          const r = await window.scribe.clickup.refresh('mine')
+          setListTasks({ listId: viewListId, tasks: ts })
+        } else if (refreshP) {
+          const r = await refreshP
           if (seq !== loadSeq.current) return
-          setMine(r.tasks)
+          if (view === 'activity' || scope === 'mine') setMine(r.tasks)
+          else setAll(r.tasks)
           setEvents(r.events)
+          if (view !== 'activity') setTruncated(r.truncated)
+          // what changed since last time lands a moment after the list does
+          window.scribe.clickup
+            .activity()
+            .then((ev) => {
+              if (seq === loadSeq.current) setEvents(ev)
+            })
+            .catch(() => {})
         }
         setLastRefresh(new Date().toISOString())
       } catch (err) {
@@ -326,7 +391,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
         if (seq === loadSeq.current) setRefreshing(false)
       }
     },
-    [view, scope]
+    [view, scope, viewListId]
   )
 
   useEffect(() => {
@@ -335,8 +400,9 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     return () => clearInterval(t)
   }, [load])
 
+  // the workspace tree starts loading as the tab opens, not once the
+  // connection check is back; a second ask when it connects is shared or cached
   useEffect(() => {
-    if (!status?.connected) return
     window.scribe.clickup.lists().then(setLists).catch(() => {})
     window.scribe.clickup.members().then(setMembers).catch(() => {})
   }, [status?.connected])
@@ -401,7 +467,17 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
 
   // ---- the task set for this view ----
   const source: ClickupTask[] | null =
-    view === 'done' ? done : view === 'activity' ? mine : scope === 'all' ? all : mine
+    view === 'done'
+      ? done
+      : view === 'activity'
+        ? mine
+        : viewListId
+          ? listTasks?.listId === viewListId
+            ? listTasks.tasks
+            : null
+          : scope === 'all'
+            ? all
+            : mine
 
   const needle = query.trim().toLowerCase()
   const today = todayIso()
@@ -466,7 +542,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
           tasks: ts
         }))
     }
-    if (groupBy === 'none') return [{ key: 'all', label: 'All', tasks }]
+    if (groupBy === 'none') return [{ key: 'all', label: 'All', tasks: nestSubtasks(tasks) }]
     if (groupBy === 'due') {
       const week = plusDaysIso(7)
       const buckets: Group[] = [
@@ -483,7 +559,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
         else if (t.dueDate <= week) buckets[2].tasks.push(t)
         else buckets[3].tasks.push(t)
       }
-      return buckets.filter((g) => g.tasks.length > 0)
+      return buckets.filter((g) => g.tasks.length > 0).map((g) => ({ ...g, tasks: nestSubtasks(g.tasks) }))
     }
     const map = new Map<string, Group>()
     for (const t of tasks) {
@@ -511,9 +587,27 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     const out = [...map.values()]
     if (groupBy === 'priority') out.sort((a, b) => (PRIORITY_RANK[a.key] ?? 9) - (PRIORITY_RANK[b.key] ?? 9))
     else out.sort((a, b) => a.label.localeCompare(b.label))
-    for (const g of out) g.overdue = g.tasks.some((t) => !!t.dueDate && t.dueDate < today)
+    for (const g of out) {
+      g.overdue = g.tasks.some((t) => !!t.dueDate && t.dueDate < today)
+      g.tasks = nestSubtasks(g.tasks)
+    }
     return out
   }, [tasks, groupBy, view, today])
+
+  const rowDepth = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const g of groups) depthsIn(g.tasks, m)
+    return m
+  }, [groups])
+
+  /** subtasks per parent among everything loaded for this scope, not just what's filtered in */
+  const subtasksOf = useMemo(() => {
+    const m = new Map<string, ClickupTask[]>()
+    for (const t of source ?? []) {
+      if (t.parentId) m.set(t.parentId, [...(m.get(t.parentId) ?? []), t])
+    }
+    return m
+  }, [source])
 
   const flat = useMemo(() => groups.flatMap((g) => (collapsed.has(g.key) ? [] : g.tasks)), [groups, collapsed])
 
@@ -522,10 +616,23 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     return (
       mine?.find((t) => t.id === selectedId) ??
       all?.find((t) => t.id === selectedId) ??
+      listTasks?.tasks.find((t) => t.id === selectedId) ??
       done?.find((t) => t.id === selectedId) ??
       null
     )
-  }, [selectedId, mine, all, done])
+  }, [selectedId, mine, all, listTasks, done])
+
+  /** the parent of the open task, when it's loaded, so the panel can jump to it */
+  const parentOfSelected: ClickupTask | null = useMemo(() => {
+    const pid = selected?.parentId
+    if (!pid) return null
+    return (
+      mine?.find((t) => t.id === pid) ??
+      all?.find((t) => t.id === pid) ??
+      listTasks?.tasks.find((t) => t.id === pid) ??
+      null
+    )
+  }, [selected, mine, all, listTasks])
 
   /** counts for the rail, from whatever is loaded */
   const counts = useMemo(() => {
@@ -587,11 +694,13 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     setMine(f)
     setAll(f)
     setDone(f)
+    setListTasks((prev) => (prev ? { ...prev, tasks: f(prev.tasks) ?? [] } : prev))
   }
   const dropTask = (id: string): void => {
     const f = (prev: ClickupTask[] | null): ClickupTask[] | null => prev?.filter((x) => x.id !== id) ?? null
     setMine(f)
     setAll(f)
+    setListTasks((prev) => (prev ? { ...prev, tasks: f(prev.tasks) ?? [] } : prev))
     if (selectedId === id) setSelectedId(null)
   }
 
@@ -824,7 +933,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     }
     for (const t of tasks) push({ status: t.status, color: t.statusColor })
     return order
-      .map((c) => ({ ...c, tasks: tasks.filter((t) => t.status.toLowerCase() === c.status.toLowerCase()) }))
+      .map((c) => ({ ...c, tasks: nestSubtasks(tasks.filter((t) => t.status.toLowerCase() === c.status.toLowerCase())) }))
       .filter((c) => c.tasks.length > 0 || !!viewListId)
   }, [tasks, layout, viewListId, listStatuses])
 
@@ -1134,7 +1243,12 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
         <span>
           {refreshing ? 'Refreshing…' : lastRefresh ? `Refreshed ${formatAgo(lastRefresh)}` : ''}
         </span>
-        {truncated && <span className="cuc-rail-warn">Showing the first tasks only; ClickUp has more.</span>}
+        {truncated && scope === 'all' && (
+          <span className="cuc-rail-warn">
+            The workspace is too big to load in full, so this view is missing some tasks. Open a list to see all of its
+            tasks.
+          </span>
+        )}
       </div>
     </aside>
   )
@@ -1155,13 +1269,21 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     const active = selectedId === t.id
     // the group header already names the list when grouping by it
     const showProject = groupBy !== 'list' && !viewListId
-    const where = [t.parentName ? `↳ ${t.parentName}` : '', t.requestor ? `for ${t.requestor}` : '']
+    const depth = rowDepth.get(t.id) ?? 0
+    const kids = subtasksOf.get(t.id)?.length ?? 0
+    const where = [
+      // nested right under its parent it needs no label; elsewhere it says whose it is
+      t.parentId && !depth ? `Subtask of ${t.parentName ?? 'another task'}` : '',
+      kids ? `${kids} subtask${kids === 1 ? '' : 's'}` : '',
+      t.requestor ? `for ${t.requestor}` : ''
+    ]
       .filter(Boolean)
       .join(' · ')
     return (
       <div
         key={t.id}
-        className={`cuc-tr ${active ? 'active' : ''} ${busyId === t.id ? 'busy' : ''} ${view === 'done' ? 'done' : ''}`}
+        className={`cuc-tr ${active ? 'active' : ''} ${busyId === t.id ? 'busy' : ''} ${view === 'done' ? 'done' : ''} ${depth ? 'sub' : ''}`}
+        style={depth ? ({ '--depth': Math.min(depth, 3) } as React.CSSProperties) : undefined}
         onClick={(e) => {
           // clicks on the pickers handle themselves
           if ((e.target as HTMLElement).closest('.cuc-pop-anchor, .cuc-check, a')) return
@@ -1185,7 +1307,14 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
           )}
         </span>
         <span className="cuc-td cuc-td-name">
-          <span className="cuc-name">{t.name}</span>
+          <span className="cuc-name">
+            {depth > 0 && (
+              <span className="cuc-sub-glyph" aria-label="Subtask:">
+                ↳
+              </span>
+            )}
+            {t.name}
+          </span>
           {(showProject || where) && (
             <span className="cuc-where">
               {showProject && <ProjectLabel task={t} />}
@@ -1345,10 +1474,15 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
               {col.tasks.map((t) => {
                 const overdue = !!t.dueDate && t.dueDate < today
                 const p = priorityOf(t.priority)
+                // nested: its parent sits above it in this same column
+                const depth = Math.min(2, ancestorsIn(t, col.tasks))
+                const nested = depth > 0
+                const kids = subtasksOf.get(t.id) ?? []
                 return (
                   <div
                     key={t.id}
-                    className={`cuc-card ${selectedId === t.id ? 'active' : ''} ${dragId === t.id ? 'dragging' : ''}`}
+                    className={`cuc-card ${selectedId === t.id ? 'active' : ''} ${dragId === t.id ? 'dragging' : ''} ${nested ? 'sub' : ''}`}
+                    style={nested ? ({ '--depth': depth } as React.CSSProperties) : undefined}
                     draggable={view !== 'done'}
                     onDragStart={(e) => {
                       setDragId(t.id)
@@ -1366,8 +1500,18 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
                         <ProjectLabel task={t} />
                       </div>
                     )}
+                    {t.parentId && (
+                      <div className="cuc-subof" title={t.parentName ? `Subtask of ${t.parentName}` : 'Subtask'}>
+                        {nested ? (
+                          'Subtask'
+                        ) : (
+                          <>
+                            Subtask of <b>{t.parentName ?? 'another task'}</b>
+                          </>
+                        )}
+                      </div>
+                    )}
                     <div className="cuc-card-name">{t.name}</div>
-                    {t.parentName && <div className="cuc-where">↳ {t.parentName}</div>}
                     <div className="cuc-card-foot">
                       {t.assignees.length > 0 ? (
                         <span className="cuc-card-avatars">
@@ -1379,6 +1523,11 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
                         <span className="cuc-where">Unassigned</span>
                       )}
                       <span className="cuc-card-gap" />
+                      {kids.length > 0 && (
+                        <span className="cuc-kids" title={kids.map((k) => `${k.name} (${k.status})`).join('\n')}>
+                          {kids.length} subtask{kids.length === 1 ? '' : 's'}
+                        </span>
+                      )}
                       {p && (
                         <span className={`cuc-flag cuc-flag-${p} inline`} title={`${p} priority`}>
                           <FlagIcon />
@@ -1560,7 +1709,18 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
         </a>
       </div>
       <div className="cuc-panel-scroll">
-        {selected.parentName && <div className="cuc-where">↳ {selected.parentName}</div>}
+        {selected.parentId && (
+          <div className="cuc-subof">
+            Subtask of{' '}
+            {parentOfSelected ? (
+              <button className="link-btn cuc-subof-link" onClick={() => openTask(parentOfSelected)}>
+                {parentOfSelected.name}
+              </button>
+            ) : (
+              <b>{selected.parentName ?? 'another task'}</b>
+            )}
+          </div>
+        )}
         {editingName ? (
           <input
             className="cuc-panel-title-input"
@@ -1617,6 +1777,18 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
           <p className="cuc-desc">{selected.description}</p>
         ) : (
           <p className="cuc-desc empty">No description.</p>
+        )}
+        {(subtasksOf.get(selected.id)?.length ?? 0) > 0 && (
+          <div className="cuc-subtasks">
+            <span className="card-subhead">Subtasks · {subtasksOf.get(selected.id)!.length}</span>
+            {subtasksOf.get(selected.id)!.map((k) => (
+              <button key={k.id} className="cuc-subtask" onClick={() => openTask(k)}>
+                <span className="cuc-pill-dot" style={{ '--pill': k.statusColor ?? 'var(--ink-faint)' } as React.CSSProperties} />
+                <span className="cuc-subtask-name">{k.name}</span>
+                <span className="cuc-where">{k.status}</span>
+              </button>
+            ))}
+          </div>
         )}
         <div className="cuc-comments">
           <span className="card-subhead">Comments</span>
