@@ -284,6 +284,8 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   const [mine, setMine] = useState<ClickupTask[] | null>(null)
   const [all, setAll] = useState<ClickupTask[] | null>(null)
   const [done, setDone] = useState<ClickupTask[] | null>(null)
+  // the list view's own fetch, tagged with the list it belongs to
+  const [listTasks, setListTasks] = useState<{ listId: string; tasks: ClickupTask[] } | null>(null)
   const [events, setEvents] = useState<ClickupActivityEvent[]>([])
   const [truncated, setTruncated] = useState(false)
   const [lists, setLists] = useState<ClickupList[]>([])
@@ -336,7 +338,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   const isListView = view.startsWith('list:')
   const viewListId = isListView ? view.slice(5) : null
   const scope: 'mine' | 'all' =
-    view === 'unassigned' || view === 'everyone' || isListView ? 'all' : 'mine'
+    view === 'unassigned' || view === 'everyone' ? 'all' : 'mine'
 
   // ---- loading ----
   const load = useCallback(
@@ -348,8 +350,11 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
         // the tasks are asked for alongside the connection check rather than
         // after it; when not connected the check says so and this is ignored
         const doneP = view === 'done' ? window.scribe.clickup.done('mine') : null
-        const refreshP = view === 'done' ? null : window.scribe.clickup.refresh(view === 'activity' ? 'mine' : scope)
+        const listP = viewListId ? window.scribe.clickup.listTasks(viewListId) : null
+        const refreshP =
+          view === 'done' || viewListId ? null : window.scribe.clickup.refresh(view === 'activity' ? 'mine' : scope)
         doneP?.catch(() => {})
+        listP?.catch(() => {})
         refreshP?.catch(() => {})
         const st = await window.scribe.clickup.status()
         if (seq !== loadSeq.current) return
@@ -359,6 +364,10 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
           const d = await doneP
           if (seq !== loadSeq.current) return
           setDone(d)
+        } else if (listP && viewListId) {
+          const ts = await listP
+          if (seq !== loadSeq.current) return
+          setListTasks({ listId: viewListId, tasks: ts })
         } else if (refreshP) {
           const r = await refreshP
           if (seq !== loadSeq.current) return
@@ -382,7 +391,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
         if (seq === loadSeq.current) setRefreshing(false)
       }
     },
-    [view, scope]
+    [view, scope, viewListId]
   )
 
   useEffect(() => {
@@ -458,7 +467,17 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
 
   // ---- the task set for this view ----
   const source: ClickupTask[] | null =
-    view === 'done' ? done : view === 'activity' ? mine : scope === 'all' ? all : mine
+    view === 'done'
+      ? done
+      : view === 'activity'
+        ? mine
+        : viewListId
+          ? listTasks?.listId === viewListId
+            ? listTasks.tasks
+            : null
+          : scope === 'all'
+            ? all
+            : mine
 
   const needle = query.trim().toLowerCase()
   const today = todayIso()
@@ -597,17 +616,23 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     return (
       mine?.find((t) => t.id === selectedId) ??
       all?.find((t) => t.id === selectedId) ??
+      listTasks?.tasks.find((t) => t.id === selectedId) ??
       done?.find((t) => t.id === selectedId) ??
       null
     )
-  }, [selectedId, mine, all, done])
+  }, [selectedId, mine, all, listTasks, done])
 
   /** the parent of the open task, when it's loaded, so the panel can jump to it */
   const parentOfSelected: ClickupTask | null = useMemo(() => {
     const pid = selected?.parentId
     if (!pid) return null
-    return mine?.find((t) => t.id === pid) ?? all?.find((t) => t.id === pid) ?? null
-  }, [selected, mine, all])
+    return (
+      mine?.find((t) => t.id === pid) ??
+      all?.find((t) => t.id === pid) ??
+      listTasks?.tasks.find((t) => t.id === pid) ??
+      null
+    )
+  }, [selected, mine, all, listTasks])
 
   /** counts for the rail, from whatever is loaded */
   const counts = useMemo(() => {
@@ -669,11 +694,13 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     setMine(f)
     setAll(f)
     setDone(f)
+    setListTasks((prev) => (prev ? { ...prev, tasks: f(prev.tasks) ?? [] } : prev))
   }
   const dropTask = (id: string): void => {
     const f = (prev: ClickupTask[] | null): ClickupTask[] | null => prev?.filter((x) => x.id !== id) ?? null
     setMine(f)
     setAll(f)
+    setListTasks((prev) => (prev ? { ...prev, tasks: f(prev.tasks) ?? [] } : prev))
     if (selectedId === id) setSelectedId(null)
   }
 
@@ -1216,7 +1243,12 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
         <span>
           {refreshing ? 'Refreshing…' : lastRefresh ? `Refreshed ${formatAgo(lastRefresh)}` : ''}
         </span>
-        {truncated && <span className="cuc-rail-warn">Showing the first tasks only; ClickUp has more.</span>}
+        {truncated && scope === 'all' && (
+          <span className="cuc-rail-warn">
+            The workspace is too big to load in full, so this view is missing some tasks. Open a list to see all of its
+            tasks.
+          </span>
+        )}
       </div>
     </aside>
   )

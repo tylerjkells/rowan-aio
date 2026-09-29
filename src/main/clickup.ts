@@ -304,6 +304,27 @@ export async function fetchClickupDone(scope: 'mine' | 'all'): Promise<ClickupTa
     .sort((a, b) => (b.dateDone ?? '').localeCompare(a.dateDone ?? ''))
 }
 
+/**
+ * Every open task in one list, asked of the list itself: what a list view
+ * shows. Unlike the workspace-wide fetch this can't be cut short by the
+ * rest of the workspace, so the list comes back whole.
+ */
+export async function fetchClickupListTasks(listId: string): Promise<ClickupTask[]> {
+  const raws: RawTask[] = []
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const r = await req<{ tasks: RawTask[]; last_page?: boolean }>(
+      `/list/${encodeURIComponent(listId)}/task?page=${page}&include_closed=false&subtasks=true&order_by=due_date`
+    )
+    raws.push(...r.tasks)
+    if (r.last_page || r.tasks.length === 0) break
+  }
+  // parents in "Complete"-type statuses still lend their names
+  const known = await nameParents(raws)
+  return raws
+    .filter((r) => r.status.type !== 'done' && r.status.type !== 'closed')
+    .map((r) => toTask(r, known))
+}
+
 export async function fetchClickupTasks(scope: 'mine' | 'all'): Promise<ClickupTask[]> {
   return (await fetchTasks(scope)).tasks
 }
