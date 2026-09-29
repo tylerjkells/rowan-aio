@@ -6,6 +6,11 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.33.0': [
+    'Agenda summary, in the Tickets rail: your open tickets summed up for a meeting agenda, grouped by request type, plan, status or requester, with the tickets named and your next steps under them. Edit the wording, then Copy for Google Sheets to paste it all into one cell, or Copy as a list for email and Docs. Update your tickets once so request types fill in.',
+    'Tickets have a Topic. Give related tickets the same one (say, RO KPI Dashboard) and they share a line in the agenda summary. The field suggests topics you have already used, and each topic shows as a tag in the ticket list.',
+    'Never miss release notes. If you skip a few updates, this popup now lists every version since the one you last saw, and Settings → About → Version history shows every version\'s notes.'
+  ],
   '0.32.0': [
     'Click to filter the service report. Click any bar, or a name in the new Team members table, and every number, chart and list on the page narrows to it. Filters stack, show above the numbers with an × to remove each, and stay on in Present.',
     'Service report times now run to when a ticket was resolved, not closed. ServiceNow closes tickets three days after they are resolved, which was adding three days to every ticket. Click Update once to bring in the new details.',
