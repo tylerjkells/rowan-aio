@@ -7,6 +7,7 @@ import type {
   TicketSyncSummary
 } from '../../../shared/types'
 import { Avatar } from '../ui'
+import { TeamReport } from './TeamReport'
 
 // ---------------------------------------------------------------------------
 // Ticket desk: ServiceNow incidents assigned to you, triaged into your own
@@ -177,6 +178,13 @@ async function copyTicketLink(t: Ticket): Promise<void> {
 // ---- the view ----------------------------------------------------------------
 
 export function TicketsView({ yourName }: { yourName: string }): React.JSX.Element {
+  // your own tickets every time the tab opens; the team report is a click away
+  const [mode, setMode] = useState<'mine' | 'team'>('mine')
+  if (mode === 'team') return <TeamReport onBack={() => setMode('mine')} />
+  return <MyTickets yourName={yourName} onTeam={() => setMode('team')} />
+}
+
+function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void }): React.JSX.Element {
   const [desk, setDesk] = useState<TicketDesk | null>(null)
   const [notes, setNotes] = useState<Record<string, TicketNote>>({})
   const [view, setView] = useState<DeskView>(
@@ -314,7 +322,17 @@ export function TicketsView({ yourName }: { yourName: string }): React.JSX.Eleme
     setBanner({ ok: true, text: summaryText(s) })
   }
 
-  const updateDialog = updating && <UpdateDialog onClose={() => setUpdating(false)} onApplied={applied} />
+  const updateDialog = updating && (
+    <UpdateDialog
+      title="Update from ServiceNow"
+      link={LIST_URL}
+      linkLabel="Open my tickets in ServiceNow"
+      hint="Your plans, next steps and notes are kept separately and carry through every update."
+      runUpdate={(text) => (text ? window.scribe.tickets.apply(text) : window.scribe.tickets.applyClipboard())}
+      onClose={() => setUpdating(false)}
+      onApplied={(r) => applied(r.desk, r.summary)}
+    />
+  )
 
   if (!desk) {
     return <p className="cuc-empty">Loading tickets…</p>
@@ -331,9 +349,14 @@ export function TicketsView({ yourName }: { yourName: string }): React.JSX.Eleme
             Plans and notes stay on this computer.
           </p>
           {banner && <p className={`field-note ${banner.ok ? 'ok' : 'error'}`}>{banner.text}</p>}
-          <button className="btn btn-primary" onClick={() => setUpdating(true)}>
-            Update from ServiceNow
-          </button>
+          <div className="empty-state-actions">
+            <button className="btn btn-primary" onClick={() => setUpdating(true)}>
+              Update from ServiceNow
+            </button>
+            <button className="btn" onClick={onTeam}>
+              Team report
+            </button>
+          </div>
         </div>
         {updateDialog}
       </>
@@ -362,6 +385,15 @@ export function TicketsView({ yourName }: { yourName: string }): React.JSX.Eleme
           </button>
         ))}
       </nav>
+      <div className="cuc-rail-head">
+        <span>Team</span>
+      </div>
+      <button className="cuc-rail-item" onClick={onTeam} title="RO Operations service report: the whole group's ticket stats">
+        <span>Service report</span>
+        <span className="cuc-rail-n" aria-hidden="true">
+          ›
+        </span>
+      </button>
       <div className="cuc-rail-foot">
         <button className="link-btn" onClick={() => setRecapOpen(true)}>
           Monthly recap
@@ -807,12 +839,26 @@ function TicketPanel({
 
 // ---- update dialog --------------------------------------------------------------
 
-function UpdateDialog({
+type SyncOutcome = { ok: true } | { ok: false; error: string }
+
+/** paste a ServiceNow JSONv2 page (or read it straight off the clipboard) and merge it */
+export function UpdateDialog<R extends SyncOutcome>({
+  title,
+  link,
+  linkLabel,
+  hint,
+  runUpdate,
   onClose,
   onApplied
 }: {
+  title: string
+  link: string
+  linkLabel: string
+  hint: string
+  /** '' means read the clipboard */
+  runUpdate: (text: string) => Promise<R>
   onClose: () => void
-  onApplied: (desk: TicketDesk, summary: TicketSyncSummary) => void
+  onApplied: (result: Extract<R, { ok: true }>) => void
 }): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null)
   const [text, setText] = useState('')
@@ -826,12 +872,10 @@ function UpdateDialog({
   async function apply(): Promise<void> {
     setBusy(true)
     setError(null)
-    const r = text.trim()
-      ? await window.scribe.tickets.apply(text)
-      : await window.scribe.tickets.applyClipboard()
+    const r = await runUpdate(text.trim() ? text : '')
     setBusy(false)
-    if (r.ok) onApplied(r.desk, r.summary)
-    else setError(r.error)
+    if (r.ok) onApplied(r as Extract<R, { ok: true }>)
+    else setError((r as { error: string }).error)
   }
 
   return (
@@ -843,13 +887,21 @@ function UpdateDialog({
         if (e.target === ref.current && !busy) onClose()
       }}
     >
-      <h3>Update from ServiceNow</h3>
+      <h3>{title}</h3>
       <ol className="tk-steps">
         <li>
-          <a href={LIST_URL} target="_blank" rel="noreferrer">
-            Open my tickets in ServiceNow
+          <a href={SN} target="_blank" rel="noreferrer">
+            Sign in to ServiceNow
           </a>{' '}
-          (opens in your browser; sign in if asked).
+          the way you normally do. The ticket list link only returns your data once you&apos;re
+          already signed in; it won&apos;t take you through the sign-in itself.
+        </li>
+        <li>
+          Then{' '}
+          <a href={link} target="_blank" rel="noreferrer">
+            {linkLabel.charAt(0).toLowerCase() + linkLabel.slice(1)}
+          </a>{' '}
+          (opens in your browser).
         </li>
         <li>On that page press Ctrl+A, then Ctrl+C.</li>
         <li>Come back here and choose Apply from clipboard.</li>
@@ -864,7 +916,7 @@ function UpdateDialog({
           onChange={(e) => setText(e.target.value)}
         />
       </label>
-      <p className="tk-hint">Your plans, next steps and notes are kept separately and carry through every update.</p>
+      <p className="tk-hint">{hint}</p>
       {error && <p className="field-note error">{error}</p>}
       <div className="confirm-actions">
         <button className="btn" onClick={onClose} disabled={busy}>

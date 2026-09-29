@@ -8299,3 +8299,395 @@ dialog.confirm p.tk-hint,
 .tk-recap-preview a {
   color: var(--accent-strong);
 }
+
+/* ---------- Team service report ----------
+   KPIs for the RO Operations group. Two series run through every chart:
+   blue is closed work, orange is incoming and still-open work. Both pairs
+   are the dataviz reference slots 1 and 2, validated against each theme's
+   card surface (orange on Paper sits under 3:1, so every value is also
+   labelled or in a table). */
+:root {
+  --series-closed: #3987e5;
+  --series-opened: #d95926;
+  --delta-good: oklch(0.76 0.14 150);
+  --delta-bad: oklch(0.74 0.14 25);
+}
+:root[data-theme='paper'],
+:root[data-theme='notion'],
+:root[data-theme='ios'] {
+  --series-closed: #2a78d6;
+  --series-opened: #eb6834;
+  --delta-good: oklch(0.5 0.13 150);
+  --delta-bad: oklch(0.52 0.18 27);
+}
+.tkr-opened {
+  --c: var(--series-opened);
+}
+.tkr-closed {
+  --c: var(--series-closed);
+}
+
+.tkr {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+}
+.tkr-toolbar {
+  flex-wrap: wrap;
+  row-gap: var(--s2);
+}
+.tkr-back {
+  padding: 4px var(--s3);
+  font-size: 12.5px;
+}
+.tkr-periods button {
+  padding: 4px var(--s3);
+  font-size: 12.5px;
+}
+.tkr-asof {
+  margin-left: var(--s3);
+  white-space: nowrap;
+}
+.tkr-asof::before {
+  content: '·';
+  margin-right: var(--s3);
+}
+.tkr-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--s4) var(--s5) 96px;
+  container-type: inline-size;
+}
+.tkr-banner {
+  margin: 0 0 var(--s3);
+}
+.tkr-range {
+  margin: 0 0 var(--s3);
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+.tkr-range b {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+/* stat tiles: proportional figures, the same sans as everything else */
+.tkr-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin-bottom: var(--s4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-card);
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.tkr-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s4);
+  background: var(--bg-raised);
+}
+.tkr-kpi-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.tkr-kpi-value {
+  font-size: 30px;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.tkr-kpi-value small {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+.tkr-delta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+.tkr-delta.good {
+  color: var(--delta-good);
+}
+.tkr-delta.bad {
+  color: var(--delta-bad);
+}
+
+.tkr-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--s4);
+}
+.tkr-card {
+  min-width: 0;
+  padding: var(--s4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-card);
+  background: var(--bg-raised);
+}
+.tkr-card.span-4 {
+  grid-column: span 4;
+}
+.tkr-card.span-6 {
+  grid-column: span 6;
+}
+.tkr-card.span-8 {
+  grid-column: span 8;
+}
+.tkr-card.span-12 {
+  grid-column: span 12;
+}
+.tkr-card h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tkr-note {
+  margin: 2px 0 var(--s3);
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+.tkr-none {
+  margin: var(--s1) 0;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+.tkr-foot {
+  margin: var(--s4) 0 0;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+@container (max-width: 1000px) {
+  .tkr-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  /* five tiles in rows of three or two: the last one takes up the slack */
+  .tkr-kpi:last-child {
+    grid-column: span 2;
+  }
+  .tkr-card.span-8 {
+    grid-column: span 12;
+  }
+  .tkr-card.span-4 {
+    grid-column: span 6;
+  }
+}
+@container (max-width: 640px) {
+  .tkr-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tkr-card.span-4,
+  .tkr-card.span-6 {
+    grid-column: span 12;
+  }
+}
+
+/* horizontal bars: square at the baseline, 4px rounded data end, value at the tip */
+.tkr-hbars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tkr-hbar {
+  display: grid;
+  grid-template-columns: minmax(90px, 38%) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  padding: 3px var(--s1);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.tkr-hbar:hover {
+  background: var(--bg-overlay);
+}
+.tkr-hbar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-soft);
+}
+.tkr-hbar-track {
+  display: flex;
+  align-items: center;
+  height: 16px;
+}
+.tkr-hbar-fill {
+  display: block;
+  height: 14px;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+  background: var(--c);
+}
+.tkr-hbar-v {
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.tkr-hbar-v small {
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+/* opened vs closed columns */
+.tkr-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  margin-bottom: var(--s1);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.tkr-key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: -1px;
+  background: var(--c);
+}
+.tkr-table-toggle {
+  margin-left: auto;
+  font-size: 12px;
+}
+.tkr-chart {
+  position: relative;
+}
+.tkr-chart svg {
+  display: block;
+  overflow: visible;
+}
+.tkr-gridline {
+  stroke: var(--line-soft);
+  stroke-width: 1;
+}
+.tkr-baseline {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+.tkr-axis {
+  fill: var(--ink-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.tkr-col {
+  fill: var(--c);
+}
+.tkr-cap {
+  fill: var(--ink-soft);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.tkr-cap.strong {
+  fill: var(--ink);
+  font-weight: 650;
+}
+.tkr-band {
+  fill: var(--bg-overlay);
+}
+.tkr-hit {
+  fill: transparent;
+  outline: none;
+}
+.tkr-hit:focus-visible {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.tkr-tip {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, calc(-100% - 10px));
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-overlay);
+  box-shadow: 0 6px 20px oklch(0 0 0 / 0.25);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tkr-tip-head {
+  margin-bottom: 2px;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+.tkr-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+}
+.tkr-tip-row b {
+  color: var(--ink);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.tkr-tip-key {
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--c);
+}
+
+.tkr-table-wrap {
+  overflow-x: auto;
+}
+.tkr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.tkr-table th {
+  padding: 6px var(--s2);
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+.tkr-table td {
+  padding: 7px var(--s2);
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+  color: var(--ink);
+}
+.tkr-table .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.tkr-table td a {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.tkr-table-compact {
+  max-width: 360px;
+}
+
+/* present: the report alone, full screen */
+.tkr-presenting .shell {
+  grid-template-columns: 1fr;
+}
+.tkr-presenting .sidebar,
+.tkr-presenting .askw-fab,
+.tkr-presenting .askw-panel {
+  display: none !important;
+}
+.tkr.presenting .tkr-scroll {
+  padding-bottom: var(--s5);
+}

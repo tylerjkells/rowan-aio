@@ -45,6 +45,8 @@ import type {
   PersonSummary,
   RecordingMode,
   SeriesData,
+  TeamDesk,
+  TeamSyncResult,
   TicketDesk,
   TicketNote,
   TicketSyncResult,
@@ -279,6 +281,12 @@ const api = {
     applyClipboard: (): Promise<TicketSyncResult> => ipcRenderer.invoke('tickets:applyClipboard'),
     setNote: (number: string, patch: Partial<TicketNote>): Promise<TicketNote> =>
       ipcRenderer.invoke('tickets:setNote', number, patch)
+  },
+  team: {
+    get: (): Promise<TeamDesk> => ipcRenderer.invoke('team:get'),
+    /** merge a pasted JSONv2 page of the team's incidents */
+    apply: (text: string): Promise<TeamSyncResult> => ipcRenderer.invoke('team:apply', text),
+    applyClipboard: (): Promise<TeamSyncResult> => ipcRenderer.invoke('team:applyClipboard')
   },
   clipboard: {
     writeRich: (html: string, text: string): Promise<void> =>

@@ -24,7 +24,7 @@ interface DeskFile {
   syncedAt: string | null
 }
 
-const CLOSED_RE = /resolved|closed|cancel/i
+export const CLOSED_RE = /resolved|closed|cancel/i
 const PLANS: TicketPlan[] = ['now', 'next', 'later', 'waiting', '']
 const EMPTY_NOTE: TicketNote = { plan: '', next: '', notes: '', seen: '' }
 
@@ -75,7 +75,7 @@ export function setTicketNote(number: string, patch: Partial<TicketNote>): Ticke
 // ---- ServiceNow values ------------------------------------------------------
 
 /** a field as a string, whether the list sent display values or {display_value, value} pairs */
-function str(v: unknown): string {
+export function str(v: unknown): string {
   if (v == null) return ''
   if (typeof v === 'object' && 'display_value' in v) return String((v as { display_value: unknown }).display_value ?? '')
   return String(v)
@@ -222,7 +222,7 @@ interface ArtifactNote {
   seenU?: string
 }
 
-function extractJson(text: string): unknown {
+export function extractJson(text: string): unknown {
   const i = text.search(/[[{]/)
   if (i < 0) {
     throw new Error('That doesn’t look like JSON. Copy the whole page from the ServiceNow link.')
