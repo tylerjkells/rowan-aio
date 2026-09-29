@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 
 /** release notes shown once after an update lands (auto-updates are silent) */
 const NOTES: Record<string, string[]> = {
+  '0.30.1': [
+    'Every ClickUp task shows which project it belongs to. Board cards lead with the project, list rows show it under the task name, and the task panel has a Project line, each with a colored dot so projects are easy to tell apart at a glance. Board cards used to lose it when Group was set to List.',
+    'The Done and ClickUp buttons at the top of a task panel no longer wrap onto two lines.'
+  ],
   '0.30.0': [
     'A Tickets tab for your ServiceNow incidents. Click Update tickets, open your list in ServiceNow from the link it gives you, press Ctrl+A then Ctrl+C there, and choose Apply from clipboard. Sort tickets into Now, Next, Later and Waiting, keep a next step and private notes on each, and let the flags tell you which ones you have not answered yet, where someone replied after you, what changed since you last looked, and what has gone quiet for a month. Click a ticket for its whole comment history with the email clutter stripped out. Nothing is ever written back to ServiceNow.',
     'Copy link on a ticket puts its number on the clipboard as a link, so it pastes into Outlook, Teams or Webex as the ticket number and opens the ticket when clicked. Monthly recap lists everything you closed in a month, grouped by requester if you like, ready to paste into an email.',
