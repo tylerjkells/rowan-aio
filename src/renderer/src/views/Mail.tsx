@@ -392,6 +392,9 @@ export function MailView({
 
   /** the list: the folder's conversations, or a search across everything */
   const threads = useMemo(() => {
+    // starred cuts across the other folders: a handled or automated
+    // conversation stays in Starred until it's unstarred
+    if (!needle && folder === 'starred') return allThreads.filter(isStarred)
     const kept: MailMessage[] = []
     for (const m of messages) {
       if (needle) {
@@ -408,11 +411,9 @@ export function MailView({
       if (folder === 'automated' && !m.automated) continue
       kept.push(m)
     }
-    const out = toThreads(kept, isUnread)
-    if (!needle && folder === 'starred') return out.filter(isStarred)
-    return out
+    return toThreads(kept, isUnread)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, needle, folder, triage])
+  }, [messages, allThreads, needle, folder, triage])
 
   const selectedThread = selectedKey
     ? (allThreads.find((t) => t.key === selectedKey) ?? null)

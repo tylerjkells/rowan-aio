@@ -110,6 +110,8 @@ type ViewId =
   | `list:${string}`
 
 type Layout = 'list' | 'board'
+/** on the board: every subtask its own card, or folded into its parent's card */
+type BoardSubtasks = 'cards' | 'parent'
 type GroupBy = 'due' | 'list' | 'status' | 'assignee' | 'priority' | 'none'
 type SortKey = 'due' | 'name' | 'status' | 'assignee' | 'priority' | 'updated'
 
@@ -156,18 +158,6 @@ function depthsIn(list: ClickupTask[], into: Map<string, number>): void {
   for (const t of list) {
     into.set(t.id, t.parentId && ids.has(t.parentId) ? (into.get(t.parentId) ?? 0) + 1 : 0)
   }
-}
-
-/** how many of a task's ancestors sit in the same list (for board indentation) */
-function ancestorsIn(t: ClickupTask, list: ClickupTask[]): number {
-  const byId = new Map(list.map((x) => [x.id, x]))
-  let n = 0
-  let cur = t
-  while (cur.parentId && byId.has(cur.parentId) && n < 5) {
-    cur = byId.get(cur.parentId)!
-    n++
-  }
-  return n
 }
 
 /** drop-target key for the board's Done column; no real status is named this */
@@ -302,6 +292,17 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
   const [groupBy, setGroupBy] = useState<GroupBy>(
     () => (localStorage.getItem('clickupGroupBy') as GroupBy) || 'due'
   )
+  const [boardSubs, setBoardSubs] = useState<BoardSubtasks>(
+    () => (localStorage.getItem('clickupBoardSubtasks') as BoardSubtasks) || 'cards'
+  )
+  /** a list view shows everyone's tasks in it, or just yours */
+  const [listWho, setListWho] = useState<'all' | 'mine'>(
+    () => (localStorage.getItem('clickupListWho') === 'mine' ? 'mine' : 'all')
+  )
+  /** parent cards opened up to list their subtasks (Inside parent mode) */
+  const [openKids, setOpenKids] = useState<Set<string>>(() => new Set())
+  /** a parent whose family is lit up across the board while pointed at */
+  const [trace, setTrace] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'due', dir: 1 })
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
@@ -455,6 +456,17 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     setPop(null)
   }
 
+  function changeListWho(w: 'all' | 'mine'): void {
+    setListWho(w)
+    localStorage.setItem('clickupListWho', w)
+  }
+
+  function changeBoardSubs(m: BoardSubtasks): void {
+    setBoardSubs(m)
+    localStorage.setItem('clickupBoardSubtasks', m)
+    setTrace(null)
+  }
+
   function changeGroupBy(g: GroupBy): void {
     setGroupBy(g)
     localStorage.setItem('clickupGroupBy', g)
@@ -488,7 +500,11 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     if (view === 'today') out = out.filter((t) => !!t.dueDate && t.dueDate <= today)
     else if (view === 'overdue') out = out.filter((t) => !!t.dueDate && t.dueDate < today)
     else if (view === 'unassigned') out = out.filter((t) => t.assignees.length === 0)
-    else if (viewListId) out = out.filter((t) => t.listId === viewListId)
+    else if (viewListId) {
+      out = out.filter((t) => t.listId === viewListId)
+      const me = status?.userName
+      if (listWho === 'mine' && me) out = out.filter((t) => t.assignees.includes(me))
+    }
     if (needle) {
       out = out.filter((t) =>
         [
@@ -523,7 +539,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
       }
     }
     return [...out].sort((a, b) => sort.dir * cmp(a, b) || a.name.localeCompare(b.name))
-  }, [source, view, viewListId, needle, sort, today])
+  }, [source, view, viewListId, needle, sort, today, listWho, status])
 
   const groups = useMemo((): Group[] => {
     if (!tasks) return []
@@ -914,7 +930,34 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  // ---- board columns (a hook, so it sits above the early returns) ----
+  // ---- board columns (hooks, so they sit above the early returns) ----
+
+  /** subtasks per parent among the tasks on the board */
+  const boardKids = useMemo(() => {
+    const m = new Map<string, ClickupTask[]>()
+    if (!tasks || layout !== 'board') return m
+    const ids = new Set(tasks.map((t) => t.id))
+    for (const t of tasks) {
+      if (t.parentId && t.parentId !== t.id && ids.has(t.parentId)) m.set(t.parentId, [...(m.get(t.parentId) ?? []), t])
+    }
+    return m
+  }, [tasks, layout])
+
+  /** a parent and everything under it on the board, for tracing a family */
+  const traced = useMemo(() => {
+    if (!trace) return null
+    const out = new Set<string>([trace])
+    const walk = (id: string, depth: number): void => {
+      if (depth > 5) return
+      for (const k of boardKids.get(id) ?? []) {
+        out.add(k.id)
+        walk(k.id, depth + 1)
+      }
+    }
+    walk(trace, 0)
+    return out
+  }, [trace, boardKids])
+
   const boardColumns = useMemo((): { status: string; color: string | null; type: string; tasks: ClickupTask[] }[] => {
     if (!tasks || layout !== 'board') return []
     // a single list gives its own column order; a mixed view takes the union in order of appearance
@@ -932,10 +975,14 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
       listStatuses[viewListId].filter((s) => s.type !== 'done' && s.type !== 'closed').forEach(push)
     }
     for (const t of tasks) push({ status: t.status, color: t.statusColor })
+    // inside-parent mode shows only the top of each family; the rest opens up in its card
+    const ids = new Set(tasks.map((t) => t.id))
+    const shown =
+      boardSubs === 'parent' ? tasks.filter((t) => !t.parentId || t.parentId === t.id || !ids.has(t.parentId)) : tasks
     return order
-      .map((c) => ({ ...c, tasks: nestSubtasks(tasks.filter((t) => t.status.toLowerCase() === c.status.toLowerCase())) }))
+      .map((c) => ({ ...c, tasks: nestSubtasks(shown.filter((t) => t.status.toLowerCase() === c.status.toLowerCase())) }))
       .filter((c) => c.tasks.length > 0 || !!viewListId)
-  }, [tasks, layout, viewListId, listStatuses])
+  }, [tasks, layout, viewListId, listStatuses, boardSubs])
 
   // ---- not connected ----
   if (!status) {
@@ -1443,8 +1490,24 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     </div>
   )
 
+  /** everything under a parent on the board, depth first, for its card's list */
+  const familyRows = (id: string): { task: ClickupTask; depth: number }[] => {
+    const out: { task: ClickupTask; depth: number }[] = []
+    const seen = new Set<string>([id])
+    const walk = (pid: string, depth: number): void => {
+      for (const k of boardKids.get(pid) ?? []) {
+        if (seen.has(k.id)) continue
+        seen.add(k.id)
+        out.push({ task: k, depth: Math.min(depth, 2) })
+        walk(k.id, depth + 1)
+      }
+    }
+    walk(id, 0)
+    return out
+  }
+
   const board = (
-    <div className="cuc-board">
+    <div className={`cuc-board ${traced && !dragId ? 'tracing' : ''}`}>
       {boardColumns.map((col) => {
         const dragged = dragId ? tasks?.find((t) => t.id === dragId) : null
         const allowed = dragged ? canDropOn(dragged, col.status) : true
@@ -1474,17 +1537,17 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
               {col.tasks.map((t) => {
                 const overdue = !!t.dueDate && t.dueDate < today
                 const p = priorityOf(t.priority)
-                // nested: its parent sits above it in this same column
-                const depth = Math.min(2, ancestorsIn(t, col.tasks))
-                const nested = depth > 0
                 const kids = subtasksOf.get(t.id) ?? []
+                const inside = boardSubs === 'parent' ? familyRows(t.id) : []
+                const opened = inside.length > 0 && openKids.has(t.id)
+                const kin = traced ? traced.has(t.id) : false
                 return (
                   <div
                     key={t.id}
-                    className={`cuc-card ${selectedId === t.id ? 'active' : ''} ${dragId === t.id ? 'dragging' : ''} ${nested ? 'sub' : ''}`}
-                    style={nested ? ({ '--depth': depth } as React.CSSProperties) : undefined}
+                    className={`cuc-card ${selectedId === t.id ? 'active' : ''} ${dragId === t.id ? 'dragging' : ''} ${kin ? 'kin' : ''}`}
                     draggable={view !== 'done'}
                     onDragStart={(e) => {
+                      setTrace(null)
                       setDragId(t.id)
                       e.dataTransfer.effectAllowed = 'move'
                       e.dataTransfer.setData('text/plain', t.id)
@@ -1500,18 +1563,22 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
                         <ProjectLabel task={t} />
                       </div>
                     )}
+                    <div className="cuc-card-name">{t.name}</div>
                     {t.parentId && (
-                      <div className="cuc-subof" title={t.parentName ? `Subtask of ${t.parentName}` : 'Subtask'}>
-                        {nested ? (
-                          'Subtask'
-                        ) : (
-                          <>
-                            Subtask of <b>{t.parentName ?? 'another task'}</b>
-                          </>
-                        )}
+                      // quiet, under the name, and the same wherever the parent happens to be
+                      <div
+                        className="cuc-card-parent"
+                        title={`Subtask of ${t.parentName ?? 'another task'}`}
+                        onPointerEnter={() => setTrace(t.parentId)}
+                        onPointerLeave={() => setTrace((x) => (x === t.parentId ? null : x))}
+                      >
+                        <span aria-hidden="true">↳</span>
+                        <span className="cuc-card-parent-name">
+                          <span className="sr-only">Subtask of </span>
+                          {t.parentName ?? 'another task'}
+                        </span>
                       </div>
                     )}
-                    <div className="cuc-card-name">{t.name}</div>
                     <div className="cuc-card-foot">
                       {t.assignees.length > 0 ? (
                         <span className="cuc-card-avatars">
@@ -1523,10 +1590,39 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
                         <span className="cuc-where">Unassigned</span>
                       )}
                       <span className="cuc-card-gap" />
-                      {kids.length > 0 && (
-                        <span className="cuc-kids" title={kids.map((k) => `${k.name} (${k.status})`).join('\n')}>
-                          {kids.length} subtask{kids.length === 1 ? '' : 's'}
-                        </span>
+                      {inside.length > 0 ? (
+                        <button
+                          className={`cuc-kids btn-kids ${opened ? 'open' : ''}`}
+                          aria-expanded={opened}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setOpenKids((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(t.id)) next.delete(t.id)
+                              else next.add(t.id)
+                              return next
+                            })
+                          }}
+                        >
+                          {inside.length} subtask{inside.length === 1 ? '' : 's'}
+                          <span className="cuc-kids-caret" aria-hidden="true">
+                            ▾
+                          </span>
+                        </button>
+                      ) : (
+                        kids.length > 0 && (
+                          <span
+                            className="cuc-kids"
+                            tabIndex={0}
+                            title={kids.map((k) => `${k.name} (${k.status})`).join('\n')}
+                            onPointerEnter={() => setTrace(t.id)}
+                            onPointerLeave={() => setTrace((x) => (x === t.id ? null : x))}
+                            onFocus={() => setTrace(t.id)}
+                            onBlur={() => setTrace((x) => (x === t.id ? null : x))}
+                          >
+                            {kids.length} subtask{kids.length === 1 ? '' : 's'}
+                          </span>
+                        )
                       )}
                       {p && (
                         <span className={`cuc-flag cuc-flag-${p} inline`} title={`${p} priority`}>
@@ -1535,6 +1631,30 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
                       )}
                       {t.dueDate && <span className={`cuc-due inline ${overdue ? 'overdue' : ''}`}>{formatDue(t.dueDate)}</span>}
                     </div>
+                    {opened && (
+                      <div className="cuc-card-kids" onClick={(e) => e.stopPropagation()}>
+                        {inside.map(({ task: k, depth }) => (
+                          <button
+                            key={k.id}
+                            className="cuc-card-kid"
+                            style={{ '--depth': depth } as React.CSSProperties}
+                            onClick={() => openTask(k)}
+                            title={`${k.name} · ${k.status}`}
+                          >
+                            <span
+                              className="cuc-pill-dot"
+                              style={{ '--pill': k.statusColor ?? 'var(--ink-faint)' } as React.CSSProperties}
+                            />
+                            <span className="cuc-card-kid-name">{k.name}</span>
+                            {k.dueDate && (
+                              <span className={`cuc-due inline ${k.dueDate < today ? 'overdue' : ''}`}>
+                                {formatDue(k.dueDate)}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -1628,7 +1748,26 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
                 </button>
               )}
             </span>
-            {view !== 'done' && (
+            {viewListId && status.userName && (
+              <div className="mode-toggle view-toggle cuc-who" role="radiogroup" aria-label="Whose tasks">
+                <button className={listWho === 'all' ? 'active' : ''} role="radio" aria-checked={listWho === 'all'} onClick={() => changeListWho('all')}>
+                  Everyone
+                </button>
+                <button className={listWho === 'mine' ? 'active' : ''} role="radio" aria-checked={listWho === 'mine'} onClick={() => changeListWho('mine')}>
+                  Just me
+                </button>
+              </div>
+            )}
+            {view !== 'done' && layout === 'board' && (
+              <label className="cuc-groupby" title="How subtasks show on the board">
+                <span>Subtasks</span>
+                <select className="cuc-select" value={boardSubs} onChange={(e) => changeBoardSubs(e.target.value as BoardSubtasks)}>
+                  <option value="cards">As cards</option>
+                  <option value="parent">Inside parent</option>
+                </select>
+              </label>
+            )}
+            {view !== 'done' && layout !== 'board' && (
               <label className="cuc-groupby">
                 <span>Group</span>
                 <select className="cuc-select" value={groupBy} onChange={(e) => changeGroupBy(e.target.value as GroupBy)}>

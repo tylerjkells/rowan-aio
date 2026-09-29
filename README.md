@@ -17,7 +17,8 @@ module of several.)
   complete / re-date / re-prioritize / reassign / rename / comment in place
   with the task's recent comments shown, a Mine/Everyone scope, quiet
   auto-refresh, and an Activity changelog built by diffing refreshes with an
-  unread badge. Meeting action items and emails push to real ClickUp tasks
+  unread badge. Any list opens as a list or a status board (Everyone or Just
+  me), with subtasks as their own cards or folded inside their parent. Meeting action items and emails push to real ClickUp tasks
   with assignee, due date, and the list's Requestor field mapped.
 - **Mail** — an inbox mirror fed by a Power Automate flow into a synced
   OneDrive folder (no mailbox credentials): threads grouped by conversation,
@@ -32,11 +33,13 @@ module of several.)
   "they replied", "updated" and "quiet 30+ days", the cleaned-up comment
   history, copy-as-link ticket numbers for Outlook/Teams/Webex, and a monthly
   recap of closed tickets ready to paste into email. A Service report view
-  covers the whole RO Operations group: opened vs closed, median time to
-  close, who closed what, top requesters, request types and the open queue
-  by age, for a week, a month, month to date or 12 months, each against the
-  period before, with a full-screen Present mode. Nothing is written back
-  to ServiceNow.
+  covers the whole RO Operations group: opened vs resolved, the open queue
+  over time, median time to resolve and to first reply, each team member's
+  resolved and open work, how tickets ended, request types, top requesters,
+  the open queue by age and status, and the open tickets that need attention,
+  for a week, a month, month to date or 12 months, each against the period
+  before. Click any bar or name to filter the whole page to it; a full-screen
+  Present mode keeps the filters. Nothing is written back to ServiceNow.
 - **Action items** — every follow-up from every meeting in one place: dated
   items grouped by when, undated ones grouped by meeting, stale ones folded
   away for a bulk review. Done, dismissed, and snoozed are kept apart; select
