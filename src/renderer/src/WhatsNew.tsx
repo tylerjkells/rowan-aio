@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 
-/** release notes shown once after an update lands (auto-updates are silent) */
+/**
+ * release notes per version, newest first. The update popup shows every
+ * version since the one last seen, and Settings → About opens the full
+ * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
+ */
 const NOTES: Record<string, string[]> = {
   '0.32.0': [
     'Click to filter the service report. Click any bar, or a name in the new Team members table, and every number, chart and list on the page narrows to it. Filters stack, show above the numbers with an × to remove each, and stay on in Present.',
@@ -207,8 +211,86 @@ const NOTES: Record<string, string[]> = {
   ]
 }
 
+/** compare "0.31.1"-style versions part by part */
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0)
+    if (d) return d
+  }
+  return 0
+}
+
+/** every version with notes, newest first */
+const VERSIONS = Object.keys(NOTES).sort((a, b) => compareVersions(b, a))
+
+function VersionNotes({ versions, current }: { versions: string[]; current: string | null }): React.JSX.Element {
+  return (
+    <>
+      {versions.map((v) => (
+        <section className="whatsnew-version" key={v}>
+          <h3>
+            v{v}
+            {v === current && <span className="whatsnew-yours">Your version</span>}
+          </h3>
+          <ul className="digest-list">
+            {NOTES[v].map((note, i) => (
+              <li key={i}>{note}</li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </>
+  )
+}
+
+/** every version's notes, for Settings → About and the update popup */
+export function VersionHistory({ onClose }: { onClose: () => void }): React.JSX.Element {
+  const [current, setCurrent] = useState<string | null>(null)
+
+  useEffect(() => {
+    window.scribe.appVersion().then(setCurrent)
+  }, [])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="digest-overlay" onClick={onClose}>
+      <div
+        className="digest-box whatsnew-box"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Version history"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="digest-head">
+          <h2>Version history</h2>
+          <button className="btn btn-ghost askw-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <div className="digest-body">
+          <VersionNotes versions={VERSIONS} current={current} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * After an update lands, the notes for every version since the one last
+ * seen, so skipping a few quick releases doesn't skip their notes.
+ */
 export function WhatsNew(): React.JSX.Element {
-  const [version, setVersion] = useState<string | null>(null)
+  const [shown, setShown] = useState<{ from: string; to: string; versions: string[] } | null>(null)
+  const [history, setHistory] = useState(false)
 
   useEffect(() => {
     window.scribe.appVersion().then((v) => {
@@ -218,20 +300,22 @@ export function WhatsNew(): React.JSX.Element {
         localStorage.setItem('seenVersion', v)
         return
       }
-      if (seen !== v) {
-        if (NOTES[v]) setVersion(v)
-        else localStorage.setItem('seenVersion', v)
-      }
+      if (seen === v) return
+      const missed = VERSIONS.filter((x) => compareVersions(x, seen) > 0 && compareVersions(x, v) <= 0)
+      if (missed.length) setShown({ from: seen, to: v, versions: missed })
+      else localStorage.setItem('seenVersion', v)
     })
   }, [])
 
-  if (!version) return <></>
+  if (history) return <VersionHistory onClose={() => setHistory(false)} />
+  if (!shown) return <></>
 
   function dismiss(): void {
-    localStorage.setItem('seenVersion', version!)
-    setVersion(null)
+    localStorage.setItem('seenVersion', shown!.to)
+    setShown(null)
   }
 
+  const several = shown.versions.length > 1
   return (
     <div className="digest-overlay" onClick={dismiss}>
       <div
@@ -242,22 +326,42 @@ export function WhatsNew(): React.JSX.Element {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="digest-head">
-          <h2>New in v{version}</h2>
+          <div>
+            <h2>{several ? `What's new since v${shown.from}` : `New in v${shown.versions[0]}`}</h2>
+            {several && (
+              <p className="whatsnew-sub">
+                {shown.versions.length} updates, newest first. You&apos;re now on v{shown.to}.
+              </p>
+            )}
+          </div>
           <button className="btn btn-ghost askw-close" onClick={dismiss} aria-label="Close">
             ✕
           </button>
         </div>
         <div className="digest-body">
-          <ul className="digest-list">
-            {NOTES[version].map((note, i) => (
-              <li key={i}>{note}</li>
-            ))}
-          </ul>
-          <div className="whatsnew-actions">
-            <button className="btn btn-primary" onClick={dismiss}>
-              Nice
-            </button>
-          </div>
+          {several ? (
+            <VersionNotes versions={shown.versions} current={null} />
+          ) : (
+            <ul className="digest-list">
+              {NOTES[shown.versions[0]].map((note, i) => (
+                <li key={i}>{note}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="whatsnew-actions">
+          <button
+            className="link-btn whatsnew-all"
+            onClick={() => {
+              dismiss()
+              setHistory(true)
+            }}
+          >
+            See every version
+          </button>
+          <button className="btn btn-primary" onClick={dismiss}>
+            Nice
+          </button>
         </div>
       </div>
     </div>

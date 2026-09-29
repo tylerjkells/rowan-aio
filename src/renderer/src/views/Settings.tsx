@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MailGuideDialog } from '../MailGuide'
+import { VersionHistory } from '../WhatsNew'
 import { sanitizeSignatureHtml } from '../../../shared/signature'
 import { NAV_TABS } from '../../../shared/tabs'
 import type {
@@ -332,6 +333,7 @@ export function SettingsView({
     window.scribe.usage.get().then(setUsage)
   }, [])
   const [version, setVersion] = useState('')
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [updateBusy, setUpdateBusy] = useState(false)
   const [updateNote, setUpdateNote] = useState<{ ok: boolean; msg: string } | null>(null)
   const [updateReady, setUpdateReady] = useState(false)
@@ -1501,6 +1503,9 @@ export function SettingsView({
             .
           </p>
           <div className="field-row">
+            <button className="btn btn-ghost" onClick={() => setHistoryOpen(true)}>
+              Version history
+            </button>
             {updateReady ? (
               <button className="btn btn-primary" onClick={() => window.scribe.update.install()}>
                 Restart to update
@@ -1539,6 +1544,7 @@ export function SettingsView({
       </section>
       </div>
       {guideOpen && <MailGuideDialog onClose={() => setGuideOpen(false)} />}
+      {historyOpen && <VersionHistory onClose={() => setHistoryOpen(false)} />}
     </div>
   )
 }
