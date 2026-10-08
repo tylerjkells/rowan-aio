@@ -54,6 +54,9 @@ export class LiveTranscriber {
   private queue: Promise<void> = Promise.resolve()
   private failed = false
   private finished = false
+  /** end of the audio transcribed so far */
+  private doneMs = 0
+  private onDrainProgress: ((percent: number) => void) | null = null
   readonly segments: TranscriptSegment[] = []
 
   constructor(
@@ -61,7 +64,9 @@ export class LiveTranscriber {
     private model: WhisperModel,
     private onUpdate: (segments: TranscriptSegment[], transcribedMs: number) => void,
     /** user vocabulary prepended to each chunk's decoding context */
-    private vocab: string = ''
+    private vocab: string = '',
+    /** whether another recording is live, so catching up should leave it CPU */
+    private otherRecordingLive: () => boolean = () => false
   ) {}
 
   feed(chunk: Buffer): void {
@@ -113,7 +118,7 @@ export class LiveTranscriber {
     const wav = join(this.dir, `live-${index}.wav`)
     try {
       writeFileSync(wav, Buffer.concat([wavHeader(pcm.length), pcm]))
-      const threads = this.finished ? defaultThreads() : liveThreads()
+      const threads = this.finished && !this.otherRecordingLive() ? defaultThreads() : liveThreads()
       const segs = await transcribeFile(wav, this.model, {
         threads,
         prompt: [this.vocab, this.prevText.slice(-200)].filter(Boolean).join(' ') || undefined
@@ -128,23 +133,42 @@ export class LiveTranscriber {
         })
       }
       this.prevText = segs.map((s) => s.text).join(' ')
+      this.doneMs = offsetMs + chunkMs
       this.onUpdate([...this.segments], Math.round(this.offsetMs))
+      this.reportDrain()
     } finally {
       rmSync(wav, { force: true })
     }
   }
 
   /**
-   * Flush the remaining audio and wait for the queue to drain.
-   * Returns the full transcript, or null if any chunk failed (caller should
-   * fall back to whole-file transcription).
+   * The recording stopped: flush the remaining audio. Chunks still queued
+   * keep transcribing in the background; collect them with drained().
    */
-  async finish(): Promise<TranscriptSegment[] | null> {
+  end(): void {
+    if (this.finished) return
     this.finished = true
     if (this.bytesBuffered > 0) this.cut(true)
+  }
+
+  /**
+   * Wait for the queue to drain, hearing how much of the recording is
+   * transcribed (0-100) as each chunk lands. Returns the full transcript, or
+   * null if any chunk failed (caller should fall back to whole-file
+   * transcription).
+   */
+  async drained(onProgress?: (percent: number) => void): Promise<TranscriptSegment[] | null> {
+    this.end()
+    this.onDrainProgress = onProgress ?? null
+    this.reportDrain()
     await this.queue
     if (this.failed) return null
     return this.segments
+  }
+
+  private reportDrain(): void {
+    if (!this.onDrainProgress || this.offsetMs <= 0) return
+    this.onDrainProgress(Math.min(100, Math.round((this.doneMs / this.offsetMs) * 100)))
   }
 
   abort(): void {

@@ -156,6 +156,14 @@ interface RecSession {
 
 const sessions = new Map<string, RecSession>()
 
+/**
+ * Live transcribers still working through their backlog after the recording
+ * stopped, by meeting id. Stopping hands the transcriber over instead of
+ * waiting on it, so the next meeting can start recording right away; the
+ * pipeline collects the transcript with collectLiveTranscript.
+ */
+const catchingUp = new Map<string, LiveTranscriber>()
+
 /** whether any recording session is live (used to suppress record nudges) */
 export function hasActiveRecording(): boolean {
   return sessions.size > 0
@@ -183,7 +191,9 @@ export function beginRecording(mode: RecordingMode): string {
           meetingDir(id),
           settings.whisperModel,
           (segs, ms) => broadcastLive(id, segs, ms),
-          vocabularyPrompt(settings.vocabulary)
+          vocabularyPrompt(settings.vocabulary),
+          // its own session is gone once it stops, so any left are other meetings
+          () => sessions.size > 0
         )
       : null
 
@@ -243,16 +253,12 @@ export async function finishRecording(
     writeFileSync(energyPath(id), JSON.stringify(energy))
   }
 
-  // collect the live transcript if it kept up; fall back to whole-file
-  // transcription in the pipeline when it did not
-  let transcript: TranscriptSegment[] | undefined
+  // the live transcript may still be catching up (a slow machine, a long
+  // meeting); the pipeline waits for it in the background, and falls back to
+  // whole-file transcription when it failed
   if (s.live) {
-    const result = await s.live.finish()
-    if (result && result.length > 0) {
-      labelSpeakers(id, result)
-      transcript = result
-      rmSync(wavPath(id), { force: true })
-    }
+    s.live.end()
+    catchingUp.set(id, s.live)
   }
 
   const when = new Date(s.startedAt)
@@ -264,11 +270,34 @@ export async function finishRecording(
     mode: s.mode,
     stage: 'recorded',
     hasAudio: true,
-    transcript,
     notes: collectNotes(id)
   }
   writeMeeting(meeting)
   return meeting
+}
+
+/** whether a stopped recording's live transcript is still being collected */
+export function isCatchingUp(id: string): boolean {
+  return catchingUp.has(id)
+}
+
+/**
+ * Wait for a stopped recording's live transcript to finish. Null when there is
+ * none, or it failed or heard nothing; the pipeline then transcribes the
+ * whole file.
+ */
+export async function collectLiveTranscript(
+  id: string,
+  onProgress: (percent: number) => void
+): Promise<TranscriptSegment[] | null> {
+  const live = catchingUp.get(id)
+  if (!live) return null
+  try {
+    const result = await live.drained(onProgress)
+    return result && result.length > 0 ? result : null
+  } finally {
+    catchingUp.delete(id)
+  }
 }
 
 async function pcmToWav(rawPath: string, dest: string, bytes: number): Promise<void> {
@@ -392,7 +421,7 @@ const retrans = new Map<string, { stream: WriteStream; bytes: number }>()
 
 export function beginRetranscribe(id: string): boolean {
   const meeting = readMeeting(id)
-  if (!meeting || sessions.has(id) || retrans.has(id)) return false
+  if (!meeting || sessions.has(id) || catchingUp.has(id) || retrans.has(id)) return false
   const stream = createWriteStream(join(meetingDir(id), 'retrans.pcm'))
   retrans.set(id, { stream, bytes: 0 })
   return true
