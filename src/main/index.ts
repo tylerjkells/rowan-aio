@@ -61,6 +61,15 @@ import {
   thumbsDir,
   toggleLinkPin
 } from './links'
+import {
+  guardWebviews,
+  listDashboards,
+  moveDashboard,
+  removeDashboard,
+  saveDashboard,
+  setupDashboardSession,
+  signOutDashboards
+} from './dashboards'
 import { getBrand, saveBrand } from './brand'
 import { applyTicketPaste, readDesk, setTicketNote } from './tickets'
 import { applyTeamPaste, readTeamDesk } from './team'
@@ -230,9 +239,12 @@ function createWindow(): BrowserWindow {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      contextIsolation: true
+      contextIsolation: true,
+      // the Dashboards tab; guardWebviews locks down what a webview may be
+      webviewTag: true
     }
   })
+  guardWebviews(win.webContents)
 
   win.on('ready-to-show', () => {
     // a hidden (login) start stays in the tray — unless there is no tray
@@ -394,6 +406,7 @@ app.whenReady().then(() => {
     })
   })
 
+  setupDashboardSession()
   registerIpc()
   registerWindowFactory(createWindow)
   createWindow()
@@ -913,6 +926,17 @@ function registerIpc(): void {
   ipcMain.handle('people:importApply', (_e, rows: DirectoryImportRow[]) => {
     applyDirectoryImport(rows)
     return listPeople()
+  })
+
+  ipcMain.handle('dashboards:list', () => listDashboards())
+  ipcMain.handle('dashboards:save', (_e, entry: { id?: string; name: string; url: string }) =>
+    saveDashboard(entry)
+  )
+  ipcMain.handle('dashboards:remove', (_e, id: string) => removeDashboard(id))
+  ipcMain.handle('dashboards:move', (_e, id: string, delta: -1 | 1) => moveDashboard(id, delta))
+  ipcMain.handle('dashboards:signOut', () => signOutDashboards())
+  ipcMain.handle('dashboards:openExternal', (_e, url: string) => {
+    if (/^https?:\/\//i.test(url)) return shell.openExternal(url)
   })
 
   ipcMain.handle('links:list', () => listLinks())

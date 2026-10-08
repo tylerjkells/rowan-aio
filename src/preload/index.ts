@@ -27,6 +27,7 @@ import type {
   EngineStatus,
   EventBrief,
   LibraryQA,
+  DashboardEntry,
   LinkEntry,
   MailDraftInput,
   MailNewDraftInput,
@@ -260,6 +261,18 @@ const api = {
     importScan: (): Promise<DirectoryImportScan | null> => ipcRenderer.invoke('people:importScan'),
     importApply: (rows: DirectoryImportRow[]): Promise<PersonSummary[]> =>
       ipcRenderer.invoke('people:importApply', rows)
+  },
+  dashboards: {
+    list: (): Promise<DashboardEntry[]> => ipcRenderer.invoke('dashboards:list'),
+    /** add (no id) or update; rejects when the address is not a web page */
+    save: (entry: { id?: string; name: string; url: string }): Promise<DashboardEntry[]> =>
+      ipcRenderer.invoke('dashboards:save', entry),
+    remove: (id: string): Promise<DashboardEntry[]> => ipcRenderer.invoke('dashboards:remove', id),
+    move: (id: string, delta: -1 | 1): Promise<DashboardEntry[]> =>
+      ipcRenderer.invoke('dashboards:move', id, delta),
+    /** forget every dashboard sign-in */
+    signOut: (): Promise<void> => ipcRenderer.invoke('dashboards:signOut'),
+    openExternal: (url: string): Promise<void> => ipcRenderer.invoke('dashboards:openExternal', url)
   },
   links: {
     list: (): Promise<LinkEntry[]> => ipcRenderer.invoke('links:list'),

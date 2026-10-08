@@ -24,6 +24,7 @@ import { MailView } from './views/Mail'
 import { ToolboxView } from './views/Toolbox'
 import { SeriesView } from './views/Series'
 import { TicketsView } from './views/Tickets'
+import { DashboardsView } from './views/Dashboards'
 import { AskWidget } from './AskWidget'
 import { Digest } from './Digest'
 import { WhatsNew } from './WhatsNew'
@@ -39,6 +40,7 @@ import {
   BoardIcon,
   MailIcon,
   TicketIcon,
+  GaugeIcon,
   WrenchIcon,
   formatDuration
 } from './ui'
@@ -56,6 +58,7 @@ export type View =
   | { name: 'projects' }
   | { name: 'mail' }
   | { name: 'tickets' }
+  | { name: 'dashboards' }
   | { name: 'toolbox' }
   | { name: 'series'; title: string }
   | { name: 'import' }
@@ -86,6 +89,10 @@ export default function App(): React.JSX.Element {
   // auto-end watchdog while the user is on some other page
   const [finishing, setFinishing] = useState(false)
   const [stopError, setStopError] = useState<string | null>(null)
+  // the Dashboards tab stays mounted once opened, so its pages (and their
+  // sign-ins) do not reload every time you come back to it
+  const [dashboardsSeen, setDashboardsSeen] = useState(false)
+  if (view.name === 'dashboards' && !dashboardsSeen) setDashboardsSeen(true)
 
   useEffect(() => window.scribe.update.onReady(setUpdateVersion), [])
 
@@ -222,6 +229,14 @@ export default function App(): React.JSX.Element {
             <TicketIcon /> Tickets
           </button>
         )}
+        {shows('dashboards') && (
+          <button
+            className={`nav-btn ${view.name === 'dashboards' ? 'active' : ''}`}
+            onClick={() => setView({ name: 'dashboards' })}
+          >
+            <GaugeIcon /> Dashboards
+          </button>
+        )}
         {shows('links') && (
           <button
             className={`nav-btn ${view.name === 'links' ? 'active' : ''}`}
@@ -284,6 +299,7 @@ export default function App(): React.JSX.Element {
 
       <main
         className={`main ${flush ? 'main-flush' : ''}`}
+        style={view.name === 'dashboards' ? { display: 'none' } : undefined}
         key={
           view.name +
           ('id' in view ? view.id : '') +
@@ -393,6 +409,14 @@ export default function App(): React.JSX.Element {
           )}
         </div>
       </main>
+      {dashboardsSeen && (
+        <div
+          className="main main-flush dash-host"
+          style={view.name === 'dashboards' ? undefined : { display: 'none' }}
+        >
+          <DashboardsView />
+        </div>
+      )}
 
       <AutoEndWatch
         rec={rec}

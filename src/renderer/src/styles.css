@@ -9124,3 +9124,157 @@ button.tkr-hbar:focus-visible {
 .tkr.presenting .tkr-scroll {
   padding-bottom: var(--s5);
 }
+
+/* ---------- dashboards ---------- */
+
+/* sits in the main column; the shell swaps it in for the routed view */
+.dash-host {
+  grid-column: 2;
+  grid-row: 1;
+}
+.dash {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.dash-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--line-soft);
+}
+.dash-tabs {
+  display: flex;
+  gap: var(--s1);
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dash-tab {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 550;
+  white-space: nowrap;
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
+}
+.dash-tab:hover {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+.dash-tab.active {
+  background: var(--accent-tint);
+  border-color: var(--accent-tint-strong);
+  color: var(--ink);
+}
+.dash-tab.dash-add {
+  color: var(--ink-faint);
+}
+.dash-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.dash-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--ink-soft);
+}
+.dash-icon:hover:not(:disabled) {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+.dash-icon:disabled {
+  opacity: 0.35;
+}
+.dash-edit {
+  padding: 6px 12px;
+}
+.dash-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.dash-frame {
+  position: absolute;
+  inset: 0;
+}
+/* <webview> lays out with display:flex internally; only size it */
+.dash-frame webview {
+  width: 100%;
+  height: 100%;
+}
+.dash-loading {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  overflow: hidden;
+  z-index: 1;
+}
+.dash-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: var(--accent);
+  animation: dash-sweep 1.1s var(--ease-out) infinite;
+}
+@keyframes dash-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-loading::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.6;
+  }
+}
+.dash-error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--s5);
+  background: var(--bg);
+  text-align: center;
+  color: var(--ink-soft);
+}
+.dash-error h2 {
+  font-size: 18px;
+  color: var(--ink);
+  margin-bottom: var(--s2);
+}
+.dash-error p {
+  max-width: 52ch;
+  margin: 0 auto;
+}
+.dash-error-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--s2);
+  margin-top: var(--s5);
+}
+.dash-dialog-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  margin-top: var(--s3);
+}

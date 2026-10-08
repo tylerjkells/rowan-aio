@@ -390,6 +390,14 @@ export interface LinkEntry {
   thumb?: string
 }
 
+/** a dashboard shown inside the app on the Dashboards tab */
+export interface DashboardEntry {
+  id: string
+  name: string
+  /** http(s) page loaded in an embedded browser that keeps its own sign-ins */
+  url: string
+}
+
 /** where a ticket sits in your own triage; '' = not triaged yet */
 export type TicketPlan = 'now' | 'next' | 'later' | 'waiting' | ''
 
@@ -717,6 +725,7 @@ export type NavTab =
   | 'projects'
   | 'mail'
   | 'tickets'
+  | 'dashboards'
   | 'links'
   | 'brand'
   | 'toolbox'
