@@ -8336,7 +8336,13 @@ button.cuc-kids:hover {
   color: var(--ink-soft);
 }
 .tk-banner > span {
+  flex: 1;
   padding-top: 4px;
+}
+.tk-banner > .link-btn {
+  flex: none;
+  padding-top: 4px;
+  white-space: nowrap;
 }
 .tk-banner.error {
   color: var(--accent-strong);

@@ -432,6 +432,9 @@ export interface Ticket {
   thread: TicketEntry[]
   /** the request type (u_incident_item), '' when unset; missing on tickets stored before 0.33 */
   type?: string
+  /** ISO time of the update that first brought it in (the desk's syncedAt
+   *  then); missing on tickets stored before the Latest import view */
+  addedAt?: string
 }
 
 /** your own working state for a ticket; never sent to ServiceNow */

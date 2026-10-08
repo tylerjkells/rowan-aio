@@ -24,7 +24,7 @@ const LIST_URL =
 const ticketUrl = (t: Ticket): string =>
   `${SN}/nav_to.do?uri=${encodeURIComponent('/incident.do?sys_id=' + t.sysId)}`
 
-type DeskView = 'now' | 'next' | 'later' | 'waiting' | 'untriaged' | 'open' | 'closed'
+type DeskView = 'now' | 'next' | 'later' | 'waiting' | 'untriaged' | 'latest' | 'open' | 'closed'
 type SortKey = 'activity' | 'oldest' | 'newest'
 
 const PLANS: { id: TicketPlan; label: string }[] = [
@@ -41,6 +41,7 @@ const VIEWS: { id: DeskView; label: string }[] = [
   { id: 'later', label: 'Later' },
   { id: 'waiting', label: 'Waiting' },
   { id: 'untriaged', label: 'Untriaged' },
+  { id: 'latest', label: 'Latest import' },
   { id: 'open', label: 'All open' },
   { id: 'closed', label: 'Closed' }
 ]
@@ -48,7 +49,11 @@ const VIEWS: { id: DeskView; label: string }[] = [
 const EMPTY_NOTE: TicketNote = { plan: '', next: '', notes: '', seen: '' }
 
 const planOfView = (v: DeskView): TicketPlan | null =>
-  v === 'untriaged' ? '' : v === 'open' || v === 'closed' ? null : v
+  v === 'untriaged' ? '' : v === 'open' || v === 'closed' || v === 'latest' ? null : v
+
+/** open and first brought in by the most recent update */
+const fromLatestImport = (t: Ticket, desk: TicketDesk | null): boolean =>
+  !t.closed && !!t.addedAt && t.addedAt === desk?.syncedAt
 
 // ---- small helpers ----------------------------------------------------------
 
@@ -197,7 +202,8 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
   const [caller, setCaller] = useState('')
   const [stateFilter, setStateFilter] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null)
+  // latest: the update brought in new tickets, so the banner links to them
+  const [banner, setBanner] = useState<{ ok: boolean; text: string; latest?: boolean } | null>(null)
   const [updating, setUpdating] = useState(false)
   const [recapOpen, setRecapOpen] = useState(false)
   const [agendaOpen, setAgendaOpen] = useState(false)
@@ -280,28 +286,39 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
   }
 
   const counts = useMemo(() => {
-    const c: Record<DeskView, number> = { now: 0, next: 0, later: 0, waiting: 0, untriaged: 0, open: 0, closed: 0 }
+    const c: Record<DeskView, number> = {
+      now: 0,
+      next: 0,
+      later: 0,
+      waiting: 0,
+      untriaged: 0,
+      latest: 0,
+      open: 0,
+      closed: 0
+    }
     for (const t of tickets) {
       if (t.closed) {
         c.closed++
         continue
       }
       c.open++
+      if (fromLatestImport(t, desk)) c.latest++
       const plan = notes[t.number]?.plan ?? ''
       c[plan === '' ? 'untriaged' : plan]++
     }
     return c
-  }, [tickets, notes])
+  }, [tickets, notes, desk])
 
   const closedView = view === 'closed'
   const scoped = useMemo(
     () =>
       tickets.filter((t) => {
         if (closedView !== t.closed) return false
+        if (view === 'latest' && !fromLatestImport(t, desk)) return false
         const plan = planOfView(view)
         return plan === null || (notes[t.number]?.plan ?? '') === plan
       }),
-    [tickets, notes, view, closedView]
+    [tickets, notes, view, closedView, desk]
   )
 
   const needle = query.trim().toLowerCase()
@@ -329,7 +346,7 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
     setDesk(d)
     setNotes(d.notes)
     setUpdating(false)
-    setBanner({ ok: true, text: summaryText(s) })
+    setBanner({ ok: true, text: summaryText(s), latest: s.added.length > 0 })
   }
 
   const updateDialog = updating && (
@@ -647,6 +664,11 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
       {banner && (
         <div className={`tk-banner ${banner.ok ? '' : 'error'}`} role="status">
           <span>{banner.text}</span>
+          {banner.latest && view !== 'latest' && (
+            <button className="link-btn" onClick={() => changeView('latest')}>
+              Show the new ones
+            </button>
+          )}
           <button className="mailc-ic" onClick={() => setBanner(null)} aria-label="Dismiss">
             ×
           </button>
@@ -662,7 +684,9 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
                 ? 'Closed tickets show up here after an update, or when an open ticket drops off your list.'
                 : view === 'open'
                   ? 'Nothing open. Enjoy it while it lasts.'
-                  : 'No tickets in this plan. Pick a plan from the dropdown on any ticket to file it here.'}
+                  : view === 'latest'
+                    ? 'The last update brought in no new tickets. New ones show here after each update, whatever plan you file them under.'
+                    : 'No tickets in this plan. Pick a plan from the dropdown on any ticket to file it here.'}
           </p>
         ) : (
           table
