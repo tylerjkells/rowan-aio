@@ -413,8 +413,16 @@ let watcher: FSWatcher | null = null
 let outWatcher: FSWatcher | null = null
 let debounce: NodeJS.Timeout | null = null
 
+const changeListeners: (() => void)[] = []
+
+/** run fn whenever the bridge folder changes (the mail assistant sorts new arrivals) */
+export function onMailChanged(fn: () => void): void {
+  changeListeners.push(fn)
+}
+
 function announce(): void {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send('mail:changed')
+  for (const fn of changeListeners) fn()
 }
 
 export function stopMailWatch(): void {

@@ -1,6 +1,13 @@
 import { BrowserWindow } from 'electron'
 import { existsSync, rmSync } from 'fs'
-import { readMeeting, writeMeeting, wavPath, labelSpeakers } from './store'
+import {
+  readMeeting,
+  writeMeeting,
+  wavPath,
+  labelSpeakers,
+  isCatchingUp,
+  collectLiveTranscript
+} from './store'
 import { transcribe, vocabularyPrompt } from './whisper'
 import { summarizeTranscript } from './summarize'
 import { activeAiModel } from './ai'
@@ -33,6 +40,23 @@ export async function processMeeting(id: string): Promise<void> {
     let meeting = readMeeting(id)
     if (!meeting) return
     const settings = getSettings()
+
+    if (isCatchingUp(id)) {
+      // the recording just stopped and its live transcript is still working
+      // through the backlog. Progress re-reads the meeting each time so a
+      // rename made meanwhile is not overwritten.
+      meeting = update(meeting, { stage: 'transcribing', error: undefined })
+      const live = await collectLiveTranscript(id, (percent) => {
+        const fresh = readMeeting(id)
+        if (fresh) meeting = update(fresh, { stage: 'transcribing', progress: percent })
+      })
+      meeting = readMeeting(id)
+      if (!meeting) return // deleted while it caught up
+      if (live) {
+        labelSpeakers(id, live)
+        meeting = update(meeting, { transcript: live, progress: undefined })
+      }
+    }
 
     if (meeting.transcript && meeting.transcript.length > 0) {
       // live transcription already produced the transcript; drop the safety wav

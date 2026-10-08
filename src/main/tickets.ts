@@ -335,7 +335,8 @@ export function applyTicketPaste(text: string): TicketSyncResult {
     } else if (old.updatedAt !== t.updatedAt && !t.closed) {
       summary.updated.push(t.number)
     }
-    d.tickets[t.number] = t
+    // a refresh replaces the record but keeps when it first arrived
+    d.tickets[t.number] = { ...t, addedAt: old ? old.addedAt : now }
     if (!old && !t.closed && !d.notes[t.number]) {
       d.notes[t.number] = { ...EMPTY_NOTE, plan: t.state === 'On Hold' ? 'waiting' : '' }
     }

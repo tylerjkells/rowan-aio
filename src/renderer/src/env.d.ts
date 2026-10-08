@@ -21,3 +21,12 @@ declare class MediaStreamTrackProcessor {
   constructor(init: { track: MediaStreamTrack; maxBufferSize?: number })
   readonly readable: ReadableStream<AudioData>
 }
+
+// React declares <webview> with an empty element type; these are the parts of
+// Electron's WebviewTag the Dashboards tab calls
+interface HTMLWebViewElement {
+  reload(): void
+  goBack(): void
+  canGoBack(): boolean
+  loadURL(url: string): Promise<void>
+}

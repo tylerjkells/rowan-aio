@@ -8336,7 +8336,13 @@ button.cuc-kids:hover {
   color: var(--ink-soft);
 }
 .tk-banner > span {
+  flex: 1;
   padding-top: 4px;
+}
+.tk-banner > .link-btn {
+  flex: none;
+  padding-top: 4px;
+  white-space: nowrap;
 }
 .tk-banner.error {
   color: var(--accent-strong);
@@ -9123,4 +9129,349 @@ button.tkr-hbar:focus-visible {
 }
 .tkr.presenting .tkr-scroll {
   padding-bottom: var(--s5);
+}
+
+/* ---------- dashboards ---------- */
+
+/* sits in the main column; the shell swaps it in for the routed view */
+.dash-host {
+  grid-column: 2;
+  grid-row: 1;
+}
+.dash {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.dash-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--line-soft);
+}
+.dash-tabs {
+  display: flex;
+  gap: var(--s1);
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dash-tab {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 550;
+  white-space: nowrap;
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
+}
+.dash-tab:hover {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+.dash-tab.active {
+  background: var(--accent-tint);
+  border-color: var(--accent-tint-strong);
+  color: var(--ink);
+}
+.dash-tab.dash-add {
+  color: var(--ink-faint);
+}
+.dash-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.dash-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--ink-soft);
+}
+.dash-icon:hover:not(:disabled) {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+.dash-icon:disabled {
+  opacity: 0.35;
+}
+.dash-edit {
+  padding: 6px 12px;
+}
+.dash-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.dash-frame {
+  position: absolute;
+  inset: 0;
+}
+/* <webview> lays out with display:flex internally; only size it */
+.dash-frame webview {
+  width: 100%;
+  height: 100%;
+}
+.dash-loading {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  overflow: hidden;
+  z-index: 1;
+}
+.dash-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: var(--accent);
+  animation: dash-sweep 1.1s var(--ease-out) infinite;
+}
+@keyframes dash-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-loading::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.6;
+  }
+}
+.dash-error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--s5);
+  background: var(--bg);
+  text-align: center;
+  color: var(--ink-soft);
+}
+.dash-error h2 {
+  font-size: 18px;
+  color: var(--ink);
+  margin-bottom: var(--s2);
+}
+.dash-error p {
+  max-width: 52ch;
+  margin: 0 auto;
+}
+.dash-error-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--s2);
+  margin-top: var(--s5);
+}
+.dash-dialog-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  margin-top: var(--s3);
+}
+
+/* ---------- mail assistant ---------- */
+
+.mail-level.priority {
+  display: inline-block;
+  margin-right: var(--s2);
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--accent-tint-strong);
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
+.mailc-row.low .mailc-row-from,
+.mailc-row.low .mailc-row-subject {
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+/* the assistant's one-liner stands in for the raw preview */
+.mailc-row-gist {
+  color: var(--ink-soft);
+}
+.mailc-row.low .mailc-row-gist,
+.mailc-row.handled .mailc-row-gist {
+  color: var(--ink-faint);
+}
+
+.mailc-assist {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
+  margin: calc(-1 * var(--s2)) 0 var(--s4);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+}
+.mailc-assist-gist {
+  flex: 1 1 260px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.mailc-assist-levels {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+}
+.mailc-assist-level {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 550;
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
+}
+.mailc-assist-level:hover {
+  color: var(--ink);
+}
+.mailc-assist-level.on {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+.mailc-assist-level.priority.on {
+  background: var(--accent-tint-strong);
+  color: var(--accent-strong);
+}
+
+.mail-handoff {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* the bottom clears the floating Ask button when scrolled to the end */
+  padding: var(--s5) var(--s6) 96px;
+}
+.mail-handoff-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+}
+.mail-handoff-head h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--ink);
+}
+.mail-handoff-since {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+.mail-handoff-lead {
+  max-width: 68ch;
+  margin-bottom: var(--s5);
+  padding: var(--s3) var(--s4);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.mail-handoff-lead.waiting {
+  color: var(--ink-faint);
+}
+.mail-handoff-empty {
+  max-width: 52ch;
+  color: var(--ink-faint);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.mail-handoff-group {
+  margin-bottom: var(--s5);
+}
+.mail-handoff-group h3 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  margin-bottom: var(--s1);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.mail-handoff-group.priority h3 {
+  color: var(--accent-strong);
+}
+.mail-handoff-actions {
+  display: inline-flex;
+  gap: var(--s3);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+.mail-handoff-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'from when'
+    'gist gist';
+  align-items: baseline;
+  gap: 2px var(--s3);
+  width: 100%;
+  padding: 7px var(--s2);
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  text-align: left;
+  transition: background var(--t-fast) var(--ease-out);
+}
+.mail-handoff-item:hover {
+  background: var(--bg-raised);
+}
+.mail-handoff-from {
+  grid-area: from;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--ink);
+}
+.mail-handoff-gist {
+  grid-area: gist;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.mail-handoff-when {
+  grid-area: when;
+  font-size: 12px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+.mail-handoff-group.low .mail-handoff-from,
+.mail-handoff-group.low .mail-handoff-gist {
+  color: var(--ink-faint);
+  font-weight: 400;
 }

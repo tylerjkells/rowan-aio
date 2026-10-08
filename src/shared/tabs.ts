@@ -11,6 +11,7 @@ export const NAV_TABS: { id: NavTab; label: string; group: 'Meetings' | 'Workspa
   { id: 'projects', label: 'ClickUp', group: 'Workspace', desc: 'Your ClickUp tasks. Needs a ClickUp token.' },
   { id: 'mail', label: 'Mail', group: 'Workspace', desc: 'Outlook through the mail bridge. Needs the bridge set up.' },
   { id: 'tickets', label: 'Tickets', group: 'Workspace', desc: 'ServiceNow incidents assigned to you.' },
+  { id: 'dashboards', label: 'Dashboards', group: 'Workspace', desc: 'Dashboards embedded in the app, signed in once.' },
   { id: 'links', label: 'Links', group: 'Workspace', desc: 'Dashboards and org links.' },
   { id: 'brand', label: 'Brand', group: 'Workspace', desc: 'Colors, type, and logos.' },
   { id: 'toolbox', label: 'Toolbox', group: 'Workspace', desc: 'Guides, images, saved queries, and files.' }

@@ -28,7 +28,8 @@ export function RecordView({
   setRec: (r: RecorderHandles | null) => void
   paused: boolean
   setPaused: (p: boolean) => void
-  /** the shell is saving the recording (it also owns the auto-end path) */
+  /** the shell is saving the recording (it also owns the auto-end path);
+   *  transcription carries on in the background after that */
   finishing: boolean
   stopError: string | null
   onStop: () => void
@@ -244,7 +245,7 @@ export function RecordView({
           {paused ? 'Resume' : 'Pause'}
         </button>
         <button className="btn btn-primary" onClick={stop} disabled={finishing}>
-          <StopIcon /> {finishing ? 'Finishing transcript…' : 'Stop and transcribe'}
+          <StopIcon /> {finishing ? 'Saving…' : 'Stop and transcribe'}
         </button>
         <button className="btn btn-ghost btn-danger" onClick={discard} disabled={finishing}>
           Discard
