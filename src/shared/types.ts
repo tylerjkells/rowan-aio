@@ -655,6 +655,8 @@ export interface AppSettings {
   claudeModel: string
   openaiModel: string
   autoSummarize: boolean
+  /** sort new mail into priority / normal / low as it arrives, with a handoff */
+  mailAssistant: boolean
   hasApiKey: boolean
   hasOpenaiKey: boolean
   /** the active provider has a key saved (AI features work) */
@@ -776,6 +778,42 @@ export interface MailTriage {
    * message was opened here, false when explicitly marked unread again.
    */
   read: Record<string, boolean>
+}
+
+/** how much a message needs you, as the mail assistant sorted it */
+export type MailLevel = 'priority' | 'normal' | 'low'
+
+export interface MailSort {
+  level: MailLevel
+  /** one line: what it is and what it wants from you; '' when unknown */
+  gist: string
+  needs: 'reply' | 'action' | 'read' | 'none'
+  /** you set the level yourself; the assistant never changes it again */
+  mine?: boolean
+}
+
+export interface MailAssistState {
+  /** switched on in Settings, AI connected, and a mail folder chosen */
+  enabled: boolean
+  /** message id -> how it was sorted */
+  sorts: Record<string, MailSort>
+  /** messages still being sorted in this pass */
+  pending: number
+  /** why the last pass stopped early (no key, offline); clears on success */
+  error?: string
+  /** ISO: when you last said you were caught up; null = never */
+  caughtUpAt: string | null
+  /** ISO: the handoff covers mail after this (caught up, or the last day) */
+  handoffSince: string
+}
+
+/** "while you were away": the lead the assistant wrote for the handoff */
+export interface MailHandoff {
+  /** ISO start of the window the handoff covers */
+  since: string
+  /** 1-3 sentences; '' when it could not be written */
+  lead: string
+  error?: string
 }
 
 export interface MailStatus {

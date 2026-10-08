@@ -70,6 +70,14 @@ import {
   setupDashboardSession,
   signOutDashboards
 } from './dashboards'
+import {
+  kickMailAssist,
+  mailAssistState,
+  mailHandoff,
+  markCaughtUp,
+  setMailLevel,
+  startMailAssist
+} from './mailAssist'
 import { getBrand, saveBrand } from './brand'
 import { applyTicketPaste, readDesk, setTicketNote } from './tickets'
 import { applyTeamPaste, readTeamDesk } from './team'
@@ -193,6 +201,7 @@ import type {
   EnergySample,
   LinkEntry,
   MailDraftInput,
+  MailLevel,
   MailNewDraftInput,
   MailComposeDraftInput,
   Meeting,
@@ -418,6 +427,7 @@ app.whenReady().then(() => {
   startAutoBackup()
   ensureMailDirs()
   startMailWatch()
+  startMailAssist()
   startBriefWatch()
 
   // Repair pre-0.2.1 recordings whose webm lacks a duration header (seeking)
@@ -494,11 +504,21 @@ function registerIpc(): void {
     const next = updateSettings(patch)
     applySystemSettings()
     if (patch.theme) applyFrameTheme()
+    // switching the assistant (or the AI provider) on sorts what is waiting
+    if (patch.mailAssistant || patch.aiProvider) kickMailAssist()
     return next
   })
-  ipcMain.handle('settings:setApiKey', (_e, key: string | null) => setApiKey(key))
+  ipcMain.handle('settings:setApiKey', (_e, key: string | null) => {
+    const next = setApiKey(key)
+    kickMailAssist()
+    return next
+  })
   ipcMain.handle('settings:testApiKey', (_e, key: string) => testApiKey(key))
-  ipcMain.handle('settings:setOpenaiKey', (_e, key: string | null) => setOpenaiKey(key))
+  ipcMain.handle('settings:setOpenaiKey', (_e, key: string | null) => {
+    const next = setOpenaiKey(key)
+    kickMailAssist()
+    return next
+  })
   ipcMain.handle('settings:testOpenaiKey', (_e, key: string) => testOpenaiKey(key))
   ipcMain.handle('usage:get', () => getUsage())
 
@@ -1002,6 +1022,7 @@ function registerIpc(): void {
     const settings = updateSettings({ mailFolder: result.filePaths[0] })
     ensureMailDirs()
     startMailWatch()
+    kickMailAssist()
     return settings
   })
   ipcMain.handle('mail:forgetFolder', () => {
@@ -1018,6 +1039,17 @@ function registerIpc(): void {
   ipcMain.handle('mail:recipientsFor', (_e, names: string[]) => recipientsFor(names))
   ipcMain.handle('mail:summarize', (_e, messageId: string) => summarizeMailMessage(messageId))
   ipcMain.handle('mail:triage', () => readMailTriage())
+  // the assistant: sorting state (asking also sorts anything waiting), your
+  // re-sorts, the handoff lead, and "caught up"
+  ipcMain.handle('mail:assist', () => {
+    kickMailAssist()
+    return mailAssistState()
+  })
+  ipcMain.handle('mail:setLevel', (_e, messageIds: string[], level: MailLevel) =>
+    setMailLevel(messageIds, level)
+  )
+  ipcMain.handle('mail:handoff', () => mailHandoff())
+  ipcMain.handle('mail:caughtUp', () => markCaughtUp())
   ipcMain.handle('mail:setHandled', (_e, messageIds: string[], handled: boolean) =>
     setMailHandled(messageIds, handled)
   )

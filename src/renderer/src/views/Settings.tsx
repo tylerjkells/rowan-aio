@@ -1419,6 +1419,31 @@ export function SettingsView({
               </>
             )}
           </div>
+          <div className="switch-row">
+            <span className="switch-label">
+              <span className="opt-title">Mail assistant</span>
+              <span className="opt-desc">
+                {!settings.mailAssistant
+                  ? 'Off. Mail arrives unsorted.'
+                  : settings.aiReady
+                    ? 'Sorts new mail into priority, normal, and low as it lands, with a one-line gist, and writes the handoff you see when no conversation is open. Uses your AI key; with Haiku it costs cents a day.'
+                    : 'Turns on once an AI key is added above.'}
+              </span>
+            </span>
+            <button
+              className={`switch ${settings.mailAssistant ? 'on' : ''}`}
+              role="switch"
+              aria-checked={settings.mailAssistant}
+              aria-label="Mail assistant"
+              onClick={async () =>
+                onChange(
+                  await window.scribe.settings.update({ mailAssistant: !settings.mailAssistant })
+                )
+              }
+            >
+              <span className="switch-knob" aria-hidden="true" />
+            </button>
+          </div>
           <MailSignature settings={settings} onChange={onChange} />
         </div>
       </section>

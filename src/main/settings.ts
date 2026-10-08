@@ -11,6 +11,7 @@ interface StoredSettings {
   claudeModel: string
   openaiModel: string
   autoSummarize: boolean
+  mailAssistant: boolean
   recordNudge: boolean
   autoEndSilence: boolean
   autoEndSilenceMinutes: number
@@ -63,6 +64,7 @@ const DEFAULTS: StoredSettings = {
   claudeModel: 'claude-haiku-4-5',
   openaiModel: 'gpt-5.1',
   autoSummarize: true,
+  mailAssistant: true,
   recordNudge: true,
   autoEndSilence: true,
   autoEndSilenceMinutes: 10,
@@ -130,6 +132,7 @@ export function getSettings(): AppSettings {
     claudeModel: s.claudeModel,
     openaiModel: s.openaiModel ?? 'gpt-5.1',
     autoSummarize: s.autoSummarize,
+    mailAssistant: s.mailAssistant !== false,
     recordNudge: s.recordNudge !== false,
     autoEndSilence: s.autoEndSilence !== false,
     autoEndSilenceMinutes: clampMinutes(s.autoEndSilenceMinutes, DEFAULTS.autoEndSilenceMinutes),
@@ -189,6 +192,7 @@ export function updateSettings(
       | 'claudeModel'
       | 'openaiModel'
       | 'autoSummarize'
+      | 'mailAssistant'
       | 'recordNudge'
       | 'autoEndSilence'
       | 'autoEndSilenceMinutes'
@@ -224,6 +228,7 @@ export function updateSettings(
   if (patch.claudeModel) s.claudeModel = patch.claudeModel
   if (patch.openaiModel) s.openaiModel = patch.openaiModel.trim()
   if (typeof patch.autoSummarize === 'boolean') s.autoSummarize = patch.autoSummarize
+  if (typeof patch.mailAssistant === 'boolean') s.mailAssistant = patch.mailAssistant
   if (typeof patch.recordNudge === 'boolean') s.recordNudge = patch.recordNudge
   if (typeof patch.autoEndSilence === 'boolean') s.autoEndSilence = patch.autoEndSilence
   if (patch.autoEndSilenceMinutes !== undefined) {

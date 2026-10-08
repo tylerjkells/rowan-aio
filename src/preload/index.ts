@@ -34,7 +34,10 @@ import type {
   MailComposeDraftInput,
   MailFiledDraft,
   MailRecipients,
+  MailAssistState,
   MailDraftResult,
+  MailHandoff,
+  MailLevel,
   MailMessage,
   MailStatus,
   MailTriage,
@@ -346,7 +349,6 @@ const api = {
     /** ask the model for a reply, with Rowan's context behind it */
     draftReply: (messageId: string, instruction?: string): Promise<MailDraftResult> =>
       ipcRenderer.invoke('mail:draftReply', messageId, instruction),
-    /** a short read on one message */
     triage: (): Promise<MailTriage> => ipcRenderer.invoke('mail:triage'),
     setHandled: (messageIds: string[], handled: boolean): Promise<MailTriage> =>
       ipcRenderer.invoke('mail:setHandled', messageIds, handled),
@@ -359,6 +361,7 @@ const api = {
     /** ask the model for a fresh message from the compose card */
     draftNew: (input: MailComposeDraftInput): Promise<MailDraftResult> =>
       ipcRenderer.invoke('mail:draftNew', input),
+    /** a short read on one message */
     summarize: (messageId: string): Promise<MailDraftResult> =>
       ipcRenderer.invoke('mail:summarize', messageId),
     /** file the draft for the outbound flow to turn into an Outlook draft */
@@ -375,6 +378,19 @@ const api = {
       const handler = (): void => fn()
       ipcRenderer.on('mail:changed', handler)
       return () => ipcRenderer.removeListener('mail:changed', handler)
+    },
+    /** the assistant's sorting; asking also sorts anything still waiting */
+    assist: (): Promise<MailAssistState> => ipcRenderer.invoke('mail:assist'),
+    /** re-sort by hand; the sender's preference steers later sorting */
+    setLevel: (messageIds: string[], level: MailLevel): Promise<MailAssistState> =>
+      ipcRenderer.invoke('mail:setLevel', messageIds, level),
+    /** the lead for "while you were away" */
+    handoff: (): Promise<MailHandoff> => ipcRenderer.invoke('mail:handoff'),
+    caughtUp: (): Promise<MailAssistState> => ipcRenderer.invoke('mail:caughtUp'),
+    onAssist: (fn: (state: MailAssistState) => void): (() => void) => {
+      const handler = (_e: unknown, state: MailAssistState): void => fn(state)
+      ipcRenderer.on('mail:assist', handler)
+      return () => ipcRenderer.removeListener('mail:assist', handler)
     }
   },
   recap: {

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  MailAssistState,
   MailFiledDraft,
+  MailLevel,
   MailMessage,
+  MailSort,
   MailStatus,
   MailTriage,
   PersonSummary
@@ -175,10 +178,15 @@ function StarIcon({ on }: { on: boolean }): React.JSX.Element {
 /** the flow has gone quiet when nothing has landed in this long (work-hours aside) */
 const STALE_AFTER_MS = 24 * 3_600_000
 
-type Folder = 'inbox' | 'starred' | 'handled' | 'automated' | 'drafts'
+type Folder = 'inbox' | 'priority' | 'low' | 'starred' | 'handled' | 'automated' | 'drafts'
+
+/** the assistant's folders only show while it is on */
+const ASSIST_FOLDERS: Folder[] = ['priority', 'low']
 
 const FOLDERS: { id: Folder; label: string; hint: string }[] = [
   { id: 'inbox', label: 'Inbox', hint: 'Mail from people that still needs you' },
+  { id: 'priority', label: 'Priority', hint: 'The assistant thinks these need you soon' },
+  { id: 'low', label: 'Low priority', hint: 'Newsletters, notifications, FYIs: nothing asked of you' },
   { id: 'starred', label: 'Starred', hint: 'Starred here in Rowan; Outlook does not see it' },
   { id: 'handled', label: 'Handled', hint: 'Marked handled here; nothing changes in Outlook' },
   { id: 'automated', label: 'Automated', hint: 'Newsletters, notifications, and no-reply senders' },
@@ -204,6 +212,7 @@ export function MailView({
   const [messages, setMessages] = useState<MailMessage[]>([])
   const [drafts, setDrafts] = useState<MailFiledDraft[]>([])
   const [triage, setTriage] = useState<MailTriage>({ handled: {}, starred: {}, read: {} })
+  const [assist, setAssist] = useState<MailAssistState | null>(null)
   const [people, setPeople] = useState<PersonSummary[]>([])
   const [folder, setFolder] = useState<Folder>('inbox')
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
@@ -241,8 +250,14 @@ export function MailView({
     load()
     window.scribe.mail.triage().then(setTriage).catch(() => {})
     window.scribe.people.list().then(setPeople).catch(() => {})
+    window.scribe.mail.assist().then(setAssist).catch(() => {})
+    const offAssist = window.scribe.mail.onAssist(setAssist)
     // the main process watches the synced folder and pings when it changes
-    return window.scribe.mail.onChanged(() => load(true))
+    const offChanged = window.scribe.mail.onChanged(() => load(true))
+    return () => {
+      offAssist()
+      offChanged()
+    }
   }, [load])
 
   const peopleNames = useMemo(() => new Set(people.map((p) => p.name)), [people])
@@ -310,6 +325,42 @@ export function MailView({
   const isHandled = (m: MailMessage): boolean => !!triage.handled[m.id]
   const isStarred = (t: Thread): boolean => t.messages.some((m) => !!triage.starred[m.id])
 
+  const sortOf = (m: MailMessage): MailSort | undefined =>
+    assist?.enabled ? assist.sorts[m.id] : undefined
+  /** priority if anything still open in it is; low only when all of it is */
+  const threadLevel = (t: Thread): MailLevel | undefined => {
+    const open = t.messages.filter((m) => !isHandled(m))
+    let level: MailLevel | undefined
+    for (const m of open.length ? open : t.messages) {
+      const s = sortOf(m)
+      if (!s) continue
+      if (s.level === 'priority') return 'priority'
+      if (s.level === 'normal' || !level) level = s.level
+    }
+    return level
+  }
+  /** the gist worth showing: the priority message's, else the latest's */
+  const threadSort = (t: Thread): MailSort | undefined =>
+    t.messages.map(sortOf).find((s) => s?.level === 'priority') ?? sortOf(t.latest)
+
+  async function setThreadsLevel(threads: Thread[], level: MailLevel): Promise<void> {
+    const ids = threads.flatMap((t) => t.messages.map((m) => m.id))
+    if (ids.length === 0) return
+    setAssist((prev) => {
+      if (!prev) return prev
+      const sorts = { ...prev.sorts }
+      for (const id of ids) {
+        sorts[id] = { gist: sorts[id]?.gist ?? '', needs: sorts[id]?.needs ?? 'read', level, mine: true }
+      }
+      return { ...prev, sorts }
+    })
+    try {
+      setAssist(await window.scribe.mail.setLevel(ids, level))
+    } catch {
+      setRowError('Could not save that')
+    }
+  }
+
   async function setThreadRead(thread: Thread, read: boolean): Promise<void> {
     const ids = thread.messages.map((x) => x.id)
     if (ids.every((id) => triage.read[id] === read)) return
@@ -373,6 +424,7 @@ export function MailView({
     let automated = 0
     let handled = 0
     let starred = 0
+    let priority = 0
     for (const t of allThreads) {
       const m = t.latest
       if (isStarred(t)) starred++
@@ -380,21 +432,26 @@ export function MailView({
         handled++
         continue
       }
+      if (threadLevel(t) === 'priority') priority++
       if (m.automated) automated++
       else {
         inbox++
         if (t.unread > 0) inboxUnread++
       }
     }
-    return { inbox, inboxUnread, automated, handled, starred, drafts: drafts.length }
+    return { inbox, inboxUnread, automated, handled, starred, priority, drafts: drafts.length }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allThreads, triage, drafts])
+  }, [allThreads, triage, drafts, assist])
 
   /** the list: the folder's conversations, or a search across everything */
   const threads = useMemo(() => {
     // starred cuts across the other folders: a handled or automated
     // conversation stays in Starred until it's unstarred
     if (!needle && folder === 'starred') return allThreads.filter(isStarred)
+    // the assistant's folders cut across Inbox and Automated the same way
+    if (!needle && (folder === 'priority' || folder === 'low')) {
+      return allThreads.filter((t) => !isHandled(t.latest) && threadLevel(t) === folder)
+    }
     const kept: MailMessage[] = []
     for (const m of messages) {
       if (needle) {
@@ -413,7 +470,7 @@ export function MailView({
     }
     return toThreads(kept, isUnread)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, allThreads, needle, folder, triage])
+  }, [messages, allThreads, needle, folder, triage, assist])
 
   const selectedThread = selectedKey
     ? (allThreads.find((t) => t.key === selectedKey) ?? null)
@@ -560,17 +617,17 @@ export function MailView({
         Compose
       </button>
       <nav className="mailc-folders" aria-label="Mail folders">
-        {FOLDERS.map((f) => {
-          const n =
-            f.id === 'inbox'
-              ? counts.inboxUnread
-              : f.id === 'starred'
-                ? counts.starred
-                : f.id === 'handled'
-                  ? counts.handled
-                  : f.id === 'automated'
-                    ? counts.automated
-                    : counts.drafts
+        {FOLDERS.filter((f) => assist?.enabled || !ASSIST_FOLDERS.includes(f.id)).map((f) => {
+          const n: Record<Folder, number> = {
+            inbox: counts.inboxUnread,
+            priority: counts.priority,
+            // a pile of newsletters is not a call to action; no badge
+            low: 0,
+            starred: counts.starred,
+            handled: counts.handled,
+            automated: counts.automated,
+            drafts: counts.drafts
+          }
           return (
             <button
               key={f.id}
@@ -579,7 +636,7 @@ export function MailView({
               title={f.hint}
             >
               <span>{f.label}</span>
-              {n > 0 && <span className="mailc-folder-count">{n}</span>}
+              {n[f.id] > 0 && <span className="mailc-folder-count">{n[f.id]}</span>}
             </button>
           )
         })}
@@ -608,8 +665,11 @@ export function MailView({
     const active = selectedKey === thread.key
     const handled = isHandled(m)
     const starred = isStarred(thread)
+    const level = threadLevel(thread)
+    const sort = threadSort(thread)
     const classes = [
       'mailc-row',
+      level === 'low' && !handled ? 'low' : '',
       active ? 'active' : '',
       checked.has(thread.key) ? 'checked' : '',
       thread.unread > 0 && !handled ? 'unread' : '',
@@ -659,6 +719,11 @@ export function MailView({
             </span>
           </span>
           <span className="mailc-row-subject">
+            {level === 'priority' && !handled && (
+              <span className="mail-level priority" title="The assistant thinks this needs you soon">
+                PRIORITY
+              </span>
+            )}
             {m.external && (
               <span className="mail-ext" title="From outside Rowan">
                 EXT
@@ -671,7 +736,13 @@ export function MailView({
             )}
             {m.subject}
           </span>
-          <span className="mailc-row-preview">{m.preview}</span>
+          {sort?.gist ? (
+            <span className="mailc-row-preview mailc-row-gist" title={m.preview}>
+              {sort.gist}
+            </span>
+          ) : (
+            <span className="mailc-row-preview">{m.preview}</span>
+          )}
         </button>
         <span className="mailc-row-hover">
           <button
@@ -1001,6 +1072,33 @@ export function MailView({
               )}
             </span>
           </header>
+          {assist?.enabled && (
+            <div className="mailc-assist">
+              <span className="mailc-assist-gist">
+                {threadSort(thread)?.gist || (threadLevel(thread) ? 'Sorted.' : 'Not sorted yet.')}
+              </span>
+              <span className="mailc-assist-levels" role="radiogroup" aria-label="Priority">
+                {(['priority', 'normal', 'low'] as const).map((l) => (
+                  <button
+                    key={l}
+                    role="radio"
+                    aria-checked={threadLevel(thread) === l}
+                    className={`mailc-assist-level ${threadLevel(thread) === l ? 'on' : ''} ${l}`}
+                    onClick={() => setThreadsLevel([thread], l)}
+                    title={
+                      l === 'priority'
+                        ? 'Needs you soon. Mail from this sender leans priority from now on.'
+                        : l === 'low'
+                          ? 'Nothing needed from you. Mail from this sender leans low from now on.'
+                          : 'Neither'
+                    }
+                  >
+                    {l === 'priority' ? 'Priority' : l === 'normal' ? 'Normal' : 'Low'}
+                  </button>
+                ))}
+              </span>
+            </div>
+          )}
           {rowError && <p className="field-note error">{rowError}</p>}
           <div className="mailc-thread">
             {ordered.map((x) => messageCard(x, thread, x.id === m.id))}
@@ -1078,6 +1176,19 @@ export function MailView({
         threadView(selectedThread)
       ) : selectedFiled ? (
         filedView(selectedFiled)
+      ) : assist?.enabled && !showingDrafts && !needle ? (
+        <Handoff
+          assist={assist}
+          threads={allThreads.filter(
+            (t) => !isHandled(t.latest) && t.latest.receivedAt > assist.handoffSince
+          )}
+          levelOf={threadLevel}
+          sortOf={threadSort}
+          nameOf={(m) => m.fromName ?? m.from}
+          onOpen={openThread}
+          onHandle={(ts) => setThreadsHandled(ts, true)}
+          onCaughtUp={async () => setAssist(await window.scribe.mail.caughtUp())}
+        />
       ) : (
         <div className="mailc-read-empty">
           <p>
@@ -1126,6 +1237,165 @@ export function MailView({
           onDone={() => setTaskFrom(null)}
           onClose={() => setTaskFrom(null)}
         />
+      )}
+    </div>
+  )
+}
+
+/** "9:10 AM" today, "Tue 4:30 PM" otherwise */
+function sinceLabel(iso: string): string {
+  const d = new Date(iso)
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  return d.toDateString() === new Date().toDateString()
+    ? time
+    : `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`
+}
+
+/**
+ * The assistant's handoff: what came in since you last caught up, sorted by
+ * how much it needs you, with a short lead the model writes from the gists.
+ * It fills the reading pane whenever no conversation is open.
+ */
+function Handoff({
+  assist,
+  threads,
+  levelOf,
+  sortOf,
+  nameOf,
+  onOpen,
+  onHandle,
+  onCaughtUp
+}: {
+  assist: MailAssistState
+  /** open conversations whose latest message arrived in the handoff window */
+  threads: Thread[]
+  levelOf: (t: Thread) => MailLevel | undefined
+  sortOf: (t: Thread) => MailSort | undefined
+  nameOf: (m: MailMessage) => string
+  onOpen: (t: Thread) => void
+  onHandle: (ts: Thread[]) => void
+  onCaughtUp: () => void
+}): React.JSX.Element {
+  const [lead, setLead] = useState<{ key: string; text: string; error?: string } | null>(null)
+  const [showLow, setShowLow] = useState(false)
+
+  const groups: Record<MailLevel | 'unsorted', Thread[]> = {
+    priority: [],
+    normal: [],
+    low: [],
+    unsorted: []
+  }
+  for (const t of threads) groups[levelOf(t) ?? 'unsorted'].push(t)
+  const sorted = threads.length - groups.unsorted.length
+  // what the lead covers; main keeps the last one until this changes
+  const key = `${assist.handoffSince}|${threads.map((t) => `${t.key}:${levelOf(t) ?? ''}`).join(',')}`
+  const waiting = sorted > 0 && assist.pending === 0 && lead?.key !== key
+
+  useEffect(() => {
+    // wait for a sorting pass to finish rather than rewriting after each batch
+    if (sorted === 0 || assist.pending > 0) return
+    let alive = true
+    const timer = setTimeout(async () => {
+      try {
+        const r = await window.scribe.mail.handoff()
+        if (alive) setLead({ key, text: r.lead, error: r.error })
+      } catch {
+        if (alive) setLead({ key, text: '' })
+      }
+    }, 500)
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, assist.pending])
+
+  const item = (t: Thread): React.JSX.Element => (
+    <button key={t.key} className="mail-handoff-item" onClick={() => onOpen(t)}>
+      <span className="mail-handoff-from">{nameOf(t.latest)}</span>
+      <span className="mail-handoff-gist">{sortOf(t)?.gist || t.latest.subject || '(no subject)'}</span>
+      <span className="mail-handoff-when">{formatWhen(t.latest.receivedAt)}</span>
+    </button>
+  )
+
+  const since = assist.caughtUpAt ? `Since ${sinceLabel(assist.handoffSince)}` : 'The last day'
+
+  return (
+    <div className="mail-handoff">
+      <header className="mail-handoff-head">
+        <div>
+          <h2>Handoff</h2>
+          <p className="mail-handoff-since">
+            {since} · {threads.length} new
+            {assist.pending > 0 && ` · sorting ${assist.pending}…`}
+          </p>
+        </div>
+        {threads.length > 0 && (
+          <button
+            className="btn"
+            onClick={onCaughtUp}
+            title="Start the next handoff from now. Nothing is marked handled."
+          >
+            Got it
+          </button>
+        )}
+      </header>
+
+      {assist.error && (
+        <p className="field-note error">The assistant could not sort new mail: {assist.error}</p>
+      )}
+
+      {threads.length === 0 ? (
+        <p className="mail-handoff-empty">
+          Nothing new{assist.caughtUpAt ? ` since ${sinceLabel(assist.caughtUpAt)}` : ''}. New mail is
+          sorted as it lands, and anything that needs you shows here.
+        </p>
+      ) : (
+        <>
+          {(lead?.text || waiting) && (
+            <p className={`mail-handoff-lead ${lead?.text ? '' : 'waiting'}`} aria-live="polite">
+              {lead?.text || 'Writing the handoff…'}
+            </p>
+          )}
+          {groups.priority.length > 0 && (
+            <section className="mail-handoff-group priority">
+              <h3>Needs you · {groups.priority.length}</h3>
+              {groups.priority.map(item)}
+            </section>
+          )}
+          {groups.normal.length > 0 && (
+            <section className="mail-handoff-group">
+              <h3>Worth a look · {groups.normal.length}</h3>
+              {groups.normal.map(item)}
+            </section>
+          )}
+          {groups.unsorted.length > 0 && (
+            <section className="mail-handoff-group">
+              <h3>Not sorted yet · {groups.unsorted.length}</h3>
+              {groups.unsorted.map(item)}
+            </section>
+          )}
+          {groups.low.length > 0 && (
+            <section className="mail-handoff-group low">
+              <h3>
+                Low priority · {groups.low.length}
+                <span className="mail-handoff-actions">
+                  <button className="link-btn" onClick={() => setShowLow((v) => !v)}>
+                    {showLow ? 'Hide' : 'Show'}
+                  </button>
+                  <button
+                    className="link-btn"
+                    onClick={() => onHandle(groups.low)}
+                    title="Mark every low-priority conversation here handled"
+                  >
+                    Mark all handled
+                  </button>
+                </span>
+              </h3>
+              {showLow && groups.low.map(item)}
+            </section>
+          )}
+        </>
       )}
     </div>
   )
