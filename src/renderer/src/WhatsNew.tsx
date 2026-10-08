@@ -6,6 +6,12 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.34.0': [
+    'Start the next recording while the last one is still finishing. Stop and transcribe now saves the audio and opens the meeting right away, and the transcript and summary finish in the background with a progress bar, so a slow transcription no longer holds up your next meeting.',
+    'A Dashboards tab. Add a dashboard\'s address, or pick one from Links, and it opens right inside Rowan, including Power BI, Tableau and Grafana pages that refuse to be embedded anywhere else. Sign in once and it remembers you. Dashboards stay loaded when you switch tabs, with Back, Reload, Home and Open in browser above them.',
+    'Tickets has a Latest import view: just the open tickets your last update brought in, and the banner after an update links straight to them. Untriaged is still every open ticket without a plan, old or new. The view starts filling with your next update.',
+    'Mail has an assistant. As new mail arrives it is sorted into Priority, Normal or Low with a one-line note on what it wants from you, and Priority and Low priority folders sit under Inbox. Change a message\'s level in the conversation and it learns that sender. With nothing open, the reading pane is your handoff: a few sentences on what came in, then what needs you, what is worth a look, and one click to mark the low-priority mail handled. It reads the start of each new email using your AI key (cents a day on Haiku), and Settings → Mail has a switch to turn it off.'
+  ],
   '0.33.0': [
     'Agenda summary, in the Tickets rail: your open tickets summed up for a meeting agenda, grouped by request type, plan, status or requester, with the tickets named and your next steps under them. Edit the wording, then Copy for Google Sheets to paste it all into one cell, or Copy as a list for email and Docs. Update your tickets once so request types fill in.',
     'Tickets have a Topic. Give related tickets the same one (say, RO KPI Dashboard) and they share a line in the agenda summary. The field suggests topics you have already used, and each topic shows as a tag in the ticket list.',
