@@ -6,6 +6,10 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.35.0': [
+    'Dashboards has a sidebar in place of the row of tabs, so it stays tidy as you add more. Put dashboards in folders (there is a new Folder field under Edit), star the ones you use most to pin them to the top, and fold away folders you don\'t need. Press Ctrl+K, even while you\'re in a dashboard, to jump to one by name. The « button hides the sidebar so the dashboard gets the full width. The last five dashboards you opened stay loaded; older ones reload when you go back to them.',
+    'The ClickUp board puts its columns in working order when it shows tasks from more than one list: To Do, then In Progress, then anything in review, then On Hold, then Done. It used to follow whichever status showed up first. A single list still uses its own ClickUp order, and grouping the list by status follows the same order instead of A to Z.'
+  ],
   '0.34.0': [
     'Start the next recording while the last one is still finishing. Stop and transcribe now saves the audio and opens the meeting right away, and the transcript and summary finish in the background with a progress bar, so a slow transcription no longer holds up your next meeting.',
     'A Dashboards tab. Add a dashboard\'s address, or pick one from Links, and it opens right inside Rowan, including Power BI, Tableau and Grafana pages that refuse to be embedded anywhere else. Sign in once and it remembers you. Dashboards stay loaded when you switch tabs, with Back, Reload, Home and Open in browser above them.',
