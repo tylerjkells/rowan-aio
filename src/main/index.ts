@@ -197,6 +197,7 @@ import type {
   BulkSelection,
   ClickupPushInput,
   DailyRecap,
+  DashboardInput,
   DirectoryImportRow,
   EnergySample,
   LinkEntry,
@@ -949,9 +950,7 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('dashboards:list', () => listDashboards())
-  ipcMain.handle('dashboards:save', (_e, entry: { id?: string; name: string; url: string }) =>
-    saveDashboard(entry)
-  )
+  ipcMain.handle('dashboards:save', (_e, entry: DashboardInput) => saveDashboard(entry))
   ipcMain.handle('dashboards:remove', (_e, id: string) => removeDashboard(id))
   ipcMain.handle('dashboards:move', (_e, id: string, delta: -1 | 1) => moveDashboard(id, delta))
   ipcMain.handle('dashboards:signOut', () => signOutDashboards())

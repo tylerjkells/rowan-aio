@@ -28,6 +28,7 @@ import type {
   EventBrief,
   LibraryQA,
   DashboardEntry,
+  DashboardInput,
   LinkEntry,
   MailDraftInput,
   MailNewDraftInput,
@@ -268,14 +269,20 @@ const api = {
   dashboards: {
     list: (): Promise<DashboardEntry[]> => ipcRenderer.invoke('dashboards:list'),
     /** add (no id) or update; rejects when the address is not a web page */
-    save: (entry: { id?: string; name: string; url: string }): Promise<DashboardEntry[]> =>
+    save: (entry: DashboardInput): Promise<DashboardEntry[]> =>
       ipcRenderer.invoke('dashboards:save', entry),
     remove: (id: string): Promise<DashboardEntry[]> => ipcRenderer.invoke('dashboards:remove', id),
     move: (id: string, delta: -1 | 1): Promise<DashboardEntry[]> =>
       ipcRenderer.invoke('dashboards:move', id, delta),
     /** forget every dashboard sign-in */
     signOut: (): Promise<void> => ipcRenderer.invoke('dashboards:signOut'),
-    openExternal: (url: string): Promise<void> => ipcRenderer.invoke('dashboards:openExternal', url)
+    openExternal: (url: string): Promise<void> => ipcRenderer.invoke('dashboards:openExternal', url),
+    /** Ctrl+K pressed inside a dashboard */
+    onFind: (cb: () => void): (() => void) => {
+      const handler = (): void => cb()
+      ipcRenderer.on('dashboards:find', handler)
+      return () => ipcRenderer.removeListener('dashboards:find', handler)
+    }
   },
   links: {
     list: (): Promise<LinkEntry[]> => ipcRenderer.invoke('links:list'),

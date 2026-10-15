@@ -396,7 +396,14 @@ export interface DashboardEntry {
   name: string
   /** http(s) page loaded in an embedded browser that keeps its own sign-ins */
   url: string
+  /** sidebar folder it's filed under; none = Other */
+  folder?: string
+  /** also listed under Pinned at the top of the sidebar */
+  pinned?: boolean
 }
+
+/** a dashboard to add (no id) or update; folder and pinned left out keep what it had */
+export type DashboardInput = Omit<DashboardEntry, 'id'> & { id?: string }
 
 /** where a ticket sits in your own triage; '' = not triaged yet */
 export type TicketPlan = 'now' | 'next' | 'later' | 'waiting' | ''
