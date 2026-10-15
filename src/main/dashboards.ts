@@ -2,7 +2,7 @@ import { app, session, shell, type WebContents } from 'electron'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
-import type { DashboardEntry } from '../shared/types'
+import type { DashboardEntry, DashboardInput } from '../shared/types'
 
 // ---------------------------------------------------------------------------
 // Dashboards tab: pages embedded in the app with <webview>, which (unlike an
@@ -47,15 +47,24 @@ function normalizeUrl(raw: string): string {
 }
 
 /** Add (no id) or update (with id) a dashboard; returns the full list. */
-export function saveDashboard(entry: { id?: string; name: string; url: string }): DashboardEntry[] {
+export function saveDashboard(entry: DashboardInput): DashboardEntry[] {
   const list = listDashboards()
   const url = normalizeUrl(entry.url)
   const name = entry.name.trim() || new URL(url).hostname.replace(/^www\./, '')
+  const folder = entry.folder?.trim() || undefined
   if (entry.id) {
     const i = list.findIndex((d) => d.id === entry.id)
-    if (i >= 0) list[i] = { ...list[i], name, url }
+    if (i >= 0) {
+      list[i] = {
+        ...list[i],
+        name,
+        url,
+        folder: entry.folder === undefined ? list[i].folder : folder,
+        pinned: entry.pinned ?? list[i].pinned
+      }
+    }
   } else {
-    list.push({ id: randomUUID(), name, url })
+    list.push({ id: randomUUID(), name, url, folder, pinned: entry.pinned })
   }
   write(list)
   return list
@@ -67,12 +76,15 @@ export function removeDashboard(id: string): DashboardEntry[] {
   return kept
 }
 
-/** shift a dashboard one place left (-1) or right (+1) in the tab strip */
+/** shift a dashboard one place up (-1) or down (+1) among those in its folder */
 export function moveDashboard(id: string, delta: -1 | 1): DashboardEntry[] {
   const list = listDashboards()
   const i = list.findIndex((d) => d.id === id)
-  const j = i + delta
-  if (i < 0 || j < 0 || j >= list.length) return list
+  if (i < 0) return list
+  const folder = list[i].folder ?? ''
+  let j = i + delta
+  while (j >= 0 && j < list.length && (list[j].folder ?? '') !== folder) j += delta
+  if (j < 0 || j >= list.length) return list
   ;[list[i], list[j]] = [list[j], list[i]]
   write(list)
   return list
@@ -118,6 +130,20 @@ export function guardWebviews(host: WebContents): void {
     if (!/^https?:\/\//i.test(params.src)) e.preventDefault()
   })
   host.on('did-attach-webview', (_e, guest) => {
+    // a focused dashboard swallows the keyboard, so its Ctrl+K is passed up
+    // to open the sidebar's search
+    guest.on('before-input-event', (e, input) => {
+      if (
+        input.type === 'keyDown' &&
+        (input.control || input.meta) &&
+        !input.alt &&
+        !input.shift &&
+        input.key.toLowerCase() === 'k'
+      ) {
+        e.preventDefault()
+        host.send('dashboards:find')
+      }
+    })
     // sign-in popups (SSO, "Sign in with Google") must share the dashboards'
     // cookies to work, so web popups open as app windows on that session;
     // anything else (mailto:, teams:) goes to the system

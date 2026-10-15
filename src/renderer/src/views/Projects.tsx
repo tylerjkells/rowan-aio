@@ -89,6 +89,16 @@ function priorityOf(p: string | null): Priority | null {
   return (PRIORITIES as readonly string[]).includes(v) ? (v as Priority) : null
 }
 
+/** where a status sits in the usual flow — not started, under way, in review,
+ *  parked — for views that mix lists and so have no one ClickUp order to follow */
+function workflowRank(status: string, type?: string): number {
+  const s = status.toLowerCase()
+  if (type === 'open' || /\b(to ?do|open|new|backlog|not started|queued|planned)\b/.test(s)) return 0
+  if (/\b(hold|blocked|waiting|paused|pending|stuck|parked|deferred)\b/.test(s)) return 3
+  if (/\b(review|qa|feedback|approval)\b/.test(s)) return 2
+  return 1
+}
+
 const KIND_LABEL: Record<ClickupActivityEvent['kind'], string> = {
   new: 'New',
   done: 'Done',
@@ -602,6 +612,8 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     }
     const out = [...map.values()]
     if (groupBy === 'priority') out.sort((a, b) => (PRIORITY_RANK[a.key] ?? 9) - (PRIORITY_RANK[b.key] ?? 9))
+    else if (groupBy === 'status')
+      out.sort((a, b) => workflowRank(a.label) - workflowRank(b.label) || a.label.localeCompare(b.label))
     else out.sort((a, b) => a.label.localeCompare(b.label))
     for (const g of out) {
       g.overdue = g.tasks.some((t) => !!t.dueDate && t.dueDate < today)
@@ -960,7 +972,7 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
 
   const boardColumns = useMemo((): { status: string; color: string | null; type: string; tasks: ClickupTask[] }[] => {
     if (!tasks || layout !== 'board') return []
-    // a single list gives its own column order; a mixed view takes the union in order of appearance
+    // a single list gives its own column order; a mixed view takes the union in workflow order
     const order: { status: string; color: string | null; type: string }[] = []
     const seen = new Set<string>()
     const push = (s: { status: string; color: string | null; type?: string }): void => {
@@ -974,7 +986,11 @@ export function ProjectsView({ onSettings }: { onSettings: () => void }): React.
     if (viewListId && listStatuses[viewListId]) {
       listStatuses[viewListId].filter((s) => s.type !== 'done' && s.type !== 'closed').forEach(push)
     }
-    for (const t of tasks) push({ status: t.status, color: t.statusColor })
+    for (const t of tasks) {
+      const type = listStatuses[t.listId]?.find((s) => s.status.toLowerCase() === t.status.toLowerCase())?.type
+      push({ status: t.status, color: t.statusColor, type })
+    }
+    if (!viewListId) order.sort((a, b) => workflowRank(a.status, a.type) - workflowRank(b.status, b.type))
     // inside-parent mode shows only the top of each family; the rest opens up in its card
     const ids = new Set(tasks.map((t) => t.id))
     const shown =
