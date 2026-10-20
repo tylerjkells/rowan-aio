@@ -15,6 +15,13 @@ import { parseDueDate } from '../../../shared/dates'
 import { ClickupPushDialog } from '../ClickupPush'
 import { exportFilename, followUpEmail, meetingToMarkdown, summaryToMarkdown } from '../markdown'
 import { retranscribeMeeting } from '../retranscribe'
+import {
+  EditableList,
+  EditableText,
+  InstructionsDialog,
+  NotesView,
+  TagRow
+} from '../MeetingExtras'
 
 /**
  * Who was in the room: edit the meeting's participant list by hand (directory
@@ -473,6 +480,10 @@ export function MeetingView({
   const titleRef = useRef<HTMLInputElement>(null)
   const [confirmEl, confirm] = useConfirm()
   const [seriesCount, setSeriesCount] = useState(0)
+  const [editingSummary, setEditingSummary] = useState(false)
+  const [instructionsOpen, setInstructionsOpen] = useState(false)
+  const [standingInstructions, setStandingInstructions] = useState('')
+  const [linkCopied, setLinkCopied] = useState(false)
 
   useEffect(() => {
     setSeriesCount(0)
@@ -488,6 +499,7 @@ export function MeetingView({
         setHasApiKey(settings.aiReady)
         setAiProvider(settings.aiProvider)
         setHasClickup(settings.hasClickup)
+        setStandingInstructions(settings.summaryInstructions)
       }
     )
   }, [id])
@@ -641,6 +653,55 @@ export function MeetingView({
     }
   }
 
+  /** play from a moment (a note's stamp) and show the transcript line there */
+  function jumpTo(ms: number): void {
+    const t = meeting?.transcript
+    if (t?.length) {
+      let idx = t.findIndex((s) => ms < s.to)
+      if (idx < 0) idx = t.length - 1
+      setTranscriptToggled(true)
+      setFlashIdx(idx)
+    }
+    if (meeting?.hasAudio) playerRef.current?.seek(ms)
+  }
+
+  async function copyLink(): Promise<void> {
+    if (!meeting) return
+    await navigator.clipboard.writeText(await window.scribe.nav.meetingUrl(meeting.id))
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 1800)
+  }
+
+  async function editSummary(
+    patch: Parameters<typeof window.scribe.meetings.editSummary>[1]
+  ): Promise<void> {
+    if (!meeting) return
+    const updated = await window.scribe.meetings.editSummary(meeting.id, patch)
+    if (updated) setMeeting(updated)
+  }
+
+  async function regenerate(model?: string, label?: string, instructions?: string): Promise<void> {
+    if (!meeting) return
+    const edited = !!meeting.summaryEdited
+    // the instructions dialog already warned about hand edits
+    if (!instructions) {
+      const sure = await confirm({
+        title: 'Rewrite the summary from the transcript?',
+        body:
+          (edited ? 'You have edited this summary by hand, and those edits will be replaced. ' : '') +
+          'Owner assignments and checked-off action items will be reset.' +
+          (label ? ` This run uses ${label}.` : ''),
+        confirmLabel: 'Regenerate',
+        danger: edited
+      })
+      if (!sure) return
+    }
+    setEditingSummary(false)
+    window.scribe.meetings.resummarize(meeting.id, model, instructions)
+  }
+
+  const linkable = meeting.hasAudio
+
   return (
     <div className="main-narrow">
       <div className="detail-head">
@@ -713,6 +774,7 @@ export function MeetingView({
           )}
           <StageBadge stage={meeting.stage} progress={meeting.progress} />
         </div>
+        <TagRow meeting={meeting} onSaved={setMeeting} />
         {(meeting.summary || (meeting.transcript && meeting.transcript.length > 0)) && (
           <div className="toolbar-row">
             {meeting.summary && (
@@ -732,19 +794,27 @@ export function MeetingView({
             <button className="btn" onClick={exportMd}>
               Export Markdown
             </button>
+            <button
+              className="btn"
+              onClick={copyLink}
+              title="A link that opens this meeting in Rowan AIO. Paste it into OneNote, a task, or a chat to yourself."
+            >
+              {linkCopied ? 'Copied ✓' : 'Copy link'}
+            </button>
+            {meeting.summary && (
+              <button
+                className={`btn ${editingSummary ? 'btn-primary' : ''}`}
+                onClick={() => setEditingSummary(!editingSummary)}
+                title="Fix wording, add or remove points; edits save as you go"
+              >
+                {editingSummary ? 'Done editing' : 'Edit summary'}
+              </button>
+            )}
             {meeting.summary && meeting.transcript && meeting.transcript.length > 0 && (
               <RegenerateButton
                 provider={aiProvider}
-                onRegenerate={async (model, label) => {
-                  const sure = await confirm({
-                    title: 'Rewrite the summary from the transcript?',
-                    body:
-                      'Owner assignments and checked-off action items will be reset.' +
-                      (label ? ` This run uses ${label}.` : ''),
-                    confirmLabel: 'Regenerate'
-                  })
-                  if (sure) window.scribe.meetings.resummarize(meeting.id, model)
-                }}
+                onRegenerate={(model, label) => regenerate(model, label)}
+                onInstructions={() => setInstructionsOpen(true)}
               />
             )}
             {exportedTo && (
@@ -831,15 +901,37 @@ export function MeetingView({
         </div>
       )}
 
+      {editingSummary && (
+        <div className="stage-banner sum-edit-banner">
+          Editing the summary. Changes save as you go; regenerating later asks before it replaces
+          your edits.
+          <button className="btn" onClick={() => setEditingSummary(false)}>
+            Done editing
+          </button>
+        </div>
+      )}
+
       {meeting.summary && (
         <Collapse label="TL;DR">
-          <p className="tldr">{meeting.summary.tldr}</p>
+          {editingSummary ? (
+            <EditableText
+              value={meeting.summary.tldr}
+              placeholder="A one to three sentence recap"
+              onSave={(tldr) => editSummary({ tldr })}
+            />
+          ) : (
+            <p className="tldr">{meeting.summary.tldr}</p>
+          )}
         </Collapse>
       )}
 
       {(meeting.notes || meeting.stage === 'ready' || meeting.stage === 'transcript-only') && (
         <Collapse label="Your notes" defaultOpen={!!meeting.notes}>
-          <NotesEditor meeting={meeting} onSaved={setMeeting} />
+          <NotesEditor
+            meeting={meeting}
+            onSaved={setMeeting}
+            onSeek={linkable || (meeting.transcript?.length ?? 0) > 0 ? jumpTo : undefined}
+          />
         </Collapse>
       )}
 
@@ -853,7 +945,17 @@ export function MeetingView({
                     className={`action-item ${a.done ? 'done' : ''} ${a.dismissed ? 'dismissed' : ''}`}
                     key={i}
                   >
-                    <span className="action-task">{a.task}</span>
+                    {editingSummary ? (
+                      <ActionTaskEdit
+                        task={a.task}
+                        onSave={async (text) => {
+                          const updated = await window.scribe.actions.setTask(meeting.id, i, text)
+                          if (updated) setMeeting(updated)
+                        }}
+                      />
+                    ) : (
+                      <span className="action-task">{a.task}</span>
+                    )}
                     {a.dismissed && <span className="action-state">Dismissed</span>}
                     {!a.dismissed && a.done && <span className="action-state">Done</span>}
                     <OwnerEditor
@@ -907,43 +1009,111 @@ export function MeetingView({
             </Collapse>
           )}
 
-          {meeting.summary.decisions.length > 0 && (
+          {(meeting.summary.decisions.length > 0 || editingSummary) && (
             <Collapse label="Decisions">
-              <ul className="point-list">
-                {meeting.summary.decisions.map((d, i) => (
-                  <li key={i}>{d}</li>
-                ))}
-              </ul>
+              {editingSummary ? (
+                <EditableList
+                  items={meeting.summary.decisions}
+                  addLabel="Add a decision"
+                  onSave={(decisions) => editSummary({ decisions })}
+                />
+              ) : (
+                <ul className="point-list">
+                  {meeting.summary.decisions.map((d, i) => (
+                    <li key={i}>{d}</li>
+                  ))}
+                </ul>
+              )}
             </Collapse>
           )}
 
-          {meeting.summary.openQuestions.length > 0 && (
+          {(meeting.summary.openQuestions.length > 0 || editingSummary) && (
             <Collapse label="Open questions">
-              <ul className="point-list">
-                {meeting.summary.openQuestions.map((q, i) => (
-                  <li key={i}>{q}</li>
-                ))}
-              </ul>
+              {editingSummary ? (
+                <EditableList
+                  items={meeting.summary.openQuestions}
+                  addLabel="Add a question"
+                  onSave={(openQuestions) => editSummary({ openQuestions })}
+                />
+              ) : (
+                <ul className="point-list">
+                  {meeting.summary.openQuestions.map((q, i) => (
+                    <li key={i}>{q}</li>
+                  ))}
+                </ul>
+              )}
             </Collapse>
           )}
 
-          {meeting.summary.topics?.map((topic, ti) => (
-            <Collapse label={topic.heading} topic key={ti}>
-              <ul className="point-list">
-                {topic.notes.map((n, i) => (
-                  <li key={i}>{n}</li>
-                ))}
-              </ul>
-            </Collapse>
-          ))}
+          {meeting.summary.topics?.map((topic, ti) =>
+            editingSummary ? (
+              <section className="section" key={ti}>
+                <div className="collapse-head topic sum-topic-head">
+                  <EditableText
+                    value={topic.heading}
+                    placeholder="Section heading (clear it and its notes to remove the section)"
+                    onSave={(heading) =>
+                      editSummary({
+                        topics: meeting.summary!.topics!.map((t, j) =>
+                          j === ti ? { ...t, heading } : t
+                        )
+                      })
+                    }
+                  />
+                </div>
+                <div className="collapse-body">
+                  <EditableList
+                    items={topic.notes}
+                    addLabel="Add a note"
+                    onSave={(notes) =>
+                      editSummary({
+                        topics: meeting.summary!.topics!.map((t, j) =>
+                          j === ti ? { ...t, notes } : t
+                        )
+                      })
+                    }
+                  />
+                </div>
+              </section>
+            ) : (
+              <Collapse label={topic.heading} topic key={ti}>
+                <ul className="point-list">
+                  {topic.notes.map((n, i) => (
+                    <li key={i}>{n}</li>
+                  ))}
+                </ul>
+              </Collapse>
+            )
+          )}
 
-          {!meeting.summary.topics && (meeting.summary.keyPoints?.length ?? 0) > 0 && (
+          {editingSummary && meeting.summary.topics && (
+            <button
+              className="link-btn sum-add"
+              onClick={() =>
+                editSummary({
+                  topics: [...meeting.summary!.topics!, { heading: 'New section', notes: [] }]
+                })
+              }
+            >
+              + Add a section
+            </button>
+          )}
+
+          {!meeting.summary.topics && ((meeting.summary.keyPoints?.length ?? 0) > 0 || editingSummary) && (
             <Collapse label="Key points">
-              <ul className="point-list">
-                {meeting.summary.keyPoints!.map((p, i) => (
-                  <li key={i}>{p}</li>
-                ))}
-              </ul>
+              {editingSummary ? (
+                <EditableList
+                  items={meeting.summary.keyPoints ?? []}
+                  addLabel="Add a point"
+                  onSave={(keyPoints) => editSummary({ keyPoints })}
+                />
+              ) : (
+                <ul className="point-list">
+                  {meeting.summary.keyPoints!.map((p, i) => (
+                    <li key={i}>{p}</li>
+                  ))}
+                </ul>
+              )}
             </Collapse>
           )}
         </>
@@ -1162,7 +1332,40 @@ export function MeetingView({
           onClose={() => setEditingAttendees(false)}
         />
       )}
+      {instructionsOpen && (
+        <InstructionsDialog
+          standing={standingInstructions}
+          edited={!!meeting.summaryEdited}
+          onRun={(text) => regenerate(undefined, undefined, text)}
+          onClose={() => setInstructionsOpen(false)}
+        />
+      )}
     </div>
+  )
+}
+
+/** an action item's wording, editable while the summary is being edited */
+function ActionTaskEdit({
+  task,
+  onSave
+}: {
+  task: string
+  onSave: (text: string) => void
+}): React.JSX.Element {
+  const [draft, setDraft] = useState(task)
+  useEffect(() => setDraft(task), [task])
+  return (
+    <input
+      className="text-input action-task-input"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft.trim() && draft.trim() !== task.trim()) onSave(draft)
+        else setDraft(task)
+      }}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      aria-label="Action item"
+    />
   )
 }
 
@@ -1323,17 +1526,35 @@ function EmailDraft({
 /** typed notes attached to the meeting; edits feed the next summary regeneration */
 function NotesEditor({
   meeting,
-  onSaved
+  onSaved,
+  onSeek
 }: {
   meeting: Meeting
   onSaved: (m: Meeting) => void
+  /** play the recording from a note's time stamp */
+  onSeek?: (ms: number) => void
 }): React.JSX.Element {
   const [draft, setDraft] = useState(meeting.notes ?? '')
+  // notes read as text with clickable stamps; editing is one click away
+  const [editing, setEditing] = useState(!meeting.notes)
 
   async function save(): Promise<void> {
+    if (draft.trim()) setEditing(false)
     if (draft.trim() === (meeting.notes ?? '').trim()) return
     const updated = await window.scribe.meetings.setNotes(meeting.id, draft)
     if (updated) onSaved(updated)
+  }
+
+  if (!editing && draft.trim()) {
+    return (
+      <div className="notes-editor">
+        <NotesView text={draft} onSeek={onSeek} onEdit={() => setEditing(true)} />
+        <p className="opt-desc">
+          Click a time to play from that moment, or click the notes to edit them. Notes are folded
+          into the summary; regenerate it after big edits.
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -1342,6 +1563,7 @@ function NotesEditor({
         className="text-input notes-input"
         placeholder="Notes typed during the meeting land here — you can also add them after the fact."
         value={draft}
+        autoFocus={!!meeting.notes}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={save}
         aria-label="Meeting notes"
@@ -1372,9 +1594,12 @@ const REGEN_MODELS: Record<'claude' | 'openai', { id: string; label: string }[]>
  */
 function RegenerateButton({
   onRegenerate,
+  onInstructions,
   provider
 }: {
   onRegenerate: (model?: string, label?: string) => void
+  /** open the one-off instructions dialog */
+  onInstructions: () => void
   provider: 'claude' | 'openai'
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -1424,6 +1649,16 @@ function RegenerateButton({
               With {m.label}
             </button>
           ))}
+          <button
+            className="split-menu-item"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              onInstructions()
+            }}
+          >
+            With instructions…
+          </button>
         </div>
       )}
     </span>

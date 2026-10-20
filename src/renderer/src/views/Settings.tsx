@@ -8,6 +8,7 @@ import type {
   AppTheme,
   EngineProgress,
   EngineStatus,
+  MicApp,
   UsageSummary,
   WhisperModel
 } from '../../../shared/types'
@@ -172,6 +173,104 @@ function OptRow({
 }
 
 /**
+ * Call detection: what Windows says is holding the mic right now (so it is
+ * easy to see the feature working), and the apps that should never count.
+ */
+function CallDetection({
+  settings,
+  onChange
+}: {
+  settings: AppSettings
+  onChange: (s: AppSettings) => void
+}): React.JSX.Element {
+  const [apps, setApps] = useState<MicApp[]>([])
+  const [draft, setDraft] = useState('')
+
+  useEffect(() => {
+    window.scribe.mic
+      .state()
+      .then((c) => setApps(c.active))
+      .catch(() => {})
+    return window.scribe.mic.onChange((c) => setApps(c.active))
+  }, [])
+
+  async function ignore(name: string): Promise<void> {
+    const t = name.trim()
+    if (!t) return
+    onChange(
+      await window.scribe.settings.update({ micIgnoreApps: [...settings.micIgnoreApps, t] })
+    )
+    setDraft('')
+  }
+
+  async function unignore(name: string): Promise<void> {
+    onChange(
+      await window.scribe.settings.update({
+        micIgnoreApps: settings.micIgnoreApps.filter((x) => x !== name)
+      })
+    )
+  }
+
+  return (
+    <>
+      <SwitchRow
+        title="Offer to record calls"
+        desc="When Webex, Teams, Zoom or a browser picks up your microphone and nothing is recording, a notification offers to record it. Click it and recording starts. Nothing is listened to: Windows only reports which app has the mic."
+        checked={settings.callDetect}
+        onToggle={async (v) => onChange(await window.scribe.settings.update({ callDetect: v }))}
+      />
+      <p className="opt-desc mic-now" role="status">
+        {apps.length === 0 ? (
+          'No app is using your microphone right now.'
+        ) : (
+          <>
+            Using your microphone right now:{' '}
+            {apps.map((a, i) => (
+              <span key={a.id}>
+                {i > 0 && ', '}
+                <strong>{a.name}</strong>{' '}
+                <button className="link-btn" onClick={() => ignore(a.name)} title={a.id}>
+                  ignore
+                </button>
+              </span>
+            ))}
+          </>
+        )}
+      </p>
+      {settings.micIgnoreApps.length > 0 && (
+        <div className="cal-ignore-chips">
+          {settings.micIgnoreApps.map((t) => (
+            <span className="cal-ignore-chip" key={t}>
+              {t}
+              <button
+                onClick={() => unignore(t)}
+                aria-label={`Count ${t} as a call again`}
+                title="Count this app as a call again"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="field-row">
+        <input
+          className="text-input"
+          placeholder="An app that should never count as a call"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && ignore(draft)}
+          aria-label="App to ignore for call detection"
+        />
+        <button className="btn" onClick={() => ignore(draft)} disabled={!draft.trim()}>
+          Ignore app
+        </button>
+      </div>
+    </>
+  )
+}
+
+/**
  * The signature Rowan puts on every reply draft.
  *
  * Outlook only applies a signature to a message you compose yourself, so a
@@ -314,6 +413,7 @@ export function SettingsView({
   }, [])
   const [yourNameDraft, setYourNameDraft] = useState(settings.yourName)
   const [vocabDraft, setVocabDraft] = useState(settings.vocabulary)
+  const [instrDraft, setInstrDraft] = useState(settings.summaryInstructions)
   const [backingUp, setBackingUp] = useState(false)
   const [claude, setClaude] = useState<{
     claudeFound: boolean
@@ -771,6 +871,28 @@ export function SettingsView({
               <span className="switch-knob" aria-hidden="true" />
             </button>
           </div>
+
+          <div>
+            <label className="field-label" htmlFor="summary-instructions">
+              Summary instructions
+            </label>
+            <textarea
+              id="summary-instructions"
+              className="text-input vocab-input"
+              placeholder="e.g. Always list budget figures with what they are for. Call students “learners”. Keep action items to tasks for my team."
+              value={instrDraft}
+              onChange={(e) => setInstrDraft(e.target.value)}
+              onBlur={async () => {
+                if (instrDraft.trim() !== settings.summaryInstructions) {
+                  onChange(await window.scribe.settings.update({ summaryInstructions: instrDraft }))
+                }
+              }}
+            />
+            <p className="opt-desc">
+              Added to every summary from now on. For a one-off, use Regenerate summary ▾ → With
+              instructions on a meeting.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -887,6 +1009,28 @@ export function SettingsView({
               }
             />
           )}
+          <SwitchRow
+            title="Stop when the call ends"
+            desc="Virtual meetings stop once Webex, Teams, or whichever app ran the call lets go of your microphone. Uses the call detection below."
+            checked={settings.autoEndCallEnded}
+            onToggle={async (v) =>
+              onChange(await window.scribe.settings.update({ autoEndCallEnded: v }))
+            }
+          />
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <header className="settings-label">
+          <h2>Call detection</h2>
+          <p className="hint">
+            Catches the calls your calendar never knew about, and tells the recorder when a call
+            is over. Rowan watches which app holds your microphone, the same thing the mic icon in
+            the taskbar shows; it never listens to another app&apos;s audio.
+          </p>
+        </header>
+        <div className="settings-body">
+          <CallDetection settings={settings} onChange={onChange} />
         </div>
       </section>
 
@@ -1015,7 +1159,8 @@ export function SettingsView({
               <span className="switch-label">
                 <span className="opt-title">Nudge to record</span>
                 <span className="opt-desc">
-                  Notify when a meeting with a call link or room starts and nothing is recording.
+                  Notify as a meeting with a call link or room starts and nothing is recording.
+                  Clicking the notification joins the call and starts recording.
                 </span>
               </span>
               <button

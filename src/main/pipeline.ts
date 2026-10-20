@@ -8,7 +8,7 @@ import {
   isCatchingUp,
   collectLiveTranscript
 } from './store'
-import { transcribe, vocabularyPrompt } from './whisper'
+import { transcribe, meetingPrompt } from './whisper'
 import { summarizeTranscript } from './summarize'
 import { activeAiModel } from './ai'
 import { getSettings } from './settings'
@@ -77,7 +77,7 @@ export async function processMeeting(id: string): Promise<void> {
           (percent) => {
             meeting = update(meeting!, { stage: 'transcribing', progress: percent })
           },
-          vocabularyPrompt(settings.vocabulary) || undefined
+          meetingPrompt(settings.vocabulary, meeting.attendees, meeting.title) || undefined
         )
         if (transcript.length === 0) {
           // keep the wav so "Try again" (or a different model) has something to work with
@@ -107,8 +107,16 @@ export async function processMeeting(id: string): Promise<void> {
   }
 }
 
-/** modelOverride: one-off model for this run (the Regenerate menu); default is Settings */
-export async function summarizeMeeting(id: string, modelOverride?: string): Promise<void> {
+/**
+ * modelOverride: one-off model for this run (the Regenerate menu); default is
+ * Settings. extraInstructions: one-off asks for this run only, on top of the
+ * standing instructions from Settings.
+ */
+export async function summarizeMeeting(
+  id: string,
+  modelOverride?: string,
+  extraInstructions?: string
+): Promise<void> {
   let meeting = readMeeting(id)
   const transcript = meeting?.transcript
   if (!meeting || !transcript || transcript.length === 0) return
@@ -120,20 +128,27 @@ export async function summarizeMeeting(id: string, modelOverride?: string): Prom
     const knownNames = [...(meeting.attendees ?? []), ...settings.people]
       .filter((n, i, all) => all.findIndex((x) => x.toLowerCase() === n.toLowerCase()) === i)
       .slice(0, 40)
+    const instructions = [settings.summaryInstructions, extraInstructions ?? '']
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .join('\n')
     const summary = await summarizeTranscript(
       transcript,
       modelOverride ?? activeAiModel(),
       knownNames,
       settings.vocabulary,
       meeting.notes,
-      meeting.createdAt
+      meeting.createdAt,
+      instructions
     )
     const keepUserTitle =
       meeting.title && !/^(Virtual meeting|Imported meeting|Meeting) · /.test(meeting.title)
     update(meeting, {
       summary,
       title: keepUserTitle ? meeting.title : summary.title,
-      stage: 'ready'
+      stage: 'ready',
+      // a fresh summary carries no hand edits
+      summaryEdited: undefined
     })
   } catch (err) {
     update(meeting, {

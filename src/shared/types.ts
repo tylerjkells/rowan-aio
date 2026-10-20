@@ -134,6 +134,10 @@ export interface Meeting {
   notes?: string
   /** fingerprint of imported transcript text, so a re-import can skip it */
   importKey?: string
+  /** the user's own labels, in the order applied */
+  tags?: string[]
+  /** the summary text was changed by hand; regenerating asks before replacing it */
+  summaryEdited?: boolean
 }
 
 /** Lightweight listing shape (no transcript body) */
@@ -147,6 +151,25 @@ export interface MeetingListItem {
   progress?: number
   error?: string
   tldr?: string
+  tags?: string[]
+}
+
+/** one label in the tag catalogue, with how many meetings carry it */
+export interface TagInfo {
+  name: string
+  /** index into TAG_COLORS (shared/tags.ts) */
+  color: number
+  count: number
+}
+
+/** another app currently holding the microphone, as Windows reports it */
+export interface MicApp {
+  /** the registry entry: an exe path or a packaged app's family name */
+  id: string
+  /** display name, e.g. "Webex" */
+  name: string
+  /** epoch ms it was first seen using the mic */
+  since: number
 }
 
 /** one event from the connected calendar feed */
@@ -603,8 +626,25 @@ export interface PersonProfile {
   myCommitments: ActionRollupItem[]
 }
 
+/** a page the main process can send the window to (deep links, tray, notifications) */
+export type NavTarget =
+  | { name: 'today' }
+  | { name: 'library'; query?: string }
+  | { name: 'record' }
+  | { name: 'meeting'; id: string; at?: number }
+  | { name: 'actions' }
+  | { name: 'people' }
+  | { name: 'person'; person: string }
+  | { name: 'settings' }
+
+export interface NavRequest {
+  view: NavTarget
+  /** start recording in this mode as soon as the Record page is up */
+  autostart?: RecordingMode
+}
+
 /** why a recording stopped itself */
-export type AutoEndReason = 'silence' | 'overrun'
+export type AutoEndReason = 'silence' | 'overrun' | 'callEnded'
 
 /** one file found by a bulk import scan */
 export interface BulkCandidate {
@@ -674,6 +714,10 @@ export interface AppSettings {
   hasClickup: boolean
   /** notify when a calendared meeting starts and nothing is recording */
   recordNudge: boolean
+  /** offer to record when another app (Webex, Teams…) starts using the mic */
+  callDetect: boolean
+  /** apps whose mic use never counts as a call, matched by name */
+  micIgnoreApps: string[]
   /** stop a recording by itself once the room has gone quiet */
   autoEndSilence: boolean
   /** minutes of silence before the automatic stop */
@@ -682,9 +726,15 @@ export interface AppSettings {
   autoEndOverrun: boolean
   /** minutes past the scheduled end before the automatic stop */
   autoEndOverrunMinutes: number
+  /** stop a virtual-meeting recording once the call app lets go of the mic */
+  autoEndCallEnded: boolean
   theme: AppTheme
   /** names, acronyms, and jargon fed to transcription and summaries */
   vocabulary: string
+  /** standing instructions added to every summary ("always list budget figures") */
+  summaryInstructions: string
+  /** tag name (lowercased) -> index into TAG_COLORS, assigned as tags are first used */
+  tagColors: Record<string, number>
   /** closing the window hides to the tray instead of quitting */
   closeToTray: boolean
   /** start (in the tray) when Windows starts */

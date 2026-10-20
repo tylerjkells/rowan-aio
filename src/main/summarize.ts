@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { aiChat } from './ai'
+import { aiChat, type AiSystemBlock } from './ai'
 import { recordUsage } from './usage'
 import type { MeetingSummary, TranscriptSegment } from '../shared/types'
 
@@ -164,7 +164,9 @@ export async function summarizeTranscript(
   attendees?: string[],
   vocabulary?: string,
   userNotes?: string,
-  meetingDate?: string
+  meetingDate?: string,
+  /** what the user wants from their summaries (standing ones plus any one-off ask) */
+  instructions?: string
 ): Promise<MeetingSummary> {
   const transcript = transcriptToText(segments)
   const attendeeNote =
@@ -185,34 +187,53 @@ export async function summarizeTranscript(
   // on their own, and skipping the pass roughly halves the tokens spent
   const shouldVerify = /haiku|mini|nano/i.test(model)
 
+  // The transcript leads each pass's system prompt, byte-identical, so the
+  // fact-check pass reads back the copy the draft pass cached instead of
+  // paying for the whole transcript again. Only cached when that second read
+  // is coming: a single-pass model would pay the cache-write premium for
+  // nothing. (The fact extraction runs alongside the draft with a different
+  // output schema, which never shares a cache, so it pays full price as before.)
+  const transcriptBlock: AiSystemBlock = {
+    text: `<transcript>\n${transcript}\n</transcript>`,
+    cache: shouldVerify
+  }
+
   const draftPromise = aiChat({
     model,
     maxTokens: 24000,
     schema: SUMMARY_SCHEMA as unknown as Record<string, unknown>,
     schemaName: 'meeting_summary',
-    system:
-      'You summarize meeting transcripts produced by automatic speech recognition. ' +
-      'The transcript comes from automatic speech recognition and may contain errors; infer meaning from context and do not invent facts that are not supported by the transcript. ' +
-      'Lines labeled "Me" were spoken by the person you are summarizing for; lines labeled "Them" are the other participants (possibly several people); lines may also carry specific speaker names. Unlabeled lines could be anyone. ' +
-      'Write for the meeting participant reviewing this later: concrete, specific, no filler. ' +
-      'Group the discussion into topical sections the way good meeting minutes do: when the conversation jumps between subjects, give each subject its own section with a short heading, and put the substance in the notes (numbers, names, formats, reasons), not vague paraphrase. ' +
-      'Keep the summary internally consistent: a date, deadline, or figure must read the same in every section that mentions it. If the transcript supports only a rough timeframe ("beginning of September"), use that same rough timeframe everywhere — never sharpen it into a specific date the transcript does not state, and if two spots in the transcript seem to conflict, use the version with stronger support rather than repeating both. ' +
-      'Never state a specific calendar date unless a speaker said that date. When the transcript gives a relative timeframe ("in three weeks", "next month"), keep the speakers\' phrasing instead of converting it to a date yourself — ASR mishears dates often enough that a computed date is more likely wrong than helpful. Before finishing, sanity-check the timeline you have written: every deadline must be consistent with the meeting date and with the sequence of events (work that supports a launch cannot be due after the launch); if a date fails that check, fall back to the relative phrasing actually used. ' +
-      'Report a cause or explanation for a problem only when a participant actually voiced it in the meeting; never present your own inference as a conclusion the group reached. When describing a reported bug or issue, preserve the specific symptom as described rather than paraphrasing it into a different-sounding problem. ' +
-      'When a figure was tied to a particular filter, view, or timeframe (e.g. a count that only holds for one term or one campus), keep that context attached to the number wherever it appears, and never mix figures from different views as if they were the same measurement. Copy thresholds and comparators exactly — "five or more" means at least 5, not more than 5. When the meeting covered two distinct items (two problems, two dependencies, two features), keep them distinct; never fold one into the other because they sound related. ' +
-      'A date belongs to the event the speaker attached it to — re-read the surrounding lines before pairing a date with a deadline, and never move a date from one event to another. When a speaker gives a partial date ("the week of the 21st") without naming the month, do not fill the month in yourself — not even from a month mentioned in a neighboring sentence about a different event; keep it as spoken. ' +
-      'An open question is one the meeting left unanswered; if the discussion (or another part of your own summary) answers it, it is not open. ' +
-      'Leave out meeting mechanics — screen-share hiccups, audio trouble, waiting for people to join — unless someone committed to follow up on them.' +
-      attendeeNote +
-      vocabNote +
-      dateNote,
+    system: [
+      transcriptBlock,
+      {
+        text:
+          'You summarize meeting transcripts produced by automatic speech recognition. The transcript to summarize is in the <transcript> block above. ' +
+          'The transcript comes from automatic speech recognition and may contain errors; infer meaning from context and do not invent facts that are not supported by the transcript. ' +
+          'Lines labeled "Me" were spoken by the person you are summarizing for; lines labeled "Them" are the other participants (possibly several people); lines may also carry specific speaker names. Unlabeled lines could be anyone. ' +
+          'Write for the meeting participant reviewing this later: concrete, specific, no filler. ' +
+          'Group the discussion into topical sections the way good meeting minutes do: when the conversation jumps between subjects, give each subject its own section with a short heading, and put the substance in the notes (numbers, names, formats, reasons), not vague paraphrase. ' +
+          'Keep the summary internally consistent: a date, deadline, or figure must read the same in every section that mentions it. If the transcript supports only a rough timeframe ("beginning of September"), use that same rough timeframe everywhere — never sharpen it into a specific date the transcript does not state, and if two spots in the transcript seem to conflict, use the version with stronger support rather than repeating both. ' +
+          'Never state a specific calendar date unless a speaker said that date. When the transcript gives a relative timeframe ("in three weeks", "next month"), keep the speakers\' phrasing instead of converting it to a date yourself — ASR mishears dates often enough that a computed date is more likely wrong than helpful. Before finishing, sanity-check the timeline you have written: every deadline must be consistent with the meeting date and with the sequence of events (work that supports a launch cannot be due after the launch); if a date fails that check, fall back to the relative phrasing actually used. ' +
+          'Report a cause or explanation for a problem only when a participant actually voiced it in the meeting; never present your own inference as a conclusion the group reached. When describing a reported bug or issue, preserve the specific symptom as described rather than paraphrasing it into a different-sounding problem. ' +
+          'When a figure was tied to a particular filter, view, or timeframe (e.g. a count that only holds for one term or one campus), keep that context attached to the number wherever it appears, and never mix figures from different views as if they were the same measurement. Copy thresholds and comparators exactly — "five or more" means at least 5, not more than 5. When the meeting covered two distinct items (two problems, two dependencies, two features), keep them distinct; never fold one into the other because they sound related. ' +
+          'A date belongs to the event the speaker attached it to — re-read the surrounding lines before pairing a date with a deadline, and never move a date from one event to another. When a speaker gives a partial date ("the week of the 21st") without naming the month, do not fill the month in yourself — not even from a month mentioned in a neighboring sentence about a different event; keep it as spoken. ' +
+          'An open question is one the meeting left unanswered; if the discussion (or another part of your own summary) answers it, it is not open. ' +
+          'Leave out meeting mechanics — screen-share hiccups, audio trouble, waiting for people to join — unless someone committed to follow up on them.' +
+          attendeeNote +
+          vocabNote +
+          dateNote
+      }
+    ],
     messages: [
       {
         role: 'user',
         content:
-          `Summarize this meeting transcript:\n\n${transcript}` +
+          'Summarize the meeting transcript above.' +
           (userNotes?.trim()
-            ? `\n\n<user_notes>\nThe participant typed these notes during the meeting. Treat them as high-signal: they mark what mattered, correct names and numbers, and may state action items or decisions explicitly. Fold them into the summary where the transcript supports them.\n\n${userNotes.trim().slice(0, 8000)}\n</user_notes>`
+            ? `\n\n<user_notes>\nThe participant typed these notes during the meeting. Treat them as high-signal: they mark what mattered, correct names and numbers, and may state action items or decisions explicitly. Fold them into the summary where the transcript supports them. A line that starts with a time like [12:34] was typed at that point in the recording, on the same clock as the transcript's timestamps.\n\n${userNotes.trim().slice(0, 8000)}\n</user_notes>`
+            : '') +
+          (instructions?.trim()
+            ? `\n\n<instructions>\nThe participant asked for this in their summaries:\n${instructions.trim().slice(0, 4000)}\n\nFollow it where the transcript supports it: it can shape emphasis, wording, and what goes in each section, but it never overrides accuracy, and the summary keeps the same fields.\n</instructions>`
             : '')
       }
     ]
@@ -221,7 +242,7 @@ export async function summarizeTranscript(
   // the fact sheet needs only the transcript, so it extracts while the draft generates
   const [response, factSheet] = await Promise.all([
     draftPromise,
-    shouldVerify ? extractFacts(model, transcript) : Promise.resolve(null)
+    shouldVerify ? extractFacts(model, transcriptBlock.text) : Promise.resolve(null)
   ])
 
   if (response.stop === 'refusal') {
@@ -238,7 +259,7 @@ export async function summarizeTranscript(
         : 'The model returned a malformed summary. Regenerating usually fixes this.'
     )
   }
-  return shouldVerify ? verifySummary(model, transcript, draft, dateNote, factSheet) : draft
+  return shouldVerify ? verifySummary(model, transcriptBlock, draft, dateNote, factSheet) : draft
 }
 
 /**
@@ -246,19 +267,24 @@ export async function summarizeTranscript(
  * Runs concurrently with draft generation; returns null on any failure so
  * the checking pass can still run unanchored.
  */
-async function extractFacts(model: string, transcript: string): Promise<string | null> {
+async function extractFacts(model: string, transcriptXml: string): Promise<string | null> {
   try {
     const response = await aiChat({
       model,
       maxTokens: 24000,
       schema: FACTS_SCHEMA as unknown as Record<string, unknown>,
       schemaName: 'fact_sheet',
-      system:
-        'You extract hard facts from a meeting transcript produced by automatic speech recognition. ' +
-        'List every figure, date/deadline/timeframe, threshold, and task-or-role assignment stated in the transcript — each as a precise claim with the verbatim quote it comes from. ' +
-        'Scope matters: a figure carries the filter/view/timeframe it was measured under; a date carries the specific event the speaker tied it to (look at the surrounding lines — a date near a topic is not necessarily about that topic); an assignment carries the exact task. ' +
-        'Extract only what is actually said. Do not interpret, reconcile, or summarize.',
-      messages: [{ role: 'user', content: `Extract the facts from this transcript:\n\n${transcript}` }]
+      system: [
+        { text: transcriptXml },
+        {
+          text:
+            'You extract hard facts from the meeting transcript above, which was produced by automatic speech recognition. ' +
+            'List every figure, date/deadline/timeframe, threshold, and task-or-role assignment stated in the transcript — each as a precise claim with the verbatim quote it comes from. ' +
+            'Scope matters: a figure carries the filter/view/timeframe it was measured under; a date carries the specific event the speaker tied it to (look at the surrounding lines — a date near a topic is not necessarily about that topic); an assignment carries the exact task. ' +
+            'Extract only what is actually said. Do not interpret, reconcile, or summarize.'
+        }
+      ],
+      messages: [{ role: 'user', content: 'Extract the facts from the transcript above.' }]
     })
     if (response.stop === 'refusal' || !response.text) return null
     const parsed = JSON.parse(response.text) as {
@@ -281,7 +307,7 @@ async function extractFacts(model: string, transcript: string): Promise<string |
  */
 async function verifySummary(
   model: string,
-  transcript: string,
+  transcriptBlock: AiSystemBlock,
   draft: MeetingSummary,
   dateNote: string,
   factSheet: string | null
@@ -292,27 +318,32 @@ async function verifySummary(
       maxTokens: 24000,
       schema: SUMMARY_SCHEMA as unknown as Record<string, unknown>,
       schemaName: 'meeting_summary',
-      system:
-        'You are fact-checking a draft meeting summary against the source transcript. The draft\'s structure, coverage, and wording are already good — reproduce it faithfully and change ONLY what is factually unsupported. ' +
-        (factSheet
-          ? 'A fact sheet extracted from the transcript is provided: every figure, date, threshold, and assignment, each pinned to a verbatim quote. Check the draft against it claim by claim — a draft claim that contradicts the fact sheet must be corrected to match the fact sheet, and a specific figure or date that appears in neither the fact sheet nor the transcript must be removed or replaced with the speakers\' own phrasing. '
-          : '') +
-        'Specifically correct: ' +
-        '(1) Figures that do not match the transcript: restore the exact number, keep its filter/view/timeframe context attached, and never merge two different figures into one claim. ' +
-        '(2) Thresholds and comparators: "five or more" is at least 5, not more than 5. ' +
-        '(3) Dates or deadlines: a date belongs to the event the speaker attached it to — never moved to another event, and a partial date ("the week of the 21st") never gets a month filled in from a neighboring sentence about a different event. Replace unsupported dates with the speakers\' own phrasing or drop them, and verify the timeline is coherent (work supporting a launch cannot be due after the launch). ' +
-        '(4) Distinct topics merged into one claim (two problems, two dependencies, two features treated as one): split them back apart as the transcript has them. ' +
-        '(5) Assignments that contradict the roles the meeting established: a task must sit with the person who actually took it. ' +
-        '(6) Internal contradictions between sections: align every mention on the version the transcript supports, and remove an "open question" that the meeting (or the summary itself) answers. ' +
-        '(7) Stray artifacts: leftover labels, dangling punctuation, list counts that do not match the list. ' +
-        '(8) Action items duplicated per person for the same task: collapse to one item whose owner field lists every participant, comma-separated ("Caroline, Andrew, Brian") — never lose a person. Every owner in the draft must still appear as an owner in the result. ' +
-        'Do NOT shorten, condense, or drop anything else: reproduce every section, every note, and every action item at full length — your output must be the complete summary with only the corrections applied. Anything you cannot verify either way, leave exactly as the draft has it.' +
-        dateNote,
+      // the same leading block as the draft pass: read back from its cache
+      system: [
+        transcriptBlock,
+        {
+          text:
+            'You are fact-checking a draft meeting summary against the source transcript in the <transcript> block above. The draft\'s structure, coverage, and wording are already good — reproduce it faithfully and change ONLY what is factually unsupported. ' +
+            (factSheet
+              ? 'A fact sheet extracted from the transcript is provided: every figure, date, threshold, and assignment, each pinned to a verbatim quote. Check the draft against it claim by claim — a draft claim that contradicts the fact sheet must be corrected to match the fact sheet, and a specific figure or date that appears in neither the fact sheet nor the transcript must be removed or replaced with the speakers\' own phrasing. '
+              : '') +
+            'Specifically correct: ' +
+            '(1) Figures that do not match the transcript: restore the exact number, keep its filter/view/timeframe context attached, and never merge two different figures into one claim. ' +
+            '(2) Thresholds and comparators: "five or more" is at least 5, not more than 5. ' +
+            '(3) Dates or deadlines: a date belongs to the event the speaker attached it to — never moved to another event, and a partial date ("the week of the 21st") never gets a month filled in from a neighboring sentence about a different event. Replace unsupported dates with the speakers\' own phrasing or drop them, and verify the timeline is coherent (work supporting a launch cannot be due after the launch). ' +
+            '(4) Distinct topics merged into one claim (two problems, two dependencies, two features treated as one): split them back apart as the transcript has them. ' +
+            '(5) Assignments that contradict the roles the meeting established: a task must sit with the person who actually took it. ' +
+            '(6) Internal contradictions between sections: align every mention on the version the transcript supports, and remove an "open question" that the meeting (or the summary itself) answers. ' +
+            '(7) Stray artifacts: leftover labels, dangling punctuation, list counts that do not match the list. ' +
+            '(8) Action items duplicated per person for the same task: collapse to one item whose owner field lists every participant, comma-separated ("Caroline, Andrew, Brian") — never lose a person. Every owner in the draft must still appear as an owner in the result. ' +
+            'Do NOT shorten, condense, or drop anything else: reproduce every section, every note, and every action item at full length — your output must be the complete summary with only the corrections applied. Anything you cannot verify either way, leave exactly as the draft has it.' +
+            dateNote
+        }
+      ],
       messages: [
         {
           role: 'user',
           content:
-            `<transcript>\n${transcript}\n</transcript>\n\n` +
             (factSheet ? `<fact_sheet>\n${factSheet}\n</fact_sheet>\n\n` : '') +
             `<draft_summary>\n${JSON.stringify(draft, null, 2)}\n</draft_summary>\n\nCheck the draft against the fact sheet and transcript, and return the corrected summary.`
         }

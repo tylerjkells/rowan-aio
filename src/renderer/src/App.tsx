@@ -4,7 +4,9 @@ import type {
   AutoEndReason,
   EngineStatus,
   MeetingListItem,
-  NavTab
+  NavRequest,
+  NavTab,
+  RecordingMode
 } from '../../shared/types'
 import { NAV_TABS } from '../../shared/tabs'
 import type { RecorderHandles } from './recorder'
@@ -47,8 +49,8 @@ import {
 
 export type View =
   | { name: 'today' }
-  | { name: 'library' }
-  | { name: 'record' }
+  | { name: 'library'; query?: string }
+  | { name: 'record'; autostart?: { mode: RecordingMode; nonce: number } }
   | { name: 'meeting'; id: string; at?: number }
   | { name: 'actions' }
   | { name: 'people' }
@@ -100,8 +102,29 @@ export default function App(): React.JSX.Element {
     window.scribe.appChannel().then(setChannel)
   }, [])
 
-  // record-nudge notification clicked: land on the Record page
-  useEffect(() => window.scribe.nudge.onOpenRecord(() => setView({ name: 'record' })), [])
+  // links, the tray, the hotkey, and notifications ask the main process to
+  // show a page (or start recording); collect the request when it nudges us,
+  // and once at startup in case it arrived while the window was loading
+  useEffect(() => {
+    const apply = (req: NavRequest | null): void => {
+      if (!req) return
+      const v = req.view
+      if (v.name === 'record') {
+        setView({
+          name: 'record',
+          ...(req.autostart ? { autostart: { mode: req.autostart, nonce: Date.now() } } : {})
+        })
+      } else {
+        setView(v)
+      }
+    }
+    const onNav = (): void => {
+      window.scribe.nav.take(true).then(apply)
+    }
+    window.addEventListener('rowan-nav', onNav)
+    window.scribe.nav.take(false).then(apply)
+    return () => window.removeEventListener('rowan-nav', onNav)
+  }, [])
 
   const refreshMeetings = useCallback(() => {
     window.scribe.meetings.list().then(setMeetings)
@@ -304,7 +327,8 @@ export default function App(): React.JSX.Element {
           view.name +
           ('id' in view ? view.id : '') +
           ('person' in view ? view.person : '') +
-          ('title' in view ? view.title : '')
+          ('title' in view ? view.title : '') +
+          ('query' in view ? (view.query ?? '') : '')
         }
       >
         <div
@@ -328,6 +352,7 @@ export default function App(): React.JSX.Element {
           {view.name === 'library' && (
             <LibraryView
               meetings={meetings}
+              initialQuery={view.query}
               onOpen={openMeeting}
               onRecord={() => setView({ name: 'record' })}
               onImport={() => setView({ name: 'import' })}
@@ -336,6 +361,7 @@ export default function App(): React.JSX.Element {
           {view.name === 'record' && (
             <RecordView
               engine={engine}
+              autostart={view.autostart}
               onEngineReady={setEngine}
               rec={rec}
               setRec={setRec}

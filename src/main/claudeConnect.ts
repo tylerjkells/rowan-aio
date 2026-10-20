@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { execFileSync } from 'child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { URL_SCHEME } from './deeplink'
 
 // ---------------------------------------------------------------------------
 // Claude Desktop connection: install the bundled MCP server (a single
@@ -70,6 +71,24 @@ export function claudeConnectionStatus(): ClaudeConnection {
   return { claudeFound, configured, claudeRunning: claudeIsRunning() }
 }
 
+/**
+ * The server runs from a copy made at connect time, so an app update would
+ * otherwise never reach it. When connected, keep that copy in step with the
+ * bundled one (Node reads the file once at start, so swapping it is safe even
+ * while Claude Desktop has the old one running).
+ */
+export function refreshClaudeServer(): void {
+  try {
+    if (!existsSync(installedServerPath()) || !existsSync(bundledServerPath())) return
+    const bundled = readFileSync(bundledServerPath())
+    if (!bundled.equals(readFileSync(installedServerPath()))) {
+      writeFileSync(installedServerPath(), bundled)
+    }
+  } catch {
+    // the old copy keeps working; reconnecting refreshes it too
+  }
+}
+
 export function connectClaude(): ClaudeConnection {
   if (!existsSync(claudeDir())) {
     throw new Error(
@@ -102,7 +121,9 @@ export function connectClaude(): ClaudeConnection {
       args: [installedServerPath()],
       env: {
         ELECTRON_RUN_AS_NODE: '1',
-        MEETINGSCRIBE_DATA: app.getPath('userData')
+        MEETINGSCRIBE_DATA: app.getPath('userData'),
+        // meeting links in Claude's answers open this build of the app
+        ROWAN_URL_SCHEME: URL_SCHEME
       }
     }
   }

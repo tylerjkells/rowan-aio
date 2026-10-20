@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type {
+  CalendarEvent,
   EngineProgress,
   EngineStatus,
   PrepEntry,
@@ -10,8 +11,37 @@ import { startRecording, readLevel, type RecorderHandles } from '../recorder'
 import { PrepBody } from '../PrepDialog'
 import { formatDuration, MicIcon, StopIcon, useConfirm } from '../ui'
 
+/** "12:34" on the transcript's own clock, so a note lines up with what was said */
+export function noteStamp(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000))
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+/** the last stretch of a calendar meeting turns amber; past the end it says so */
+const WARN_MS = 5 * 60 * 1000
+
+function TimeLeft({ event, now }: { event: CalendarEvent; now: number }): React.JSX.Element {
+  const end = new Date(event.end).getTime()
+  const left = end - now
+  const span = `${new Date(event.start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} – ${new Date(event.end).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+  let chip: string
+  if (left <= 0) chip = `Over by ${Math.max(1, Math.round(-left / 60000))} min`
+  else if (left <= WARN_MS) chip = `${formatDuration(left)} left`
+  else chip = `${Math.ceil(left / 60000)} min left`
+  return (
+    <div className="rec-event" aria-live="off">
+      <span className="rec-event-title" title={event.title}>
+        {event.title}
+      </span>
+      <span className="rec-event-span">{span}</span>
+      <span className={`rec-left ${left <= WARN_MS ? 'warn' : ''}`}>{chip}</span>
+    </div>
+  )
+}
+
 export function RecordView({
   engine,
+  autostart,
   onEngineReady,
   rec,
   setRec,
@@ -23,6 +53,8 @@ export function RecordView({
   onCancel
 }: {
   engine: EngineStatus | null
+  /** a notification or the tray asked to start recording right away */
+  autostart?: { mode: RecordingMode; nonce: number }
   onEngineReady: (s: EngineStatus) => void
   rec: RecorderHandles | null
   setRec: (r: RecorderHandles | null) => void
@@ -42,7 +74,9 @@ export function RecordView({
   const [confirmEl, confirm] = useConfirm()
   const [notes, setNotes] = useState('')
   const [prepNote, setPrepNote] = useState<{ id: string; entry: PrepEntry } | null>(null)
+  const [liveEvent, setLiveEvent] = useState<CalendarEvent | null>(null)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autostarted = useRef<number | null>(null)
 
   // prep written on the calendar follows you in here: if a calendar event is
   // live (or starts within a few minutes), its "before the meeting" note shows
@@ -64,12 +98,51 @@ export function RecordView({
   }, [])
   const livePanelRef = useRef<HTMLDivElement>(null)
 
+  // the calendar event this recording belongs to, for its name and how long is left
+  useEffect(() => {
+    if (!rec) {
+      setLiveEvent(null)
+      return
+    }
+    let alive = true
+    window.scribe.calendar
+      .liveEvent(new Date(rec.startedAt).toISOString())
+      .then((ev) => {
+        if (alive) setLiveEvent(ev && !ev.allDay ? ev : null)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [rec])
+
   // notes live next to the in-progress recording on disk, so they survive
   // navigating away, crashes, and app restarts
   useEffect(() => {
     if (!rec) return
     window.scribe.rec.readNotes(rec.id).then(setNotes)
   }, [rec])
+
+  /**
+   * Starting a fresh line stamps it with the recording time, so the note can
+   * jump back to that moment later (and the summary knows when it was said).
+   */
+  function stampLine(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    if (!rec || e.ctrlKey || e.metaKey || e.altKey) return
+    if (e.key.length !== 1 || e.key === ' ') return
+    const ta = e.currentTarget
+    const pos = ta.selectionStart
+    if (pos !== ta.selectionEnd) return
+    const before = ta.value.slice(0, pos)
+    const after = ta.value.slice(pos)
+    const lineSoFar = before.slice(before.lastIndexOf('\n') + 1)
+    const restOfLine = after.split('\n')[0]
+    if (lineSoFar.trim() || restOfLine.trim()) return
+    e.preventDefault()
+    // a native insert at the caret: synchronous (fast typing can't overtake
+    // it), keeps undo working, and fires the usual change event
+    document.execCommand('insertText', false, `[${noteStamp(rec.elapsedMs())}] ${e.key}`)
+  }
 
   function updateNotes(text: string): void {
     setNotes(text)
@@ -110,10 +183,10 @@ export function RecordView({
     return () => clearInterval(t)
   }, [rec])
 
-  async function begin(): Promise<void> {
+  async function begin(as: RecordingMode = mode): Promise<void> {
     setError(null)
     try {
-      const handles = await startRecording(mode)
+      const handles = await startRecording(as)
       setRec(handles)
       setPaused(false)
       setElapsed(0)
@@ -142,6 +215,15 @@ export function RecordView({
     setPaused(false)
     onCancel()
   }
+
+  // started from a notification or the tray: go straight to recording
+  useEffect(() => {
+    if (!autostart || !engineReady || rec || autostarted.current === autostart.nonce) return
+    autostarted.current = autostart.nonce
+    setMode(autostart.mode)
+    begin(autostart.mode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autostart?.nonce, engineReady, rec])
 
   if (!engineReady) {
     return <EngineSetup engine={engine} onReady={onEngineReady} />
@@ -173,7 +255,7 @@ export function RecordView({
             ? 'Captures your microphone and everything you hear: Webex, Teams, or any other call audio.'
             : 'Captures your microphone only. Place your laptop where it can hear the room.'}
         </p>
-        <button className="big-record" onClick={begin} aria-label="Start recording">
+        <button className="big-record" onClick={() => begin()} aria-label="Start recording">
           <MicIcon />
         </button>
         {prepNote && (
@@ -203,6 +285,8 @@ export function RecordView({
       <div className="rec-timer" aria-live="off">
         {formatDuration(elapsed)}
       </div>
+      {/* re-renders with the elapsed timer, so Date.now() stays current */}
+      {liveEvent && <TimeLeft event={liveEvent} now={Date.now()} />}
       <Meters rec={rec} />
       {liveSegs.length > 0 && (
         <div className="live-panel" ref={livePanelRef} aria-live="polite" aria-label="Live transcript">
@@ -222,8 +306,9 @@ export function RecordView({
       )}
       <textarea
         className="text-input rec-notes"
-        placeholder="Type notes as you go — names, numbers, decisions. They sharpen the summary and are kept with the meeting."
+        placeholder="Type notes as you go: names, numbers, decisions. Each line is stamped with the moment you start it, so you can jump back to it later, and notes sharpen the summary."
         value={notes}
+        onKeyDown={stampLine}
         onChange={(e) => updateNotes(e.target.value)}
         onBlur={flushNotes}
         aria-label="Meeting notes"

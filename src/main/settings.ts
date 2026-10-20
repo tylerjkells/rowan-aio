@@ -13,12 +13,18 @@ interface StoredSettings {
   autoSummarize: boolean
   mailAssistant: boolean
   recordNudge: boolean
+  callDetect: boolean
+  micIgnoreApps: string[]
   autoEndSilence: boolean
   autoEndSilenceMinutes: number
   autoEndOverrun: boolean
   autoEndOverrunMinutes: number
+  autoEndCallEnded: boolean
   theme: AppTheme
   vocabulary: string
+  summaryInstructions: string
+  /** tag name (lowercased) -> TAG_COLORS index */
+  tagColors: Record<string, number>
   closeToTray: boolean
   launchAtLogin: boolean
   recordHotkey: boolean
@@ -66,12 +72,17 @@ const DEFAULTS: StoredSettings = {
   autoSummarize: true,
   mailAssistant: true,
   recordNudge: true,
+  callDetect: true,
+  micIgnoreApps: [],
   autoEndSilence: true,
   autoEndSilenceMinutes: 10,
   autoEndOverrun: true,
   autoEndOverrunMinutes: 15,
+  autoEndCallEnded: true,
   theme: 'studio',
   vocabulary: '',
+  summaryInstructions: '',
+  tagColors: {},
   closeToTray: true,
   launchAtLogin: false,
   recordHotkey: true,
@@ -134,12 +145,17 @@ export function getSettings(): AppSettings {
     autoSummarize: s.autoSummarize,
     mailAssistant: s.mailAssistant !== false,
     recordNudge: s.recordNudge !== false,
+    callDetect: s.callDetect !== false,
+    micIgnoreApps: s.micIgnoreApps ?? [],
     autoEndSilence: s.autoEndSilence !== false,
     autoEndSilenceMinutes: clampMinutes(s.autoEndSilenceMinutes, DEFAULTS.autoEndSilenceMinutes),
     autoEndOverrun: s.autoEndOverrun !== false,
     autoEndOverrunMinutes: clampMinutes(s.autoEndOverrunMinutes, DEFAULTS.autoEndOverrunMinutes),
+    autoEndCallEnded: s.autoEndCallEnded !== false,
     theme: s.theme ?? 'studio',
     vocabulary: s.vocabulary ?? '',
+    summaryInstructions: s.summaryInstructions ?? '',
+    tagColors: s.tagColors ?? {},
     closeToTray: s.closeToTray !== false,
     launchAtLogin: s.launchAtLogin === true,
     recordHotkey: s.recordHotkey !== false,
@@ -194,12 +210,16 @@ export function updateSettings(
       | 'autoSummarize'
       | 'mailAssistant'
       | 'recordNudge'
+      | 'callDetect'
+      | 'micIgnoreApps'
       | 'autoEndSilence'
       | 'autoEndSilenceMinutes'
       | 'autoEndOverrun'
       | 'autoEndOverrunMinutes'
+      | 'autoEndCallEnded'
       | 'theme'
       | 'vocabulary'
+      | 'summaryInstructions'
       | 'closeToTray'
       | 'launchAtLogin'
       | 'recordHotkey'
@@ -230,6 +250,19 @@ export function updateSettings(
   if (typeof patch.autoSummarize === 'boolean') s.autoSummarize = patch.autoSummarize
   if (typeof patch.mailAssistant === 'boolean') s.mailAssistant = patch.mailAssistant
   if (typeof patch.recordNudge === 'boolean') s.recordNudge = patch.recordNudge
+  if (typeof patch.callDetect === 'boolean') s.callDetect = patch.callDetect
+  if (Array.isArray(patch.micIgnoreApps)) {
+    const seen = new Set<string>()
+    s.micIgnoreApps = patch.micIgnoreApps
+      .map((t) => String(t).trim())
+      .filter((t) => {
+        const key = t.toLowerCase()
+        if (!t || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .slice(0, 50)
+  }
   if (typeof patch.autoEndSilence === 'boolean') s.autoEndSilence = patch.autoEndSilence
   if (patch.autoEndSilenceMinutes !== undefined) {
     s.autoEndSilenceMinutes = clampMinutes(
@@ -244,8 +277,11 @@ export function updateSettings(
       DEFAULTS.autoEndOverrunMinutes
     )
   }
+  if (typeof patch.autoEndCallEnded === 'boolean') s.autoEndCallEnded = patch.autoEndCallEnded
   if (patch.theme) s.theme = patch.theme
   if (typeof patch.vocabulary === 'string') s.vocabulary = patch.vocabulary.trim()
+  if (typeof patch.summaryInstructions === 'string')
+    s.summaryInstructions = patch.summaryInstructions.trim().slice(0, 2000)
   if (typeof patch.closeToTray === 'boolean') s.closeToTray = patch.closeToTray
   if (typeof patch.launchAtLogin === 'boolean') s.launchAtLogin = patch.launchAtLogin
   if (typeof patch.recordHotkey === 'boolean') s.recordHotkey = patch.recordHotkey
@@ -308,6 +344,27 @@ function dedupeNames(names: string[]): string[] {
     out.push(name)
   }
   return out.sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * Give any tags seen for the first time the next color round-robin, so a
+ * tag keeps its hue for good. Returns the full map.
+ */
+export function assignTagColors(tags: string[]): Record<string, number> {
+  const s = load()
+  const colors = { ...(s.tagColors ?? {}) }
+  let changed = false
+  for (const tag of tags) {
+    const key = tag.toLowerCase()
+    if (key in colors) continue
+    colors[key] = Object.keys(colors).length
+    changed = true
+  }
+  if (changed) {
+    s.tagColors = colors
+    persist()
+  }
+  return colors
 }
 
 export function getMailFolder(): string | null {

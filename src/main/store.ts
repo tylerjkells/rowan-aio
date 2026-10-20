@@ -14,8 +14,9 @@ import {
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { LiveTranscriber } from './live'
-import { engineStatus, vocabularyPrompt } from './whisper'
+import { engineStatus, meetingPrompt, vocabularyPrompt } from './whisper'
 import { getSettings } from './settings'
+import { findLiveEvent } from './calendar'
 import type {
   EnergySample,
   Meeting,
@@ -117,7 +118,8 @@ export function listMeetings(): MeetingListItem[] {
       stage: m.stage,
       progress: m.progress,
       error: m.error,
-      tldr: m.summary?.tldr
+      tldr: m.summary?.tldr,
+      ...(m.tags?.length ? { tags: m.tags } : {})
     })
   }
   items.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -169,6 +171,12 @@ export function hasActiveRecording(): boolean {
   return sessions.size > 0
 }
 
+/** the live recording, if any: when it started (the tray shows it) */
+export function activeRecording(): { id: string; startedAt: string } | null {
+  const s = sessions.values().next().value
+  return s ? { id: s.id, startedAt: s.startedAt } : null
+}
+
 function broadcastLive(id: string, segments: TranscriptSegment[], transcribedMs: number): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('rec:live', { id, segments, transcribedMs })
@@ -198,6 +206,18 @@ export function beginRecording(mode: RecordingMode): string {
       : null
 
   sessions.set(id, { id, mode, startedAt: now.toISOString(), pcmStream, pcmBytes: 0, live })
+
+  // the calendar event (if any) adds its invitees and title words to the
+  // hints; the first chunk is cut 45s in, so this lands well before it
+  if (live && settings.hasCalendar) {
+    findLiveEvent(now.toISOString())
+      .then((event) => {
+        if (event && sessions.has(id)) {
+          live.setVocab(meetingPrompt(settings.vocabulary, event.attendees, event.title))
+        }
+      })
+      .catch(() => {})
+  }
   return id
 }
 

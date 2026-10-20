@@ -14,11 +14,23 @@ export interface AiMessage {
   content: string
 }
 
+/**
+ * One piece of a system prompt. cache marks the end of a prefix worth
+ * reusing: a later request starting with byte-identical blocks reads it back
+ * at a tenth of the price (Claude; ChatGPT caches long shared prefixes on its
+ * own). Only mark it when a follow-up request will actually reuse it soon,
+ * since writing the cache costs a quarter more than a plain read.
+ */
+export interface AiSystemBlock {
+  text: string
+  cache?: boolean
+}
+
 export interface AiRequest {
   /** defaults to the active provider's configured model */
   model?: string
   maxTokens: number
-  system: string
+  system: string | AiSystemBlock[]
   messages: AiMessage[]
   /** JSON schema for structured output */
   schema?: Record<string, unknown>
@@ -58,11 +70,19 @@ async function claudeChat(req: AiRequest): Promise<AiResult> {
   const model = req.model ?? getSettings().claudeModel
   // stream and collect: large max_tokens trips the SDK's "streaming required
   // for long operations" guard on plain create()
+  const system: string | Anthropic.TextBlockParam[] =
+    typeof req.system === 'string'
+      ? req.system
+      : req.system.map((b) => ({
+          type: 'text' as const,
+          text: b.text,
+          ...(b.cache ? { cache_control: { type: 'ephemeral' as const } } : {})
+        }))
   const response = await client.messages
     .stream({
       model,
       max_tokens: req.maxTokens,
-      system: req.system,
+      system,
       ...(req.schema
         ? { output_config: { format: { type: 'json_schema' as const, schema: req.schema } } }
         : {}),
@@ -77,7 +97,11 @@ async function claudeChat(req: AiRequest): Promise<AiResult> {
 
 interface OpenaiResponse {
   choices?: { message?: { content?: string | null }; finish_reason?: string }[]
-  usage?: { prompt_tokens?: number; completion_tokens?: number }
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    prompt_tokens_details?: { cached_tokens?: number }
+  }
 }
 
 async function openaiChat(req: AiRequest): Promise<AiResult> {
@@ -92,7 +116,15 @@ async function openaiChat(req: AiRequest): Promise<AiResult> {
     body: JSON.stringify({
       model,
       max_completion_tokens: req.maxTokens,
-      messages: [{ role: 'system', content: req.system }, ...req.messages],
+      // OpenAI caches a long shared prefix by itself; the blocks just join up
+      messages: [
+        {
+          role: 'system',
+          content:
+            typeof req.system === 'string' ? req.system : req.system.map((b) => b.text).join('\n\n')
+        },
+        ...req.messages
+      ],
       ...(req.schema
         ? {
             response_format: {
@@ -113,9 +145,12 @@ async function openaiChat(req: AiRequest): Promise<AiResult> {
     throw new Error(msg)
   }
   const data = (await res.json()) as OpenaiResponse
+  // prompt_tokens includes the cached part, which bills at a discount
+  const cached = data.usage?.prompt_tokens_details?.cached_tokens ?? 0
   recordUsage(model, {
-    input_tokens: data.usage?.prompt_tokens ?? 0,
-    output_tokens: data.usage?.completion_tokens ?? 0
+    input_tokens: Math.max(0, (data.usage?.prompt_tokens ?? 0) - cached),
+    output_tokens: data.usage?.completion_tokens ?? 0,
+    cache_read_input_tokens: cached
   })
   const choice = data.choices?.[0]
   if (choice?.finish_reason === 'content_filter') return { text: '', stop: 'refusal' }

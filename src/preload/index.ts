@@ -45,11 +45,15 @@ import type {
   PrepEntry,
   Meeting,
   MeetingListItem,
+  MeetingSummary,
+  MicApp,
+  NavRequest,
   PersonDetails,
   PersonProfile,
   PersonSummary,
   RecordingMode,
   SeriesData,
+  TagInfo,
   TeamDesk,
   TeamSyncResult,
   TicketDesk,
@@ -66,6 +70,14 @@ export interface LiveUpdate {
   id: string
   segments: TranscriptSegment[]
   transcribedMs: number
+}
+
+/** the mic picture from the main process's call detection */
+export interface MicChange {
+  active: MicApp[]
+  started: MicApp[]
+  stopped: MicApp[]
+  doubtful: string[]
 }
 
 export interface StorageStats {
@@ -149,8 +161,16 @@ const api = {
     retranscribeFinish: (id: string): Promise<Meeting | null> =>
       ipcRenderer.invoke('retrans:finish', id),
     retranscribeCancel: (id: string): Promise<void> => ipcRenderer.invoke('retrans:cancel', id),
-    resummarize: (id: string, model?: string): Promise<void> =>
-      ipcRenderer.invoke('meetings:resummarize', id, model),
+    /** instructions: one-off asks for this run, on top of the standing ones in Settings */
+    resummarize: (id: string, model?: string, instructions?: string): Promise<void> =>
+      ipcRenderer.invoke('meetings:resummarize', id, model, instructions),
+    setTags: (id: string, tags: string[]): Promise<Meeting | null> =>
+      ipcRenderer.invoke('meetings:setTags', id, tags),
+    /** hand edits; the meeting is flagged so regenerating asks first */
+    editSummary: (
+      id: string,
+      patch: Partial<Pick<MeetingSummary, 'tldr' | 'decisions' | 'openQuestions' | 'keyPoints' | 'topics'>>
+    ): Promise<Meeting | null> => ipcRenderer.invoke('meetings:editSummary', id, patch),
     exportMarkdown: (defaultName: string, content: string): Promise<string | null> =>
       ipcRenderer.invoke('meetings:exportMarkdown', defaultName, content),
     ask: (id: string, question: string): Promise<string> =>
@@ -197,11 +217,25 @@ const api = {
       return () => ipcRenderer.removeListener('meeting:updated', handler)
     }
   },
-  nudge: {
-    onOpenRecord: (cb: () => void): (() => void) => {
-      const handler = (): void => cb()
-      ipcRenderer.on('nudge:openRecord', handler)
-      return () => ipcRenderer.removeListener('nudge:openRecord', handler)
+  tags: {
+    /** every tag in use, most used first */
+    all: (): Promise<TagInfo[]> => ipcRenderer.invoke('tags:all'),
+    /** tag name (lowercased) -> color index */
+    colors: (): Promise<Record<string, number>> => ipcRenderer.invoke('tags:colors')
+  },
+  nav: {
+    /** collect a page (or a recording) the main process asked for; gesture: called from the rowan-nav event */
+    take: (gesture: boolean): Promise<NavRequest | null> => ipcRenderer.invoke('nav:take', gesture),
+    /** rowan-aio://meeting/<id>?t=… for this build */
+    meetingUrl: (id: string, ms?: number): Promise<string> =>
+      ipcRenderer.invoke('app:meetingUrl', id, ms)
+  },
+  mic: {
+    state: (): Promise<MicChange> => ipcRenderer.invoke('mic:state'),
+    onChange: (cb: (c: MicChange) => void): (() => void) => {
+      const handler = (_e: unknown, c: MicChange): void => cb(c)
+      ipcRenderer.on('mic:state', handler)
+      return () => ipcRenderer.removeListener('mic:state', handler)
     }
   },
   calendar: {
@@ -491,6 +525,8 @@ const api = {
     ): Promise<Meeting | null> => ipcRenderer.invoke('actions:setState', meetingId, index, patch),
     toggle: (meetingId: string, index: number): Promise<boolean> =>
       ipcRenderer.invoke('actions:toggle', meetingId, index),
+    setTask: (meetingId: string, index: number, text: string): Promise<Meeting | null> =>
+      ipcRenderer.invoke('actions:setTask', meetingId, index, text),
     setOwner: (meetingId: string, index: number, owner: string | null): Promise<Meeting | null> =>
       ipcRenderer.invoke('actions:setOwner', meetingId, index, owner),
     setDue: (meetingId: string, index: number, isoDate: string | null): Promise<Meeting | null> =>
