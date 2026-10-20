@@ -267,3 +267,72 @@ export function vocabularyPrompt(vocabulary: string): string {
   const v = vocabulary.trim().replace(/\s+/g, ' ')
   return v ? v.slice(0, 400) : ''
 }
+
+/** title words that are ordinary meeting furniture, not spelling hints */
+const PLAIN_TITLE_WORDS = new Set(
+  (
+    'meeting meetings sync weekly daily monthly quarterly annual biweekly recurring team teams ' +
+    'check checkin in review call calls update updates standup stand up planning plan discussion ' +
+    'discuss project projects office hours lunch the and for with of to a an on at by from re fw ' +
+    'fwd about our my your new kickoff kick off follow followup touch base touchbase catch catchup ' +
+    'intro introduction overview session workshop training demo retro retrospective all hands town ' +
+    'hall one chat connect prep debrief status report sprint board committee group working work ' +
+    'meet internal external quick brief agenda notes time part day week month year am pm ' +
+    'monday tuesday wednesday thursday friday saturday sunday january february march april may ' +
+    'june july august september october november december'
+  ).split(' ')
+)
+
+/** recordings that never got a real title ("Meeting · Oct 20, 2:30 PM") */
+const DEFAULT_TITLE = /^(Virtual meeting|Imported meeting|Meeting|Recovered recording) · /
+
+/** "Smith, Jane (Rowan)" → "Jane Smith"; mailbox-style names ("jsmith") are no help */
+function spokenName(raw: string): string | null {
+  let name = raw.replace(/\(.*?\)|<.*?>|\S+@\S+/g, '').replace(/\s+/g, ' ').trim()
+  const lastFirst = /^([^,]+),\s*(.+)$/.exec(name)
+  if (lastFirst) name = `${lastFirst[2]} ${lastFirst[1]}`
+  if (!/[A-Z]/.test(name) || name.length < 2) return null
+  return name
+}
+
+/**
+ * Spelling hints for one meeting: the user's glossary, then the invitees'
+ * names and the unusual words in the calendar title (codenames, acronyms,
+ * product names). Kept short: whisper keeps only the tail of a long prompt,
+ * and the live transcriber appends the previous chunk's text after this.
+ */
+export function meetingPrompt(vocabulary: string, attendees: string[] = [], title = ''): string {
+  const base = vocabularyPrompt(vocabulary)
+  const have = new Set(base.toLowerCase().split(/[\s,;]+/).filter(Boolean))
+  const terms: string[] = []
+  const add = (t: string): void => {
+    const key = t.toLowerCase()
+    if (have.has(key)) return
+    have.add(key)
+    terms.push(t)
+  }
+  // a big invite list is a broadcast, and its names would only crowd the prompt
+  if (attendees.length <= 20) {
+    for (const a of attendees) {
+      const name = spokenName(a)
+      if (name) add(name)
+    }
+  }
+  if (title && !DEFAULT_TITLE.test(title)) {
+    for (const raw of title.split(/[\s/|·,:;()[\]–—+&]+/)) {
+      const w = raw.replace(/^[^\w]+|[^\w]+$/g, '')
+      if (w.length < 2 || /^\d+$/.test(w) || PLAIN_TITLE_WORDS.has(w.toLowerCase())) continue
+      // acronyms (KPI), product names (ServiceNow), proper nouns; plain lowercase words whisper knows
+      if (/[A-Z]/.test(w)) add(w)
+    }
+  }
+  // whole terms only, up to a small budget
+  const kept: string[] = []
+  let length = 0
+  for (const t of terms) {
+    if (length + t.length + 2 > 220) break
+    kept.push(t)
+    length += t.length + 2
+  }
+  return [base, kept.join(', ')].filter(Boolean).join(', ')
+}

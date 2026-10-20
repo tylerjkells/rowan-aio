@@ -69,6 +69,11 @@ export class LiveTranscriber {
     private otherRecordingLive: () => boolean = () => false
   ) {}
 
+  /** swap the spelling hints, e.g. once the calendar event is known; applies from the next chunk */
+  setVocab(vocab: string): void {
+    this.vocab = vocab
+  }
+
   feed(chunk: Buffer): void {
     if (this.failed || this.finished) return
     this.buffers.push(chunk)

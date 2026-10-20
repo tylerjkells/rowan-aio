@@ -1,8 +1,20 @@
-import { app, BrowserWindow, Menu, Tray, globalShortcut, nativeImage, powerSaveBlocker } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  Tray,
+  globalShortcut,
+  nativeImage,
+  powerSaveBlocker,
+  shell,
+  type MenuItemConstructorOptions,
+  type NativeImage
+} from 'electron'
 import { execFile } from 'child_process'
 import { channel } from './channel'
 import { join } from 'path'
 import { getSettings } from './settings'
+import type { NavRequest, RecordingMode } from '../shared/types'
 
 // ---------------------------------------------------------------------------
 // Always-on plumbing: tray residency (close hides instead of quitting),
@@ -42,10 +54,10 @@ export function registerWindowFactory(factory: () => BrowserWindow): void {
  * showing that window presents an empty shell, so reload it; and if the window
  * itself is gone, make a new one.
  */
-export function showMainWindow(page?: 'record'): void {
+export function showMainWindow(): BrowserWindow | null {
   let win = mainWindow()
   if (!win || win.isDestroyed()) {
-    if (!windowFactory) return
+    if (!windowFactory) return null
     win = windowFactory()
   } else if (win.webContents.isCrashed()) {
     win.webContents.reload()
@@ -53,33 +65,171 @@ export function showMainWindow(page?: 'record'): void {
   if (win.isMinimized()) win.restore()
   win.show()
   win.focus()
-  if (page === 'record') {
-    const wc = win.webContents
-    if (wc.isLoading()) wc.once('did-finish-load', () => wc.send('nudge:openRecord'))
-    else wc.send('nudge:openRecord')
+  return win
+}
+
+// ---- navigation from outside the window ----
+// Links, the tray, notifications, and the hotkey all land here. The request
+// waits in pendingNav until the renderer takes it, so a window that is still
+// loading (or reloading after a crash) cannot miss it, and it is delivered
+// exactly once. The nudge to take it goes in as a simulated user gesture:
+// starting a recording opens system-audio capture, which Chromium only allows
+// right after a click.
+let pendingNav: NavRequest | null = null
+
+export function navigate(req: NavRequest): void {
+  pendingNav = req
+  const win = showMainWindow()
+  if (win) deliverNav(win, 0)
+}
+
+function deliverNav(win: BrowserWindow, attempt: number): void {
+  if (!pendingNav || win.isDestroyed()) return
+  const wc = win.webContents
+  if (wc.isLoading()) {
+    wc.once('did-finish-load', () => setTimeout(() => deliverNav(win, attempt), 300))
+    return
   }
+  wc.executeJavaScript("window.dispatchEvent(new Event('rowan-nav'))", true).catch(() => {})
+  // the page may not be listening yet right after a load; keep knocking briefly
+  if (attempt < 12) setTimeout(() => deliverNav(win, attempt + 1), 600)
+}
+
+/**
+ * The renderer collecting its navigation. A start-recording request is only
+ * handed over on the gesture path, so capture is allowed to open.
+ */
+export function takePendingNav(gesture: boolean): NavRequest | null {
+  if (!pendingNav || (pendingNav.autostart && !gesture)) return null
+  const req = pendingNav
+  pendingNav = null
+  return req
+}
+
+/** open a meeting's call link and start recording it (tray, notifications) */
+export function joinAndRecord(joinUrl: string | null, mode: RecordingMode = 'virtual'): void {
+  if (joinUrl && /^https?:\/\//i.test(joinUrl)) shell.openExternal(joinUrl).catch(() => {})
+  navigate({ view: { name: 'record' }, autostart: mode })
+}
+
+// ---- tray ----
+// The tray says what is going on without opening the window: a red dot while
+// recording, the next meeting on hover, and today's remaining meetings in the
+// menu (one click joins the call and starts recording).
+
+export interface TrayInfo {
+  recording: { since: number; title: string | null } | null
+  upcoming: { title: string; start: string; joinUrl: string | null; location: string | null }[]
+}
+
+let trayInfo: TrayInfo = { recording: null, upcoming: [] }
+let baseIcon: NativeImage | null = null
+let recIcon: NativeImage | null = null
+
+export function setTrayInfo(info: TrayInfo): void {
+  trayInfo = info
+  refreshTray()
+}
+
+/** the app icon with a red recording dot in the corner */
+function recordingIcon(base: NativeImage): NativeImage {
+  const size = 32
+  const bitmap = Buffer.from(base.resize({ width: size, height: size, quality: 'best' }).toBitmap())
+  if (bitmap.length < size * size * 4) return base
+  const cx = 23.5
+  const cy = 23.5
+  const r = 7
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy)
+      if (d > r + 1.5) continue
+      const i = (y * size + x) * 4
+      // BGRA: a white ring around a red dot
+      const [b, g, rr] = d > r ? [255, 255, 255] : [0x3d, 0x3d, 0xe5]
+      bitmap[i] = b
+      bitmap[i + 1] = g
+      bitmap[i + 2] = rr
+      bitmap[i + 3] = 255
+    }
+  }
+  return nativeImage.createFromBitmap(bitmap, { width: size, height: size })
+}
+
+function clock(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
+function untilText(iso: string): string {
+  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60000)
+  if (mins <= 0) return 'now'
+  if (mins < 60) return `in ${mins} min`
+  return `at ${clock(iso)}`
+}
+
+function refreshTray(): void {
+  if (!tray) return
+  const { recording, upcoming } = trayInfo
+  try {
+    if (!baseIcon) baseIcon = nativeImage.createFromPath(iconPath())
+    if (recording && !recIcon) recIcon = recordingIcon(baseIcon)
+    tray.setImage(recording && recIcon ? recIcon : baseIcon)
+  } catch {
+    // keep whatever icon is showing
+  }
+
+  const elapsed = recording ? Math.max(0, Math.round((Date.now() - recording.since) / 60000)) : 0
+  const next = upcoming[0]
+  // Windows caps tray tooltips at 127 characters
+  const tip = recording
+    ? `Rowan AIO · Recording${recording.title ? ` ${recording.title}` : ''} · ${elapsed} min`
+    : next
+      ? `Rowan AIO · Next: ${next.title} ${untilText(next.start)}`
+      : 'Rowan AIO'
+  tray.setToolTip(tip.length > 127 ? tip.slice(0, 126) + '…' : tip)
+
+  const items: MenuItemConstructorOptions[] = []
+  if (recording) {
+    items.push(
+      {
+        label: `Recording${recording.title ? `: ${recording.title}` : ''} · ${elapsed} min`,
+        enabled: false
+      },
+      { label: 'Show the recording', click: () => navigate({ view: { name: 'record' } }) }
+    )
+  } else {
+    items.push({ label: 'Start recording', click: () => navigate({ view: { name: 'record' } }) })
+  }
+  items.push({ label: 'Open Rowan AIO', click: () => showMainWindow() })
+  if (upcoming.length > 0) {
+    items.push({ type: 'separator' }, { label: 'Coming up today', enabled: false })
+    for (const e of upcoming.slice(0, 4)) {
+      const label = `${clock(e.start)}  ${e.title.length > 48 ? e.title.slice(0, 47) + '…' : e.title}`
+      items.push(
+        e.joinUrl && !recording
+          ? { label: `${label}  · join & record`, click: () => joinAndRecord(e.joinUrl) }
+          : { label, click: () => navigate({ view: { name: 'today' } }) }
+      )
+    }
+  }
+  items.push(
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        quitting = true
+        app.quit()
+      }
+    }
+  )
+  tray.setContextMenu(Menu.buildFromTemplate(items))
 }
 
 function ensureTray(): void {
   if (tray) return
   const image = nativeImage.createFromPath(iconPath())
   tray = new Tray(image)
-  tray.setToolTip('Rowan AIO')
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Open Rowan AIO', click: () => showMainWindow() },
-      { label: 'Start recording', click: () => showMainWindow('record') },
-      { type: 'separator' },
-      {
-        label: 'Quit',
-        click: () => {
-          quitting = true
-          app.quit()
-        }
-      }
-    ])
-  )
   tray.on('click', () => showMainWindow())
+  refreshTray()
 }
 
 function destroyTray(): void {
@@ -189,7 +339,7 @@ export function applySystemSettings(): void {
 
   globalShortcut.unregister('Control+Alt+R')
   if (s.recordHotkey) {
-    globalShortcut.register('Control+Alt+R', () => showMainWindow('record'))
+    globalShortcut.register('Control+Alt+R', () => navigate({ view: { name: 'record' } }))
   }
 }
 

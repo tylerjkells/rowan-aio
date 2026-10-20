@@ -2267,9 +2267,16 @@ a.rollup-task:hover {
 
 .toolbar-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
   margin-top: var(--s4);
+}
+
+/* buttons keep their labels on one line and the row wraps instead */
+.toolbar-row > .btn,
+.toolbar-row .split-btn .btn {
+  white-space: nowrap;
 }
 
 .toolbar-row .field-note {
@@ -9687,4 +9694,579 @@ button.tkr-hbar:focus-visible {
 .mail-handoff-group.low .mail-handoff-gist {
   color: var(--ink-faint);
   font-weight: 400;
+}
+
+/* ---- the calendar event a recording belongs to: name, slot, time left ---- */
+.rec-event {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  max-width: min(640px, 100%);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.rec-event-title {
+  font-weight: 600;
+  color: var(--ink);
+  max-width: 36ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rec-event-span {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.rec-left {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the last five minutes: amber, never red (red means recording) */
+.rec-left.warn {
+  color: var(--warn);
+  border-color: color-mix(in oklch, var(--warn) 45%, transparent);
+  background: color-mix(in oklch, var(--warn) 12%, transparent);
+}
+
+/* Settings → Call detection: what holds the mic right now */
+.mic-now {
+  padding: var(--s1) 0 var(--s1) var(--s2);
+}
+
+.mic-now .link-btn {
+  font-size: 12px;
+}
+
+/* ---- meeting tags: a neutral pill, the color only in the dot ---- */
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--s2);
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--ink) 6%, transparent);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.tag-pill.compact {
+  height: 18px;
+  padding: 0 7px;
+  gap: 5px;
+  border-radius: 5px;
+  font-size: 10.5px;
+}
+
+.tag-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.tag-pill.compact .tag-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.tag-x {
+  border: none;
+  background: none;
+  padding: 0 0 0 2px;
+  margin-right: -3px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--ink-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+
+.tag-pill:hover .tag-x,
+.tag-x:focus-visible {
+  opacity: 1;
+}
+
+.tag-x:hover {
+  color: var(--accent-strong);
+}
+
+.tag-add-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.tag-add {
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px dashed var(--line);
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    color var(--t-fast) var(--ease-out),
+    border-color var(--t-fast) var(--ease-out);
+}
+
+.tag-add:hover,
+.tag-add[aria-expanded='true'] {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.tag-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  width: 240px;
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+.tag-search {
+  margin-bottom: 4px;
+}
+
+.tag-pop-kicker {
+  padding: 6px 8px 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.tag-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tag-opt.hi,
+.tag-opt:hover {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+
+.tag-opt-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-opt-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.tag-opt-check {
+  width: 12px;
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.tag-opt.create {
+  color: var(--accent-strong);
+}
+
+.tag-pop-empty {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* Library: filter by tag, and each row's tags */
+.tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 var(--s3);
+}
+
+.tag-filter-btn {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  padding: 1px;
+  cursor: pointer;
+}
+
+.tag-filter-btn:hover .tag-pill {
+  background: color-mix(in oklch, var(--ink) 11%, transparent);
+}
+
+.tag-filter-btn.active {
+  border-color: var(--line-strong);
+}
+
+.meeting-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.tag-more {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+
+/* ---- editing the summary in place ---- */
+.sum-edit-banner {
+  justify-content: space-between;
+}
+
+.sum-edit {
+  width: 100%;
+  max-width: 76ch;
+  resize: none;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.sum-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  max-width: 80ch;
+}
+
+.sum-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+}
+
+.sum-line .seg-tool {
+  opacity: 0.5;
+  margin-top: 6px;
+}
+
+.sum-line:hover .seg-tool,
+.sum-line:focus-within .seg-tool {
+  opacity: 1;
+}
+
+.sum-add {
+  align-self: flex-start;
+  margin-top: var(--s1);
+  font-size: 12.5px;
+}
+
+.sum-topic-head {
+  cursor: default;
+}
+
+.sum-topic-head .sum-edit {
+  font-weight: 650;
+}
+
+.action-task-input {
+  flex: 1;
+  min-width: 16ch;
+}
+
+/* Regenerate with instructions */
+.instr-input {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  margin: var(--s3) 0 var(--s2);
+}
+
+.instr-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--s3);
+}
+
+.instr-examples .who-chip {
+  font-weight: 500;
+  text-align: left;
+}
+
+/* ---- notes, read with clickable time stamps ---- */
+.notes-view {
+  max-width: 76ch;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-ctl);
+  font-size: 13.5px;
+  line-height: 1.6;
+  cursor: text;
+  white-space: pre-wrap;
+  transition: background var(--t-fast) var(--ease-out);
+}
+
+.notes-view:hover {
+  background: var(--bg-raised);
+}
+
+.note-stamp {
+  border: none;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 0 5px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.note-stamp:hover:not(:disabled) {
+  background: var(--accent-tint-strong);
+}
+
+.note-stamp:disabled {
+  cursor: text;
+}
+
+.settings-body .field-row > .btn {
+  white-space: nowrap;
+  flex: none;
+}
+
+.tag-filter .who-chip {
+  padding: 1px 10px;
+  font-size: 11.5px;
+}
+
+/* ---- name a recording while it runs ---- */
+.rec-title {
+  width: min(520px, 90%);
+  border: 1px solid transparent;
+  border-radius: var(--r-ctl);
+  background: none;
+  padding: 4px 10px;
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ink);
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    background var(--t-fast) var(--ease-out);
+}
+
+.rec-title::placeholder {
+  color: var(--ink-faint);
+}
+
+.rec-title:hover {
+  border-color: var(--line-soft);
+}
+
+.rec-title:focus {
+  outline: none;
+  border-color: var(--accent-dim);
+  background: var(--bg-raised);
+}
+
+/* ---- Today: where the day stands ---- */
+.day-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 var(--s3);
+}
+
+.day-chip {
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg-raised);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-chip.live {
+  color: var(--accent-strong);
+  border-color: color-mix(in oklch, var(--accent) 40%, transparent);
+}
+
+.sched-actions {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.sched-record-only {
+  font-size: 12px;
+}
+
+/* ---- auto-stop: the grace period draining away ---- */
+.autoend-prompt {
+  overflow: hidden;
+}
+
+.autoend-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--line-soft);
+}
+
+.autoend-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left center;
+  transition: transform 1s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .autoend-bar > span {
+    transition: none;
+  }
+}
+
+/* ---- processing, step by step ---- */
+.proc-steps {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
+}
+
+.proc-steps ol {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.proc-step {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  column-gap: var(--s2);
+  row-gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.proc-step.done {
+  color: var(--ink-faint);
+}
+
+.proc-step.now {
+  color: var(--ink);
+}
+
+.proc-step.later {
+  color: var(--ink-faint);
+  opacity: 0.7;
+}
+
+.proc-icon {
+  display: inline-flex;
+  justify-content: center;
+}
+
+.proc-icon .spinner {
+  width: 12px;
+  height: 12px;
+}
+
+.proc-pct {
+  margin-left: var(--s2);
+  color: var(--ink-faint);
+}
+
+.proc-track {
+  grid-column: 2;
+  max-width: 320px;
+}
+
+/* ---- vocabulary as a list ---- */
+.vocab-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  margin: var(--s2) 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.vocab-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+.vocab-list li + li {
+  border-top: 1px solid var(--line-soft);
+}
+
+/* one color per speaker in the transcript */
+.speaker-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: 1px;
 }

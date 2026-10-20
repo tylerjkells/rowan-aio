@@ -8,9 +8,12 @@ import type {
   AppTheme,
   EngineProgress,
   EngineStatus,
+  MicApp,
   UsageSummary,
+  VoiceEngineStatus,
   WhisperModel
 } from '../../../shared/types'
+import type { VoiceSetupProgress } from '../../../preload/index'
 
 const THEMES: { id: AppTheme; title: string; desc: string; bg: string; accent: string }[] = [
   { id: 'studio', title: 'Studio', desc: 'Warm dark, signal red. The default.', bg: '#1b1717', accent: '#dc5546' },
@@ -172,6 +175,280 @@ function OptRow({
 }
 
 /**
+ * Voice recognition: switching it on downloads the voice engine the first
+ * time (with progress); once ready it says how many people it knows, and
+ * every voiceprint can be forgotten in one go.
+ */
+function VoiceRecognition({
+  settings,
+  onChange
+}: {
+  settings: AppSettings
+  onChange: (s: AppSettings) => void
+}): React.JSX.Element {
+  const [status, setStatus] = useState<VoiceEngineStatus | null>(null)
+  const [progress, setProgress] = useState<VoiceSetupProgress | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [forgetArmed, setForgetArmed] = useState(false)
+
+  useEffect(() => {
+    window.scribe.voice.status().then(setStatus)
+    return window.scribe.voice.onProgress(setProgress)
+  }, [])
+
+  async function toggle(on: boolean): Promise<void> {
+    setError(null)
+    if (!on) {
+      onChange(await window.scribe.settings.update({ voiceId: false }))
+      return
+    }
+    if (!status?.ready) {
+      setBusy(true)
+      try {
+        setStatus(await window.scribe.voice.setup())
+      } catch (err) {
+        setError(err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : 'Setup failed')
+        setBusy(false)
+        return
+      }
+      setBusy(false)
+    }
+    onChange(await window.scribe.settings.update({ voiceId: true }))
+  }
+
+  async function forget(): Promise<void> {
+    if (!forgetArmed) {
+      setForgetArmed(true)
+      return
+    }
+    setForgetArmed(false)
+    setStatus(await window.scribe.voice.forget())
+  }
+
+  if (status && !status.supported) {
+    return <p className="opt-desc">Voice recognition needs 64-bit Windows.</p>
+  }
+
+  return (
+    <>
+      <SwitchRow
+        title="Recognize voices"
+        desc="After each recording, tell the voices apart and name the ones you have named before. In-person meetings get real speakers instead of guesses. The first time, this downloads the voice engine (about 55 MB)."
+        checked={settings.voiceId && !!status?.ready}
+        onToggle={toggle}
+      />
+      {busy && progress && (
+        <div className="setup-progress" aria-live="polite">
+          {progress.detail}
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{
+                width: progress.percent >= 0 ? `${progress.percent}%` : '100%',
+                opacity: progress.percent >= 0 ? 1 : 0.35
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {error && (
+        <p className="field-note error" role="alert">
+          {error}
+        </p>
+      )}
+      {settings.voiceId && status?.ready && (
+        <>
+          <p className="opt-desc">
+            {status.people > 0
+              ? `Knows ${status.people} ${status.people === 1 ? 'voice' : 'voices'} so far.`
+              : 'No voices remembered yet.'}{' '}
+            Rename a &ldquo;Speaker 2&rdquo; in a transcript and that voice is remembered for next
+            time; on calls, your own voice is learned from your microphone. Older meetings can be
+            run from their transcript with Identify voices.
+          </p>
+          <div className="field-row">
+            <button className={`btn ${forgetArmed ? 'btn-solid-danger' : 'btn-ghost btn-danger'}`} onClick={forget}>
+              {forgetArmed ? 'Click again to forget every voiceprint' : 'Forget all voiceprints'}
+            </button>
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
+/**
+ * The vocabulary as a list of words and phrases: add one (or several,
+ * comma-separated), remove with ×. Stored as the same comma-separated text
+ * the transcriber and summarizer have always read.
+ */
+function VocabList({
+  settings,
+  onChange
+}: {
+  settings: AppSettings
+  onChange: (s: AppSettings) => void
+}): React.JSX.Element {
+  const [draft, setDraft] = useState('')
+  const words = settings.vocabulary
+    .split(/[,;\n]+/)
+    .map((w) => w.trim())
+    .filter(Boolean)
+
+  async function save(next: string[]): Promise<void> {
+    onChange(await window.scribe.settings.update({ vocabulary: next.join(', ') }))
+  }
+
+  async function add(): Promise<void> {
+    const fresh = draft
+      .split(/[,;\n]+/)
+      .map((w) => w.trim())
+      .filter((w) => w && !words.some((x) => x.toLowerCase() === w.toLowerCase()))
+    setDraft('')
+    if (fresh.length > 0) await save([...words, ...fresh])
+  }
+
+  return (
+    <div>
+      <div className="field-label">Vocabulary list</div>
+      <p className="opt-desc">
+        Names, acronyms, and jargon that speech recognition tends to mangle, watched for in every
+        meeting. Applied to future transcriptions and summaries.
+      </p>
+      {words.length > 0 && (
+        <ul className="vocab-list">
+          {words.map((w) => (
+            <li key={w}>
+              <span>{w}</span>
+              <button
+                className="seg-tool"
+                onClick={() => save(words.filter((x) => x !== w))}
+                aria-label={`Remove ${w}`}
+                title="Remove"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="field-row">
+        <input
+          className="text-input"
+          placeholder="Add a word or phrase, e.g. Banner, NJWELL, Dr. Okafor"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          aria-label="Add to the vocabulary"
+        />
+        <button className="btn" onClick={add} disabled={!draft.trim()}>
+          Add
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Call detection: what Windows says is holding the mic right now (so it is
+ * easy to see the feature working), and the apps that should never count.
+ */
+function CallDetection({
+  settings,
+  onChange
+}: {
+  settings: AppSettings
+  onChange: (s: AppSettings) => void
+}): React.JSX.Element {
+  const [apps, setApps] = useState<MicApp[]>([])
+  const [draft, setDraft] = useState('')
+
+  useEffect(() => {
+    window.scribe.mic
+      .state()
+      .then((c) => setApps(c.active))
+      .catch(() => {})
+    return window.scribe.mic.onChange((c) => setApps(c.active))
+  }, [])
+
+  async function ignore(name: string): Promise<void> {
+    const t = name.trim()
+    if (!t) return
+    onChange(
+      await window.scribe.settings.update({ micIgnoreApps: [...settings.micIgnoreApps, t] })
+    )
+    setDraft('')
+  }
+
+  async function unignore(name: string): Promise<void> {
+    onChange(
+      await window.scribe.settings.update({
+        micIgnoreApps: settings.micIgnoreApps.filter((x) => x !== name)
+      })
+    )
+  }
+
+  return (
+    <>
+      <SwitchRow
+        title="Offer to record calls"
+        desc="When Webex, Teams, Zoom or a browser picks up your microphone and nothing is recording, a notification offers to record it. Click it and recording starts. Nothing is listened to: Windows only reports which app has the mic."
+        checked={settings.callDetect}
+        onToggle={async (v) => onChange(await window.scribe.settings.update({ callDetect: v }))}
+      />
+      <p className="opt-desc mic-now" role="status">
+        {apps.length === 0 ? (
+          'No app is using your microphone right now.'
+        ) : (
+          <>
+            Using your microphone right now:{' '}
+            {apps.map((a, i) => (
+              <span key={a.id}>
+                {i > 0 && ', '}
+                <strong>{a.name}</strong>{' '}
+                <button className="link-btn" onClick={() => ignore(a.name)} title={a.id}>
+                  ignore
+                </button>
+              </span>
+            ))}
+          </>
+        )}
+      </p>
+      {settings.micIgnoreApps.length > 0 && (
+        <div className="cal-ignore-chips">
+          {settings.micIgnoreApps.map((t) => (
+            <span className="cal-ignore-chip" key={t}>
+              {t}
+              <button
+                onClick={() => unignore(t)}
+                aria-label={`Count ${t} as a call again`}
+                title="Count this app as a call again"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="field-row">
+        <input
+          className="text-input"
+          placeholder="An app that should never count as a call"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && ignore(draft)}
+          aria-label="App to ignore for call detection"
+        />
+        <button className="btn" onClick={() => ignore(draft)} disabled={!draft.trim()}>
+          Ignore app
+        </button>
+      </div>
+    </>
+  )
+}
+
+/**
  * The signature Rowan puts on every reply draft.
  *
  * Outlook only applies a signature to a message you compose yourself, so a
@@ -313,7 +590,7 @@ export function SettingsView({
     return () => obs.disconnect()
   }, [])
   const [yourNameDraft, setYourNameDraft] = useState(settings.yourName)
-  const [vocabDraft, setVocabDraft] = useState(settings.vocabulary)
+  const [instrDraft, setInstrDraft] = useState(settings.summaryInstructions)
   const [backingUp, setBackingUp] = useState(false)
   const [claude, setClaude] = useState<{
     claudeFound: boolean
@@ -771,6 +1048,28 @@ export function SettingsView({
               <span className="switch-knob" aria-hidden="true" />
             </button>
           </div>
+
+          <div>
+            <label className="field-label" htmlFor="summary-instructions">
+              Summary instructions
+            </label>
+            <textarea
+              id="summary-instructions"
+              className="text-input vocab-input"
+              placeholder="e.g. Always list budget figures with what they are for. Call students “learners”. Keep action items to tasks for my team."
+              value={instrDraft}
+              onChange={(e) => setInstrDraft(e.target.value)}
+              onBlur={async () => {
+                if (instrDraft.trim() !== settings.summaryInstructions) {
+                  onChange(await window.scribe.settings.update({ summaryInstructions: instrDraft }))
+                }
+              }}
+            />
+            <p className="opt-desc">
+              Added to every summary from now on. For a one-off, use Regenerate summary ▾ → With
+              instructions on a meeting.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -816,27 +1115,29 @@ export function SettingsView({
               </div>
             </div>
           )}
-          <div>
-            <label className="field-label" htmlFor="vocab-hints">
-              Vocabulary hints
-            </label>
-            <textarea
-              id="vocab-hints"
-              className="text-input vocab-input"
-              placeholder="Banner, Slate, Canvas, Rowan Global, Dr. Okafor, NJWELL…"
-              value={vocabDraft}
-              onChange={(e) => setVocabDraft(e.target.value)}
-              onBlur={async () => {
-                if (vocabDraft.trim() !== settings.vocabulary) {
-                  onChange(await window.scribe.settings.update({ vocabulary: vocabDraft }))
-                }
-              }}
-            />
-            <p className="opt-desc">
-              Names, acronyms, and jargon that speech recognition tends to mangle. Applied to
-              future transcriptions and summaries.
-            </p>
-          </div>
+          <VocabList settings={settings} onChange={onChange} />
+          <SwitchRow
+            title="Add words from the calendar invite"
+            desc="Each meeting also gets the invitees' names and the unusual words in its title (product names, acronyms, codenames), for that meeting only."
+            checked={settings.vocabFromCalendar}
+            onToggle={async (v) =>
+              onChange(await window.scribe.settings.update({ vocabFromCalendar: v }))
+            }
+          />
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <header className="settings-label">
+          <h2>Voice recognition</h2>
+          <p className="hint">
+            Works out who is speaking from how they sound, on this machine. Voiceprints (a few
+            hundred numbers per voice) are kept only here and never leave it; transcripts keep
+            their names if you forget them.
+          </p>
+        </header>
+        <div className="settings-body">
+          <VoiceRecognition settings={settings} onChange={onChange} />
         </div>
       </section>
 
@@ -887,6 +1188,28 @@ export function SettingsView({
               }
             />
           )}
+          <SwitchRow
+            title="Stop when the call ends"
+            desc="Virtual meetings stop once Webex, Teams, or whichever app ran the call lets go of your microphone. Uses the call detection below."
+            checked={settings.autoEndCallEnded}
+            onToggle={async (v) =>
+              onChange(await window.scribe.settings.update({ autoEndCallEnded: v }))
+            }
+          />
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <header className="settings-label">
+          <h2>Call detection</h2>
+          <p className="hint">
+            Catches the calls your calendar never knew about, and tells the recorder when a call
+            is over. Rowan watches which app holds your microphone, the same thing the mic icon in
+            the taskbar shows; it never listens to another app&apos;s audio.
+          </p>
+        </header>
+        <div className="settings-body">
+          <CallDetection settings={settings} onChange={onChange} />
         </div>
       </section>
 
@@ -1015,7 +1338,8 @@ export function SettingsView({
               <span className="switch-label">
                 <span className="opt-title">Nudge to record</span>
                 <span className="opt-desc">
-                  Notify when a meeting with a call link or room starts and nothing is recording.
+                  Notify as a meeting with a call link or room starts and nothing is recording.
+                  Clicking the notification joins the call and starts recording.
                 </span>
               </span>
               <button

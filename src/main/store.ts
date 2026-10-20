@@ -14,8 +14,9 @@ import {
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { LiveTranscriber } from './live'
-import { engineStatus, vocabularyPrompt } from './whisper'
+import { engineStatus, meetingPrompt, vocabularyPrompt } from './whisper'
 import { getSettings } from './settings'
+import { findLiveEvent } from './calendar'
 import type {
   EnergySample,
   Meeting,
@@ -117,7 +118,8 @@ export function listMeetings(): MeetingListItem[] {
       stage: m.stage,
       progress: m.progress,
       error: m.error,
-      tldr: m.summary?.tldr
+      tldr: m.summary?.tldr,
+      ...(m.tags?.length ? { tags: m.tags } : {})
     })
   }
   items.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -152,6 +154,8 @@ interface RecSession {
   pcmStream: WriteStream
   pcmBytes: number
   live: LiveTranscriber | null
+  /** a name typed while recording; wins over the calendar event's */
+  title?: string
 }
 
 const sessions = new Map<string, RecSession>()
@@ -167,6 +171,18 @@ const catchingUp = new Map<string, LiveTranscriber>()
 /** whether any recording session is live (used to suppress record nudges) */
 export function hasActiveRecording(): boolean {
   return sessions.size > 0
+}
+
+/** the live recording, if any: when it started and any name typed for it (the tray shows it) */
+export function activeRecording(): { id: string; startedAt: string; title?: string } | null {
+  const s = sessions.values().next().value
+  return s ? { id: s.id, startedAt: s.startedAt, title: s.title } : null
+}
+
+/** name the recording while it is still going */
+export function setRecordingTitle(id: string, title: string): void {
+  const s = sessions.get(id)
+  if (s) s.title = title.trim().slice(0, 200) || undefined
 }
 
 function broadcastLive(id: string, segments: TranscriptSegment[], transcribedMs: number): void {
@@ -198,6 +214,18 @@ export function beginRecording(mode: RecordingMode): string {
       : null
 
   sessions.set(id, { id, mode, startedAt: now.toISOString(), pcmStream, pcmBytes: 0, live })
+
+  // the calendar event (if any) adds its invitees and title words to the
+  // hints; the first chunk is cut 45s in, so this lands well before it
+  if (live && settings.hasCalendar && settings.vocabFromCalendar) {
+    findLiveEvent(now.toISOString())
+      .then((event) => {
+        if (event && sessions.has(id)) {
+          live.setVocab(meetingPrompt(settings.vocabulary, event.attendees, event.title))
+        }
+      })
+      .catch(() => {})
+  }
   return id
 }
 
@@ -264,7 +292,7 @@ export async function finishRecording(
   const when = new Date(s.startedAt)
   const meeting: Meeting = {
     id,
-    title: defaultTitle(when, s.mode),
+    title: s.title || defaultTitle(when, s.mode),
     createdAt: s.startedAt,
     durationMs,
     mode: s.mode,
@@ -274,6 +302,11 @@ export async function finishRecording(
   }
   writeMeeting(meeting)
   return meeting
+}
+
+/** a title the user gave it, as opposed to the "Meeting · Oct 20, 2:30 PM" placeholder */
+export function hasUserTitle(m: Meeting): boolean {
+  return !/^(Virtual meeting|Imported meeting|Meeting|Recovered recording) · /.test(m.title)
 }
 
 /** whether a stopped recording's live transcript is still being collected */
@@ -300,7 +333,7 @@ export async function collectLiveTranscript(
   }
 }
 
-async function pcmToWav(rawPath: string, dest: string, bytes: number): Promise<void> {
+export async function pcmToWav(rawPath: string, dest: string, bytes: number): Promise<void> {
   const wav = createWriteStream(dest)
   wav.write(wavHeader(bytes))
   await new Promise<void>((resolve, reject) => {

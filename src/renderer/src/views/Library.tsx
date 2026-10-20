@@ -1,26 +1,53 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CalendarEvent, MeetingListItem, PrepEntry } from '../../../shared/types'
+import type { CalendarEvent, MeetingListItem, PrepEntry, TagInfo } from '../../../shared/types'
 import { PrepDialog } from '../PrepDialog'
+import { TagPill } from '../MeetingExtras'
 import { formatDuration, formatWhen, StageBadge } from '../ui'
 
 type LibView = 'list' | 'calendar'
 
 export function LibraryView({
   meetings,
+  initialQuery,
   onOpen,
   onRecord,
   onImport
 }: {
   meetings: MeetingListItem[]
+  /** a search to start with (from a rowan-aio://library?q= link) */
+  initialQuery?: string
   onOpen: (id: string) => void
   onRecord: () => void
   onImport: () => void
 }): React.JSX.Element {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery ?? '')
   const [libView, setLibView] = useState<LibView>(
     () => (localStorage.getItem('libView') as LibView) || 'list'
   )
   const searchRef = useRef<HTMLInputElement>(null)
+  const [tagColors, setTagColors] = useState<Record<string, number>>({})
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
+
+  useEffect(() => {
+    window.scribe.tags.colors().then(setTagColors)
+  }, [meetings])
+
+  // the tag catalogue, counted from the list already in hand, most used first
+  const tagInfo = useMemo((): TagInfo[] => {
+    const counts = new Map<string, TagInfo>()
+    for (const m of meetings) {
+      for (const t of m.tags ?? []) {
+        const key = t.toLowerCase()
+        const entry = counts.get(key) ?? { name: t, count: 0, color: tagColors[key] ?? 0 }
+        entry.count++
+        counts.set(key, entry)
+      }
+    }
+    return [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  }, [meetings, tagColors])
+
+  const tagColor = (name: string): number | undefined =>
+    tagInfo.find((t) => t.name.toLowerCase() === name.toLowerCase())?.color
 
   function switchView(v: LibView): void {
     setLibView(v)
@@ -58,12 +85,16 @@ export function LibraryView({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return meetings
-    return meetings.filter((m) => {
-      const haystack = `${m.title} ${m.tldr ?? ''} ${formatWhen(m.createdAt)} ${m.createdAt.slice(0, 10)}`.toLowerCase()
+    const tag = tagFilter?.toLowerCase()
+    const tagged = tag
+      ? meetings.filter((m) => (m.tags ?? []).some((t) => t.toLowerCase() === tag))
+      : meetings
+    if (!q) return tagged
+    return tagged.filter((m) => {
+      const haystack = `${m.title} ${(m.tags ?? []).join(' ')} ${m.tldr ?? ''} ${formatWhen(m.createdAt)} ${m.createdAt.slice(0, 10)}`.toLowerCase()
       return q.split(/\s+/).every((word) => haystack.includes(word)) || deepMatches.has(m.id)
     })
-  }, [meetings, query, deepMatches])
+  }, [meetings, query, deepMatches, tagFilter])
 
   if (meetings.length === 0) {
     return (
@@ -125,7 +156,7 @@ export function LibraryView({
             aria-label="Search meetings"
           />
           <span className="count-note">
-            {query
+            {query || tagFilter
               ? `${filtered.length} of ${meetings.length}`
               : `${meetings.length} ${meetings.length === 1 ? 'recording' : 'recordings'}`}
           </span>
@@ -135,10 +166,39 @@ export function LibraryView({
         </div>
       </div>
 
+      {tagInfo.length > 0 && (
+        <div className="tag-filter" role="radiogroup" aria-label="Filter by tag">
+          <button
+            className={`who-chip ${tagFilter === null ? 'active' : ''}`}
+            role="radio"
+            aria-checked={tagFilter === null}
+            onClick={() => setTagFilter(null)}
+          >
+            All
+          </button>
+          {tagInfo.map((t) => (
+            <button
+              key={t.name}
+              className={`tag-filter-btn ${tagFilter?.toLowerCase() === t.name.toLowerCase() ? 'active' : ''}`}
+              role="radio"
+              aria-checked={tagFilter?.toLowerCase() === t.name.toLowerCase()}
+              onClick={() => setTagFilter(tagFilter === t.name ? null : t.name)}
+              title={`${t.count} ${t.count === 1 ? 'meeting' : 'meetings'}`}
+            >
+              <TagPill name={t.name} color={t.color} compact />
+            </button>
+          ))}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="empty-state">
           <h2>No matches</h2>
-          <p>Nothing matches &ldquo;{query}&rdquo;. Try a shorter word or a date like &ldquo;Jul 10&rdquo;.</p>
+          <p>
+            {query
+              ? <>Nothing matches &ldquo;{query}&rdquo;. Try a shorter word or a date like &ldquo;Jul 10&rdquo;.</>
+              : 'No meetings carry that tag.'}
+          </p>
         </div>
       ) : libView === 'calendar' ? (
         <CalendarView meetings={filtered} onOpen={onOpen} />
@@ -157,6 +217,14 @@ export function LibraryView({
                   m.tldr ??
                   (m.stage === 'error' ? (m.error ?? 'Processing failed') : '')}
               </span>
+              {m.tags && m.tags.length > 0 && (
+                <span className="meeting-row-tags">
+                  {m.tags.slice(0, 3).map((t) => (
+                    <TagPill key={t} name={t} color={tagColor(t)} compact />
+                  ))}
+                  {m.tags.length > 3 && <span className="tag-more">+{m.tags.length - 3}</span>}
+                </span>
+              )}
             </button>
           ))}
         </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Meeting } from '../../../shared/types'
+import type { Meeting, VoiceMeta } from '../../../shared/types'
+import { TAG_COLORS } from '../../../shared/tags'
 import {
   BackIcon,
   ChevronIcon,
@@ -14,7 +15,14 @@ import {
 import { parseDueDate } from '../../../shared/dates'
 import { ClickupPushDialog } from '../ClickupPush'
 import { exportFilename, followUpEmail, meetingToMarkdown, summaryToMarkdown } from '../markdown'
-import { retranscribeMeeting } from '../retranscribe'
+import { identifyMeetingVoices, retranscribeMeeting } from '../retranscribe'
+import {
+  EditableList,
+  EditableText,
+  InstructionsDialog,
+  NotesView,
+  TagRow
+} from '../MeetingExtras'
 
 /**
  * Who was in the room: edit the meeting's participant list by hand (directory
@@ -455,6 +463,12 @@ export function MeetingView({
   const [emailDraft, setEmailDraft] = useState<{ subject: string; body: string } | null>(null)
   const [knownOwners, setKnownOwners] = useState<string[]>([])
   const [hasApiKey, setHasApiKey] = useState(false)
+  const [autoSummarize, setAutoSummarize] = useState(true)
+  /** voice recognition is switched on and its engine downloaded */
+  const [voiceReady, setVoiceReady] = useState(false)
+  const [voiceOn, setVoiceOn] = useState(false)
+  const [voicePhase, setVoicePhase] = useState<string | null>(null)
+  const [voiceRunError, setVoiceRunError] = useState<string | null>(null)
   const [aiProvider, setAiProvider] = useState<'claude' | 'openai'>('claude')
   const [hasClickup, setHasClickup] = useState(false)
   const [pushIdx, setPushIdx] = useState<number | null>(null)
@@ -473,6 +487,10 @@ export function MeetingView({
   const titleRef = useRef<HTMLInputElement>(null)
   const [confirmEl, confirm] = useConfirm()
   const [seriesCount, setSeriesCount] = useState(0)
+  const [editingSummary, setEditingSummary] = useState(false)
+  const [instructionsOpen, setInstructionsOpen] = useState(false)
+  const [standingInstructions, setStandingInstructions] = useState('')
+  const [linkCopied, setLinkCopied] = useState(false)
 
   useEffect(() => {
     setSeriesCount(0)
@@ -486,8 +504,14 @@ export function MeetingView({
         const seen = items.flatMap((i) => i.owners).filter((o) => o !== 'Me')
         setKnownOwners(['Me', ...[...new Set([...settings.people, ...seen])].sort()])
         setHasApiKey(settings.aiReady)
+        setAutoSummarize(settings.autoSummarize)
+        setVoiceOn(settings.voiceId)
+        if (settings.voiceId) {
+          window.scribe.voice.status().then((st) => setVoiceReady(st.ready))
+        }
         setAiProvider(settings.aiProvider)
         setHasClickup(settings.hasClickup)
+        setStandingInstructions(settings.summaryInstructions)
       }
     )
   }, [id])
@@ -534,7 +558,10 @@ export function MeetingView({
   if (!meeting) return <></>
 
   const working =
-    meeting.stage === 'transcribing' || meeting.stage === 'summarizing' || meeting.stage === 'recorded'
+    meeting.stage === 'transcribing' ||
+    meeting.stage === 'identifying' ||
+    meeting.stage === 'summarizing' ||
+    meeting.stage === 'recorded'
 
   async function rename(): Promise<void> {
     const next = titleRef.current?.value ?? ''
@@ -579,6 +606,24 @@ export function MeetingView({
       setRetranscribeError(err instanceof Error ? err.message : 'Re-transcription failed.')
     } finally {
       setRetranscribing(null)
+    }
+  }
+
+  async function identifyVoices(): Promise<void> {
+    if (!meeting || voicePhase) return
+    setVoiceRunError(null)
+    setVoicePhase('Starting…')
+    try {
+      await identifyMeetingVoices(meeting.id, setVoicePhase)
+      const fresh = await window.scribe.meetings.get(meeting.id)
+      if (fresh) {
+        setMeeting(fresh)
+        if (fresh.summary && !fresh.voiceError) setTranscriptEdited(true)
+      }
+    } catch (err) {
+      setVoiceRunError(err instanceof Error ? err.message : 'Voice recognition failed.')
+    } finally {
+      setVoicePhase(null)
     }
   }
 
@@ -640,6 +685,56 @@ export function MeetingView({
       setTranscriptEdited(true)
     }
   }
+
+  /** play from a moment (a note's stamp) and show the transcript line there */
+  function jumpTo(ms: number): void {
+    const t = meeting?.transcript
+    if (t?.length) {
+      let idx = t.findIndex((s) => ms < s.to)
+      if (idx < 0) idx = t.length - 1
+      setTranscriptToggled(true)
+      setFlashIdx(idx)
+    }
+    if (meeting?.hasAudio) playerRef.current?.seek(ms)
+  }
+
+  async function copyLink(): Promise<void> {
+    if (!meeting) return
+    await navigator.clipboard.writeText(await window.scribe.nav.meetingUrl(meeting.id))
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 1800)
+  }
+
+  async function editSummary(
+    patch: Parameters<typeof window.scribe.meetings.editSummary>[1]
+  ): Promise<void> {
+    if (!meeting) return
+    const updated = await window.scribe.meetings.editSummary(meeting.id, patch)
+    if (updated) setMeeting(updated)
+  }
+
+  async function regenerate(model?: string, label?: string, instructions?: string): Promise<void> {
+    if (!meeting) return
+    const edited = !!meeting.summaryEdited
+    // the instructions dialog already warned about hand edits
+    if (!instructions) {
+      const sure = await confirm({
+        title: 'Rewrite the summary from the transcript?',
+        body:
+          (edited ? 'You have edited this summary by hand, and those edits will be replaced. ' : '') +
+          'Owner assignments and checked-off action items will be reset.' +
+          (label ? ` This run uses ${label}.` : ''),
+        confirmLabel: 'Regenerate',
+        danger: edited
+      })
+      if (!sure) return
+    }
+    setEditingSummary(false)
+    window.scribe.meetings.resummarize(meeting.id, model, instructions)
+  }
+
+  const linkable = meeting.hasAudio
+  const speakerColors = speakerColorMap(meeting.transcript)
 
   return (
     <div className="main-narrow">
@@ -713,6 +808,7 @@ export function MeetingView({
           )}
           <StageBadge stage={meeting.stage} progress={meeting.progress} />
         </div>
+        <TagRow meeting={meeting} onSaved={setMeeting} />
         {(meeting.summary || (meeting.transcript && meeting.transcript.length > 0)) && (
           <div className="toolbar-row">
             {meeting.summary && (
@@ -732,19 +828,27 @@ export function MeetingView({
             <button className="btn" onClick={exportMd}>
               Export Markdown
             </button>
+            <button
+              className="btn"
+              onClick={copyLink}
+              title="A link that opens this meeting in Rowan AIO. Paste it into OneNote, a task, or a chat to yourself."
+            >
+              {linkCopied ? 'Copied ✓' : 'Copy link'}
+            </button>
+            {meeting.summary && (
+              <button
+                className={`btn ${editingSummary ? 'btn-primary' : ''}`}
+                onClick={() => setEditingSummary(!editingSummary)}
+                title="Fix wording, add or remove points; edits save as you go"
+              >
+                {editingSummary ? 'Done editing' : 'Edit summary'}
+              </button>
+            )}
             {meeting.summary && meeting.transcript && meeting.transcript.length > 0 && (
               <RegenerateButton
                 provider={aiProvider}
-                onRegenerate={async (model, label) => {
-                  const sure = await confirm({
-                    title: 'Rewrite the summary from the transcript?',
-                    body:
-                      'Owner assignments and checked-off action items will be reset.' +
-                      (label ? ` This run uses ${label}.` : ''),
-                    confirmLabel: 'Regenerate'
-                  })
-                  if (sure) window.scribe.meetings.resummarize(meeting.id, model)
-                }}
+                onRegenerate={(model, label) => regenerate(model, label)}
+                onInstructions={() => setInstructionsOpen(true)}
               />
             )}
             {exportedTo && (
@@ -775,17 +879,12 @@ export function MeetingView({
       )}
 
       {working && (
-        <div className="stage-banner" aria-live="polite">
-          <span className="spinner" aria-hidden="true" />
-          {meeting.stage === 'summarizing'
-            ? 'Writing the summary with Claude…'
-            : 'Transcribing on this machine. You can leave this page.'}
-          {meeting.stage === 'transcribing' && typeof meeting.progress === 'number' && (
-            <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${meeting.progress}%` }} />
-            </div>
-          )}
-        </div>
+        <ProcessingSteps
+          stage={meeting.stage}
+          progress={meeting.progress}
+          voices={(voiceOn && voiceReady && meeting.hasAudio) || meeting.stage === 'identifying'}
+          summarize={hasApiKey && (autoSummarize || meeting.stage === 'summarizing')}
+        />
       )}
 
       {retranscribing && (
@@ -831,15 +930,37 @@ export function MeetingView({
         </div>
       )}
 
+      {editingSummary && (
+        <div className="stage-banner sum-edit-banner">
+          Editing the summary. Changes save as you go; regenerating later asks before it replaces
+          your edits.
+          <button className="btn" onClick={() => setEditingSummary(false)}>
+            Done editing
+          </button>
+        </div>
+      )}
+
       {meeting.summary && (
         <Collapse label="TL;DR">
-          <p className="tldr">{meeting.summary.tldr}</p>
+          {editingSummary ? (
+            <EditableText
+              value={meeting.summary.tldr}
+              placeholder="A one to three sentence recap"
+              onSave={(tldr) => editSummary({ tldr })}
+            />
+          ) : (
+            <p className="tldr">{meeting.summary.tldr}</p>
+          )}
         </Collapse>
       )}
 
       {(meeting.notes || meeting.stage === 'ready' || meeting.stage === 'transcript-only') && (
         <Collapse label="Your notes" defaultOpen={!!meeting.notes}>
-          <NotesEditor meeting={meeting} onSaved={setMeeting} />
+          <NotesEditor
+            meeting={meeting}
+            onSaved={setMeeting}
+            onSeek={linkable || (meeting.transcript?.length ?? 0) > 0 ? jumpTo : undefined}
+          />
         </Collapse>
       )}
 
@@ -853,7 +974,17 @@ export function MeetingView({
                     className={`action-item ${a.done ? 'done' : ''} ${a.dismissed ? 'dismissed' : ''}`}
                     key={i}
                   >
-                    <span className="action-task">{a.task}</span>
+                    {editingSummary ? (
+                      <ActionTaskEdit
+                        task={a.task}
+                        onSave={async (text) => {
+                          const updated = await window.scribe.actions.setTask(meeting.id, i, text)
+                          if (updated) setMeeting(updated)
+                        }}
+                      />
+                    ) : (
+                      <span className="action-task">{a.task}</span>
+                    )}
                     {a.dismissed && <span className="action-state">Dismissed</span>}
                     {!a.dismissed && a.done && <span className="action-state">Done</span>}
                     <OwnerEditor
@@ -907,43 +1038,111 @@ export function MeetingView({
             </Collapse>
           )}
 
-          {meeting.summary.decisions.length > 0 && (
+          {(meeting.summary.decisions.length > 0 || editingSummary) && (
             <Collapse label="Decisions">
-              <ul className="point-list">
-                {meeting.summary.decisions.map((d, i) => (
-                  <li key={i}>{d}</li>
-                ))}
-              </ul>
+              {editingSummary ? (
+                <EditableList
+                  items={meeting.summary.decisions}
+                  addLabel="Add a decision"
+                  onSave={(decisions) => editSummary({ decisions })}
+                />
+              ) : (
+                <ul className="point-list">
+                  {meeting.summary.decisions.map((d, i) => (
+                    <li key={i}>{d}</li>
+                  ))}
+                </ul>
+              )}
             </Collapse>
           )}
 
-          {meeting.summary.openQuestions.length > 0 && (
+          {(meeting.summary.openQuestions.length > 0 || editingSummary) && (
             <Collapse label="Open questions">
-              <ul className="point-list">
-                {meeting.summary.openQuestions.map((q, i) => (
-                  <li key={i}>{q}</li>
-                ))}
-              </ul>
+              {editingSummary ? (
+                <EditableList
+                  items={meeting.summary.openQuestions}
+                  addLabel="Add a question"
+                  onSave={(openQuestions) => editSummary({ openQuestions })}
+                />
+              ) : (
+                <ul className="point-list">
+                  {meeting.summary.openQuestions.map((q, i) => (
+                    <li key={i}>{q}</li>
+                  ))}
+                </ul>
+              )}
             </Collapse>
           )}
 
-          {meeting.summary.topics?.map((topic, ti) => (
-            <Collapse label={topic.heading} topic key={ti}>
-              <ul className="point-list">
-                {topic.notes.map((n, i) => (
-                  <li key={i}>{n}</li>
-                ))}
-              </ul>
-            </Collapse>
-          ))}
+          {meeting.summary.topics?.map((topic, ti) =>
+            editingSummary ? (
+              <section className="section" key={ti}>
+                <div className="collapse-head topic sum-topic-head">
+                  <EditableText
+                    value={topic.heading}
+                    placeholder="Section heading (clear it and its notes to remove the section)"
+                    onSave={(heading) =>
+                      editSummary({
+                        topics: meeting.summary!.topics!.map((t, j) =>
+                          j === ti ? { ...t, heading } : t
+                        )
+                      })
+                    }
+                  />
+                </div>
+                <div className="collapse-body">
+                  <EditableList
+                    items={topic.notes}
+                    addLabel="Add a note"
+                    onSave={(notes) =>
+                      editSummary({
+                        topics: meeting.summary!.topics!.map((t, j) =>
+                          j === ti ? { ...t, notes } : t
+                        )
+                      })
+                    }
+                  />
+                </div>
+              </section>
+            ) : (
+              <Collapse label={topic.heading} topic key={ti}>
+                <ul className="point-list">
+                  {topic.notes.map((n, i) => (
+                    <li key={i}>{n}</li>
+                  ))}
+                </ul>
+              </Collapse>
+            )
+          )}
 
-          {!meeting.summary.topics && (meeting.summary.keyPoints?.length ?? 0) > 0 && (
+          {editingSummary && meeting.summary.topics && (
+            <button
+              className="link-btn sum-add"
+              onClick={() =>
+                editSummary({
+                  topics: [...meeting.summary!.topics!, { heading: 'New section', notes: [] }]
+                })
+              }
+            >
+              + Add a section
+            </button>
+          )}
+
+          {!meeting.summary.topics && ((meeting.summary.keyPoints?.length ?? 0) > 0 || editingSummary) && (
             <Collapse label="Key points">
-              <ul className="point-list">
-                {meeting.summary.keyPoints!.map((p, i) => (
-                  <li key={i}>{p}</li>
-                ))}
-              </ul>
+              {editingSummary ? (
+                <EditableList
+                  items={meeting.summary.keyPoints ?? []}
+                  addLabel="Add a point"
+                  onSave={(keyPoints) => editSummary({ keyPoints })}
+                />
+              ) : (
+                <ul className="point-list">
+                  {meeting.summary.keyPoints!.map((p, i) => (
+                    <li key={i}>{p}</li>
+                  ))}
+                </ul>
+              )}
             </Collapse>
           )}
         </>
@@ -978,11 +1177,25 @@ export function MeetingView({
                     Re-transcribe
                   </button>
                 )}
+                {voiceOn && voiceReady && meeting.hasAudio && (
+                  <button
+                    className="btn transcript-identify"
+                    disabled={!!voicePhase || working || !!retranscribing}
+                    title="Tell the voices apart on this machine and recognize the ones you have named before"
+                    onClick={identifyVoices}
+                  >
+                    {voicePhase ?? (meeting.voices ? 'Re-identify voices' : 'Identify voices')}
+                  </button>
+                )}
                 {hasApiKey && (
                   <button
                     className="btn transcript-identify"
                     disabled={identifying}
-                    title="Attribute lines to named speakers from conversational context (uses your AI provider, costs a few cents)"
+                    title={
+                      meeting.voices
+                        ? 'Name each voice from what people call each other and the voiceprint matches (uses your AI provider, costs a few cents)'
+                        : 'Attribute lines to named speakers from conversational context (uses your AI provider, costs a few cents)'
+                    }
                     onClick={async () => {
                       setIdentifying(true)
                       setIdentifyError(null)
@@ -1004,6 +1217,11 @@ export function MeetingView({
                 {identifyError && (
                   <span className="field-note error" role="alert">
                     {identifyError}
+                  </span>
+                )}
+                {(voiceRunError ?? meeting.voiceError) && !voicePhase && (
+                  <span className="field-note error" role="alert">
+                    Voice recognition: {voiceRunError ?? meeting.voiceError}
                   </span>
                 )}
                 {transcriptEdited && meeting.summary && (
@@ -1038,6 +1256,8 @@ export function MeetingView({
                           <SpeakerChip
                             speaker={seg.speaker!}
                             label={label!}
+                            color={speakerColors.get(seg.speaker!)}
+                            hint={voiceHint(seg.voice !== undefined ? meeting.voices?.[String(seg.voice)] : undefined)}
                             suggestions={speakerChoices}
                             onRename={async (to) => {
                               const updated = await window.scribe.meetings.renameSpeaker(
@@ -1162,7 +1382,136 @@ export function MeetingView({
           onClose={() => setEditingAttendees(false)}
         />
       )}
+      {instructionsOpen && (
+        <InstructionsDialog
+          standing={standingInstructions}
+          edited={!!meeting.summaryEdited}
+          onRun={(text) => regenerate(undefined, undefined, text)}
+          onClose={() => setInstructionsOpen(false)}
+        />
+      )}
     </div>
+  )
+}
+
+/**
+ * What happens to a fresh recording, step by step: done steps ticked, the
+ * current one spinning (with progress when there is any), later ones waiting.
+ */
+function ProcessingSteps({
+  stage,
+  progress,
+  voices,
+  summarize
+}: {
+  stage: Meeting['stage']
+  progress?: number
+  /** voice recognition runs on this meeting */
+  voices: boolean
+  summarize: boolean
+}): React.JSX.Element {
+  const pastTranscribing = stage === 'identifying' || stage === 'summarizing'
+  const steps: { key: string; label: string; state: 'done' | 'now' | 'later'; progress?: number }[] = [
+    {
+      key: 'transcribe',
+      label: 'Transcribing on this machine',
+      state: pastTranscribing ? 'done' : 'now',
+      progress: stage === 'transcribing' && typeof progress === 'number' ? progress : undefined
+    }
+  ]
+  if (voices) {
+    steps.push({
+      key: 'voices',
+      label: 'Identifying voices',
+      state: stage === 'summarizing' ? 'done' : stage === 'identifying' ? 'now' : 'later',
+      progress: stage === 'identifying' && typeof progress === 'number' ? progress : undefined
+    })
+  }
+  if (summarize) {
+    steps.push({
+      key: 'summary',
+      label: 'Writing the summary',
+      state: stage === 'summarizing' ? 'now' : 'later'
+    })
+  }
+  return (
+    <div className="stage-banner proc-steps" aria-live="polite">
+      <ol>
+        {steps.map((s) => (
+          <li key={s.key} className={`proc-step ${s.state}`}>
+            <span className="proc-icon" aria-hidden="true">
+              {s.state === 'done' ? '✓' : s.state === 'now' ? <span className="spinner" /> : '○'}
+            </span>
+            <span className="proc-label">
+              {s.label}
+              {s.progress !== undefined && <span className="proc-pct">{s.progress}%</span>}
+            </span>
+            {s.progress !== undefined && (
+              <span className="progress-track proc-track">
+                <span className="progress-fill" style={{ width: `${s.progress}%` }} />
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+      <span className="opt-desc">You can leave this page; it carries on in the background.</span>
+    </div>
+  )
+}
+
+/** speaker dot colors: yours is the accent, others take the tag palette in order of first appearance */
+function speakerColorMap(transcript: Meeting['transcript']): Map<string, string> {
+  const colors = new Map<string, string>([['me', 'var(--accent)']])
+  let next = 0
+  for (const seg of transcript ?? []) {
+    if (seg.speaker && !colors.has(seg.speaker)) {
+      colors.set(seg.speaker, TAG_COLORS[next++ % TAG_COLORS.length])
+    }
+  }
+  return colors
+}
+
+/** how a voice's name was settled, for the chip's tooltip */
+function voiceHint(meta: VoiceMeta | undefined): string | undefined {
+  if (!meta) return undefined
+  switch (meta.source) {
+    case 'mic':
+      return 'Your voice, from your microphone'
+    case 'you':
+      return 'Named by you; this voice is remembered'
+    case 'voice':
+      return `Recognized by voice${meta.match ? ` (match ${Math.round((1 - meta.match.distance) * 100)}%)` : ''}`
+    case 'ai':
+      return 'Named by the AI from the conversation; rename it if that is wrong'
+    default:
+      return meta.match
+        ? `Might be ${meta.match.name} by voice; rename to confirm`
+        : 'A voice not heard before; rename it and Rowan will remember it'
+  }
+}
+
+/** an action item's wording, editable while the summary is being edited */
+function ActionTaskEdit({
+  task,
+  onSave
+}: {
+  task: string
+  onSave: (text: string) => void
+}): React.JSX.Element {
+  const [draft, setDraft] = useState(task)
+  useEffect(() => setDraft(task), [task])
+  return (
+    <input
+      className="text-input action-task-input"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft.trim() && draft.trim() !== task.trim()) onSave(draft)
+        else setDraft(task)
+      }}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      aria-label="Action item"
+    />
   )
 }
 
@@ -1323,17 +1672,35 @@ function EmailDraft({
 /** typed notes attached to the meeting; edits feed the next summary regeneration */
 function NotesEditor({
   meeting,
-  onSaved
+  onSaved,
+  onSeek
 }: {
   meeting: Meeting
   onSaved: (m: Meeting) => void
+  /** play the recording from a note's time stamp */
+  onSeek?: (ms: number) => void
 }): React.JSX.Element {
   const [draft, setDraft] = useState(meeting.notes ?? '')
+  // notes read as text with clickable stamps; editing is one click away
+  const [editing, setEditing] = useState(!meeting.notes)
 
   async function save(): Promise<void> {
+    if (draft.trim()) setEditing(false)
     if (draft.trim() === (meeting.notes ?? '').trim()) return
     const updated = await window.scribe.meetings.setNotes(meeting.id, draft)
     if (updated) onSaved(updated)
+  }
+
+  if (!editing && draft.trim()) {
+    return (
+      <div className="notes-editor">
+        <NotesView text={draft} onSeek={onSeek} onEdit={() => setEditing(true)} />
+        <p className="opt-desc">
+          Click a time to play from that moment, or click the notes to edit them. Notes are folded
+          into the summary; regenerate it after big edits.
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -1342,6 +1709,7 @@ function NotesEditor({
         className="text-input notes-input"
         placeholder="Notes typed during the meeting land here — you can also add them after the fact."
         value={draft}
+        autoFocus={!!meeting.notes}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={save}
         aria-label="Meeting notes"
@@ -1372,9 +1740,12 @@ const REGEN_MODELS: Record<'claude' | 'openai', { id: string; label: string }[]>
  */
 function RegenerateButton({
   onRegenerate,
+  onInstructions,
   provider
 }: {
   onRegenerate: (model?: string, label?: string) => void
+  /** open the one-off instructions dialog */
+  onInstructions: () => void
   provider: 'claude' | 'openai'
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -1424,6 +1795,16 @@ function RegenerateButton({
               With {m.label}
             </button>
           ))}
+          <button
+            className="split-menu-item"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              onInstructions()
+            }}
+          >
+            With instructions…
+          </button>
         </div>
       )}
     </span>
@@ -1439,14 +1820,21 @@ function RegenerateButton({
 function SpeakerChip({
   speaker,
   label,
+  color,
+  hint,
   suggestions,
   onRename
 }: {
   speaker: string
   label: string
+  /** this speaker's dot color in the transcript */
+  color?: string
+  /** how the voice engine settled the name */
+  hint?: string
   suggestions: string[]
   onRename: (to: string) => void
 }): React.JSX.Element {
+  const dot = color ? <span className="speaker-dot" style={{ background: color }} aria-hidden="true" /> : null
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [typed, setTyped] = useState(false)
@@ -1454,14 +1842,19 @@ function SpeakerChip({
 
   const editable = speaker !== 'me' && speaker !== 'them'
   if (!editable) {
-    return <span className={`speaker-chip ${speaker === 'me' ? 'me' : 'them'}`}>{label}</span>
+    return (
+      <span className={`speaker-chip ${speaker === 'me' ? 'me' : 'them'}`} title={hint}>
+        {dot}
+        {label}
+      </span>
+    )
   }
 
   if (!editing) {
     return (
       <button
         className="speaker-chip them speaker-chip-btn"
-        title={`Replace "${label}" with a person everywhere in this transcript`}
+        title={`${hint ? `${hint}. ` : ''}Click to replace "${label}" with a person everywhere in this transcript`}
         onClick={(e) => {
           e.stopPropagation()
           setDraft('')
@@ -1470,6 +1863,7 @@ function SpeakerChip({
           setEditing(true)
         }}
       >
+        {dot}
         {label}
       </button>
     )

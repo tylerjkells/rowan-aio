@@ -28,6 +28,8 @@ import {
   deleteMeeting,
   findAudio,
   finishRecording,
+  hasUserTitle,
+  setRecordingTitle,
   finishRetranscribe,
   listMeetings,
   meetingDir,
@@ -39,6 +41,7 @@ import {
   writeMeeting
 } from './store'
 import {
+  assignTagColors,
   getSettings,
   updateSettings,
   setApiKey,
@@ -148,7 +151,15 @@ import {
   findLiveEvent,
   clearCalendarCache
 } from './calendar'
-import { startRecordNudge, notifyAutoEnd, dismissNotifications } from './nudge'
+import {
+  startRecordNudge,
+  notifyAutoEnd,
+  dismissNotifications,
+  onRecordingStarted
+} from './nudge'
+import { micState, startMicWatch } from './micwatch'
+import { refreshTrayFeed, startTrayFeed } from './trayfeed'
+import { findAppUrl, meetingUrl, openAppUrl, registerUrlScheme } from './deeplink'
 import {
   bulkImportStatus,
   cancelBulkImport,
@@ -169,7 +180,8 @@ import {
   isQuitting,
   registerWindowFactory,
   showMainWindow,
-  startHidden
+  startHidden,
+  takePendingNav
 } from './system'
 import { runBackup, startAutoBackup } from './backup'
 import {
@@ -181,14 +193,32 @@ import {
   setPrepNote
 } from './prep'
 import { actionRollup, identityContext } from './identity'
-import { claudeConnectionStatus, connectClaude, disconnectClaude } from './claudeConnect'
+import {
+  claudeConnectionStatus,
+  connectClaude,
+  disconnectClaude,
+  refreshClaudeServer
+} from './claudeConnect'
 import { engineStatus, setupEngine } from './whisper'
 import { activeAiModel, testOpenaiKey } from './ai'
-import { processMeeting, summarizeMeeting } from './pipeline'
+import { processMeeting, runVoiceIdentification, summarizeMeeting } from './pipeline'
+import {
+  appendVoicePcm,
+  beginVoicePcm,
+  cancelVoicePcm,
+  confirmVoiceNames,
+  finishVoicePcm,
+  forgetVoiceprints,
+  setupVoiceEngine,
+  syncVoiceprints,
+  voiceEngineStatus,
+  voiceIdActive
+} from './voiceid'
 import { askAboutMeeting, testApiKey } from './summarize'
 import { askLibrary, clearAskHistory, readAskHistory } from './ask'
 import { createImportedMeeting } from './importer'
 import { patchLegacyAudioDurations } from './migrate'
+import { cleanTag } from '../shared/tags'
 import type {
   ActionRollupItem,
   AppSettings,
@@ -206,8 +236,10 @@ import type {
   MailNewDraftInput,
   MailComposeDraftInput,
   Meeting,
+  MeetingSummary,
   PersonDetails,
   RecordingMode,
+  TagInfo,
   TicketNote,
   WhisperModel
 } from '../shared/types'
@@ -301,8 +333,13 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   // a second launch (including a notification click routed through the OS)
-  // brings the existing instance forward, recovering the window if needed
-  app.on('second-instance', () => showMainWindow())
+  // brings the existing instance forward, recovering the window if needed;
+  // launched by an app link, it opens the page the link names
+  app.on('second-instance', (_e, argv) => {
+    const url = findAppUrl(argv)
+    if (url) openAppUrl(url)
+    else showMainWindow()
+  })
 }
 
 app.whenReady().then(() => {
@@ -419,9 +456,16 @@ app.whenReady().then(() => {
   setupDashboardSession()
   registerIpc()
   registerWindowFactory(createWindow)
+  registerUrlScheme()
   createWindow()
+  // started by an app link: go where it points once the window is up
+  const launchUrl = findAppUrl(process.argv)
+  if (launchUrl) openAppUrl(launchUrl)
   setupAutoUpdate()
+  startMicWatch()
   startRecordNudge()
+  startTrayFeed()
+  refreshClaudeServer()
   // a toast left behind by a quit app would raw-activate the exe on click
   app.on('before-quit', dismissNotifications)
   applySystemSettings()
@@ -439,7 +483,22 @@ app.whenReady().then(() => {
     .catch(() => [])
     .then(() => {
       for (const m of listMeetings()) {
-        if (m.stage === 'recorded' || m.stage === 'transcribing' || m.stage === 'summarizing') {
+        if (m.stage === 'identifying') {
+          // a voice run on a finished meeting was cut off: put it back as it
+          // was rather than rerun the pipeline (which would rewrite the summary)
+          const full = readMeeting(m.id)
+          rmSync(join(meetingDir(m.id), 'voice-input.wav'), { force: true })
+          if (full?.summary) {
+            writeMeeting({ ...full, stage: 'ready', progress: undefined })
+            continue
+          }
+        }
+        if (
+          m.stage === 'recorded' ||
+          m.stage === 'transcribing' ||
+          m.stage === 'identifying' ||
+          m.stage === 'summarizing'
+        ) {
           processMeeting(m.id)
         }
       }
@@ -536,8 +595,58 @@ function registerIpc(): void {
     }
   })
 
+  // --- navigation requested from outside the window (links, tray, toasts) ---
+  ipcMain.handle('nav:take', (_e, gesture: boolean) => takePendingNav(gesture === true))
+  ipcMain.handle('app:meetingUrl', (_e, id: string, ms?: number) => meetingUrl(id, ms))
+  ipcMain.handle('mic:state', () => micState())
+
+  // --- voice recognition ---
+  ipcMain.handle('voice:status', () => voiceEngineStatus())
+  ipcMain.handle('voice:setup', async (e) => {
+    try {
+      return await setupVoiceEngine((p) => e.sender.send('voice:progress', p))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Voice engine setup failed'
+      e.sender.send('voice:progress', { percent: -1, detail: msg, error: msg })
+      throw err
+    }
+  })
+  ipcMain.handle('voice:forget', () => {
+    forgetVoiceprints()
+    return voiceEngineStatus()
+  })
+  /**
+   * Identify voices in one meeting. With its transcription audio still on
+   * disk that runs at once (returns 'done'); an older meeting needs its
+   * recording decoded first, which the renderer does and streams in through
+   * voice:begin / voice:pcm / voice:finish (returns 'needs-audio').
+   */
+  ipcMain.handle('voice:identify', async (_e, id: string): Promise<'done' | 'needs-audio'> => {
+    if (!voiceIdActive()) throw new Error('Voice recognition is off or not set up (Settings → Voice recognition).')
+    const wav = join(meetingDir(id), 'whisper-input.wav')
+    if (!existsSync(wav)) return 'needs-audio'
+    await runVoiceIdentification(id, wav)
+    return 'done'
+  })
+  ipcMain.handle('voice:begin', (_e, id: string) => beginVoicePcm(id))
+  ipcMain.on('voice:pcm', (_e, id: string, chunk: ArrayBuffer) => appendVoicePcm(id, Buffer.from(chunk)))
+  ipcMain.handle('voice:cancel', (_e, id: string) => cancelVoicePcm(id))
+  ipcMain.handle('voice:finish', async (_e, id: string) => {
+    const wav = await finishVoicePcm(id)
+    try {
+      return await runVoiceIdentification(id, wav)
+    } finally {
+      rmSync(wav, { force: true })
+    }
+  })
+
   // --- recording ---
-  ipcMain.handle('rec:begin', (_e, mode: RecordingMode) => beginRecording(mode))
+  ipcMain.handle('rec:begin', (_e, mode: RecordingMode) => {
+    const id = beginRecording(mode)
+    onRecordingStarted()
+    refreshTrayFeed().catch(() => {})
+    return id
+  })
   ipcMain.on('rec:pcm', (_e, id: string, chunk: ArrayBuffer) => {
     appendPcm(id, Buffer.from(chunk))
   })
@@ -557,7 +666,8 @@ function registerIpc(): void {
       try {
         const event = await findLiveEvent(meeting.createdAt)
         if (event) {
-          meeting.title = event.title
+          // a name typed while recording wins over the event's
+          if (!hasUserTitle(meeting)) meeting.title = event.title
           if (event.attendees.length > 0) meeting.attendees = event.attendees
           writeMeeting(meeting)
         }
@@ -565,12 +675,20 @@ function registerIpc(): void {
         // calendar unreachable: keep the default title
       }
       if (autoEnd) notifyAutoEnd(meeting.title, autoEnd)
+      refreshTrayFeed().catch(() => {})
       // fire-and-forget: transcribe + summarize in the background
       processMeeting(id)
       return meeting
     }
   )
-  ipcMain.handle('rec:cancel', (_e, id: string) => cancelRecording(id))
+  ipcMain.handle('rec:cancel', (_e, id: string) => {
+    cancelRecording(id)
+    refreshTrayFeed().catch(() => {})
+  })
+  ipcMain.on('rec:setTitle', (_e, id: string, title: string) => {
+    setRecordingTitle(id, String(title ?? ''))
+    refreshTrayFeed().catch(() => {})
+  })
   ipcMain.on('rec:stashNotes', (_e, id: string, text: string) => {
     if (/^[\w-]+$/.test(id)) stashNotes(id, String(text))
   })
@@ -610,9 +728,82 @@ function registerIpc(): void {
     return m
   })
   ipcMain.handle('retrans:cancel', (_e, id: string) => cancelRetranscribe(id))
-  ipcMain.handle('meetings:resummarize', (_e, id: string, model?: string) => {
-    summarizeMeeting(id, model)
+  ipcMain.handle(
+    'meetings:resummarize',
+    (_e, id: string, model?: string, instructions?: string) => {
+      summarizeMeeting(id, model, typeof instructions === 'string' ? instructions : undefined)
+    }
+  )
+
+  // --- tags ---
+  ipcMain.handle('meetings:setTags', (_e, id: string, tags: string[]) => {
+    const m = readMeeting(id)
+    if (!m) return null
+    const seen = new Set<string>()
+    const clean = (Array.isArray(tags) ? tags : [])
+      .map(cleanTag)
+      .filter((t) => {
+        const key = t.toLowerCase()
+        if (!t || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .slice(0, 20)
+    m.tags = clean.length > 0 ? clean : undefined
+    assignTagColors(clean)
+    writeMeeting(m)
+    for (const win of BrowserWindow.getAllWindows()) win.webContents.send('meeting:updated', m)
+    return m
   })
+  // just the colors: the Library counts tags from the list it already has
+  ipcMain.handle('tags:colors', () => getSettings().tagColors)
+  ipcMain.handle('tags:all', (): TagInfo[] => {
+    const counts = new Map<string, { name: string; count: number }>()
+    for (const m of listMeetings()) {
+      for (const t of m.tags ?? []) {
+        const key = t.toLowerCase()
+        const entry = counts.get(key) ?? { name: t, count: 0 }
+        entry.count++
+        counts.set(key, entry)
+      }
+    }
+    const colors = assignTagColors([...counts.values()].map((c) => c.name))
+    return [...counts.entries()]
+      .map(([key, c]) => ({ name: c.name, count: c.count, color: colors[key] ?? 0 }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  })
+
+  // --- hand edits to the summary (regenerating asks before replacing them) ---
+  ipcMain.handle(
+    'meetings:editSummary',
+    (
+      _e,
+      id: string,
+      patch: Partial<Pick<MeetingSummary, 'tldr' | 'decisions' | 'openQuestions' | 'keyPoints' | 'topics'>>
+    ) => {
+      const m = readMeeting(id)
+      if (!m?.summary) return m ?? null
+      const lines = (v: unknown): string[] | null =>
+        Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : null
+      if (typeof patch.tldr === 'string') m.summary.tldr = patch.tldr.trim()
+      const decisions = lines(patch.decisions)
+      if (decisions) m.summary.decisions = decisions
+      const questions = lines(patch.openQuestions)
+      if (questions) m.summary.openQuestions = questions
+      const points = lines(patch.keyPoints)
+      if (points) m.summary.keyPoints = points
+      if (Array.isArray(patch.topics)) {
+        m.summary.topics = patch.topics
+          .map((t) => ({ heading: String(t?.heading ?? '').trim(), notes: lines(t?.notes) ?? [] }))
+          .filter((t) => t.heading || t.notes.length > 0)
+          .map((t) => ({ ...t, heading: t.heading || 'Notes' }))
+      }
+      m.summaryEdited = true
+      writeMeeting(m)
+      for (const win of BrowserWindow.getAllWindows()) win.webContents.send('meeting:updated', m)
+      return m
+    }
+  )
   ipcMain.handle('update:install', () => {
     autoUpdater.quitAndInstall()
   })
@@ -631,7 +822,8 @@ function registerIpc(): void {
       if (!m) continue
       const transcriptText = (m.transcript ?? []).map((s) => s.text).join(' ')
       const summaryText = m.summary ? JSON.stringify(m.summary) : ''
-      const haystack = `${m.title} ${summaryText} ${transcriptText}`.toLowerCase()
+      const haystack =
+        `${m.title} ${(m.tags ?? []).join(' ')} ${m.notes ?? ''} ${summaryText} ${transcriptText}`.toLowerCase()
       if (!words.every((w) => haystack.includes(w))) continue
       // snippet: context around the first word's first appearance in the transcript
       let snippet = ''
@@ -751,6 +943,11 @@ function registerIpc(): void {
       if (seg.speaker === from) seg.speaker = target
     }
     if (target !== 'me' && !/^speaker \d+$/i.test(target)) addPerson(target)
+    // naming a voice teaches the voiceprint library who that is
+    if (m.voices) {
+      m.voices = confirmVoiceNames(m)
+      syncVoiceprints(m)
+    }
     writeMeeting(m)
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send('meeting:updated', m)
@@ -791,10 +988,12 @@ function registerIpc(): void {
   ipcMain.handle('meetings:identifySpeakers', async (_e, id: string): Promise<Meeting | null> => {
     const meeting = readMeeting(id)
     if (!meeting) throw new Error('Meeting not found')
-    const transcript = await identifySpeakers(meeting)
+    const { transcript, voices } = await identifySpeakers(meeting)
     meeting.transcript = transcript
+    meeting.voices = voices
+    if (voices) syncVoiceprints(meeting)
     // real names discovered here feed the team directory
-    for (const name of new Set(transcript.map((s) => s.speaker))) {
+    for (const name of new Set((transcript ?? []).map((s) => s.speaker))) {
       if (name && name !== 'me' && name !== 'them' && !/^speaker \d+$/i.test(name)) {
         addPerson(name)
       }
@@ -1168,6 +1367,18 @@ function registerIpc(): void {
       return m
     }
   )
+
+  ipcMain.handle('actions:setTask', (_e, meetingId: string, index: number, text: string) => {
+    const m = readMeeting(meetingId)
+    const item = m?.summary?.actionItems[index]
+    const task = String(text ?? '').trim()
+    if (!m || !item || !task) return m ?? null
+    item.task = task
+    m.summaryEdited = true
+    writeMeeting(m)
+    for (const win of BrowserWindow.getAllWindows()) win.webContents.send('meeting:updated', m)
+    return m
+  })
 
   ipcMain.handle('actions:toggle', (_e, meetingId: string, index: number): boolean => {
     const m = readMeeting(meetingId)

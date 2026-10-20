@@ -32,6 +32,7 @@ interface Meeting {
   transcript?: Segment[]
   notes?: string
   attendees?: string[]
+  tags?: string[]
   speakerNames?: { me: string; them: string }
   summary?: {
     tldr: string
@@ -48,6 +49,14 @@ if (!dataDir || !existsSync(dataDir)) {
   process.exit(1)
 }
 const meetingsDir = join(dataDir, 'meetings')
+/** the app's link scheme (test and dev builds have their own); older configs lack it */
+const urlScheme = process.env.ROWAN_URL_SCHEME || 'rowan-aio'
+
+/** a link that opens the meeting in Rowan AIO, optionally at a moment */
+function appUrl(id: string, ms?: number): string {
+  const t = ms && ms > 0 ? `?t=${Math.floor(ms / 1000)}` : ''
+  return `${urlScheme}://meeting/${encodeURIComponent(id)}${t}`
+}
 
 function readMeeting(id: string): Meeting | null {
   try {
@@ -95,8 +104,39 @@ function meetingCard(m: Meeting): Record<string, unknown> {
     durationMinutes: Math.round(m.durationMs / 60000),
     mode: m.mode,
     tldr: m.summary?.tldr ?? null,
-    attendees: m.attendees ?? []
+    attendees: m.attendees ?? [],
+    tags: m.tags ?? [],
+    app_url: appUrl(m.id)
   }
+}
+
+const dateFilters = {
+  after: z
+    .string()
+    .optional()
+    .describe('Only meetings on or after this date (YYYY-MM-DD or full ISO timestamp)'),
+  before: z
+    .string()
+    .optional()
+    .describe('Only meetings before this date (YYYY-MM-DD or full ISO timestamp)'),
+  tag: z.string().optional().describe('Only meetings carrying this tag (case-insensitive)')
+}
+
+/** apply the shared after/before/tag filters; an unparseable date is ignored */
+function filtered(
+  meetings: Meeting[],
+  f: { after?: string; before?: string; tag?: string }
+): Meeting[] {
+  const after = f.after ? Date.parse(f.after) : NaN
+  const before = f.before ? Date.parse(f.before) : NaN
+  const tag = f.tag?.trim().toLowerCase()
+  return meetings.filter((m) => {
+    const t = Date.parse(m.createdAt)
+    if (!Number.isNaN(after) && t < after) return false
+    if (!Number.isNaN(before) && t >= before) return false
+    if (tag && !(m.tags ?? []).some((x) => x.toLowerCase() === tag)) return false
+    return true
+  })
 }
 
 function meetingFull(m: Meeting, includeTranscript: boolean): Record<string, unknown> {
@@ -114,16 +154,23 @@ server.registerTool(
   'list_meetings',
   {
     description:
-      'List meetings in the MeetingScribe library, newest first. Each entry has id, title, date, duration, TL;DR, and attendees.',
+      'List meetings in the Rowan AIO library, newest first, optionally within a date range or carrying a tag. Each entry has id, title, date, duration, TL;DR, attendees, tags, and app_url (a link that opens the meeting in Rowan AIO; offer it to the user when pointing at a meeting).',
     inputSchema: {
-      limit: z.number().int().min(1).max(200).optional().describe('Max results (default 25)')
+      limit: z.number().int().min(1).max(200).optional().describe('Max results (default 25)'),
+      ...dateFilters
     }
   },
-  async ({ limit }) => ({
+  async ({ limit, after, before, tag }) => ({
     content: [
       {
         type: 'text',
-        text: JSON.stringify(allMeetings().slice(0, limit ?? 25).map(meetingCard), null, 2)
+        text: JSON.stringify(
+          filtered(allMeetings(), { after, before, tag })
+            .slice(0, limit ?? 25)
+            .map(meetingCard),
+          null,
+          2
+        )
       }
     ]
   })
@@ -152,25 +199,30 @@ server.registerTool(
   'search_meetings',
   {
     description:
-      'Full-text search across meeting titles, summaries, notes, and transcripts. Every word in the query must appear somewhere in a meeting for it to match.',
+      'Full-text search across meeting titles, tags, summaries, notes, and transcripts, optionally within a date range or tag. Every word in the query must appear somewhere in a meeting for it to match. When the words turn up in the transcript, match_url opens the meeting at that moment in Rowan AIO.',
     inputSchema: {
       query: z.string().describe('Words to search for'),
-      limit: z.number().int().min(1).max(50).optional()
+      limit: z.number().int().min(1).max(50).optional(),
+      ...dateFilters
     }
   },
-  async ({ query, limit }) => {
+  async ({ query, limit, after, before, tag }) => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean)
     const hits: Record<string, unknown>[] = []
-    for (const m of allMeetings()) {
+    for (const m of filtered(allMeetings(), { after, before, tag })) {
       const haystack = [
         m.title,
+        (m.tags ?? []).join(' '),
         m.notes ?? '',
         m.summary ? JSON.stringify(m.summary) : '',
         (m.transcript ?? []).map((s) => s.text).join(' ')
       ]
         .join(' ')
         .toLowerCase()
-      if (words.every((w) => haystack.includes(w))) hits.push(meetingCard(m))
+      if (!words.every((w) => haystack.includes(w))) continue
+      // the first transcript line naming the first word, as a jump-in point
+      const seg = (m.transcript ?? []).find((s) => s.text.toLowerCase().includes(words[0]))
+      hits.push({ ...meetingCard(m), ...(seg ? { match_url: appUrl(m.id, seg.from) } : {}) })
       if (hits.length >= (limit ?? 10)) break
     }
     return { content: [{ type: 'text', text: JSON.stringify(hits, null, 2) }] }

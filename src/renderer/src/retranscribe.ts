@@ -1,15 +1,25 @@
 /**
- * Re-transcribe a meeting from its saved audio. The main process keeps only
- * the playback file (webm, or wav for recovered recordings) and has no
- * decoder, so the renderer decodes it with Web Audio straight to 16kHz mono,
- * streams the PCM over IPC, and the normal pipeline takes it from there.
+ * Feed a meeting's saved audio back to the main process as 16kHz mono PCM.
+ * The main process keeps only the playback file (webm, or wav for recovered
+ * recordings) and has no decoder, so the renderer decodes it with Web Audio
+ * and streams the samples over IPC. Re-transcription and voice recognition
+ * on older meetings both start this way.
  */
 
 const RATE = 16000
 
-export async function retranscribeMeeting(
+interface PcmSink {
+  begin: (id: string) => Promise<boolean>
+  pcm: (id: string, chunk: ArrayBuffer) => void
+  finish: (id: string) => Promise<unknown>
+  cancel: (id: string) => Promise<void>
+}
+
+async function streamMeetingAudio(
   id: string,
-  onPhase: (phase: string) => void
+  onPhase: (phase: string) => void,
+  sink: PcmSink,
+  handoff: string
 ): Promise<void> {
   onPhase('Loading the recording…')
   const res = await fetch(`scribe-media://${id}`)
@@ -21,7 +31,7 @@ export async function retranscribeMeeting(
   const ctx = new OfflineAudioContext(1, 1, RATE)
   const decoded = await ctx.decodeAudioData(encoded)
 
-  const ok = await window.scribe.meetings.retranscribeBegin(id)
+  const ok = await sink.begin(id)
   if (!ok) throw new Error('This meeting is busy; try again in a moment.')
 
   try {
@@ -43,14 +53,52 @@ export async function retranscribeMeeting(
         const v = Math.max(-1, Math.min(1, mono[i] / channels))
         out[i] = Math.round(v * 32767)
       }
-      window.scribe.meetings.retranscribePcm(id, out.buffer)
+      sink.pcm(id, out.buffer)
       // let the IPC queue drain so a long meeting doesn't pile up in memory
       if (start % (chunkFrames * 6) === 0) await new Promise((r) => setTimeout(r, 0))
     }
-    onPhase('Handing off to the transcription engine…')
-    await window.scribe.meetings.retranscribeFinish(id)
+    onPhase(handoff)
+    await sink.finish(id)
   } catch (err) {
-    await window.scribe.meetings.retranscribeCancel(id).catch(() => {})
+    await sink.cancel(id).catch(() => {})
     throw err
   }
+}
+
+/** Re-transcribe a meeting from its saved audio; the normal pipeline takes it from there. */
+export async function retranscribeMeeting(
+  id: string,
+  onPhase: (phase: string) => void
+): Promise<void> {
+  const m = window.scribe.meetings
+  await streamMeetingAudio(
+    id,
+    onPhase,
+    {
+      begin: m.retranscribeBegin,
+      pcm: m.retranscribePcm,
+      finish: m.retranscribeFinish,
+      cancel: m.retranscribeCancel
+    },
+    'Handing off to the transcription engine…'
+  )
+}
+
+/**
+ * Tell the voices apart in a meeting. Straight after a recording its
+ * transcription audio is still on disk; for an older one the recording is
+ * decoded and streamed in first.
+ */
+export async function identifyMeetingVoices(
+  id: string,
+  onPhase: (phase: string) => void
+): Promise<void> {
+  const v = window.scribe.voice
+  if ((await v.identify(id)) === 'done') return
+  await streamMeetingAudio(
+    id,
+    onPhase,
+    { begin: v.begin, pcm: v.pcm, finish: v.finish, cancel: v.cancel },
+    'Listening for voices…'
+  )
 }
