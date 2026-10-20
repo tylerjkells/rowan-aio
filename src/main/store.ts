@@ -154,6 +154,8 @@ interface RecSession {
   pcmStream: WriteStream
   pcmBytes: number
   live: LiveTranscriber | null
+  /** a name typed while recording; wins over the calendar event's */
+  title?: string
 }
 
 const sessions = new Map<string, RecSession>()
@@ -171,10 +173,16 @@ export function hasActiveRecording(): boolean {
   return sessions.size > 0
 }
 
-/** the live recording, if any: when it started (the tray shows it) */
-export function activeRecording(): { id: string; startedAt: string } | null {
+/** the live recording, if any: when it started and any name typed for it (the tray shows it) */
+export function activeRecording(): { id: string; startedAt: string; title?: string } | null {
   const s = sessions.values().next().value
-  return s ? { id: s.id, startedAt: s.startedAt } : null
+  return s ? { id: s.id, startedAt: s.startedAt, title: s.title } : null
+}
+
+/** name the recording while it is still going */
+export function setRecordingTitle(id: string, title: string): void {
+  const s = sessions.get(id)
+  if (s) s.title = title.trim().slice(0, 200) || undefined
 }
 
 function broadcastLive(id: string, segments: TranscriptSegment[], transcribedMs: number): void {
@@ -209,7 +217,7 @@ export function beginRecording(mode: RecordingMode): string {
 
   // the calendar event (if any) adds its invitees and title words to the
   // hints; the first chunk is cut 45s in, so this lands well before it
-  if (live && settings.hasCalendar) {
+  if (live && settings.hasCalendar && settings.vocabFromCalendar) {
     findLiveEvent(now.toISOString())
       .then((event) => {
         if (event && sessions.has(id)) {
@@ -284,7 +292,7 @@ export async function finishRecording(
   const when = new Date(s.startedAt)
   const meeting: Meeting = {
     id,
-    title: defaultTitle(when, s.mode),
+    title: s.title || defaultTitle(when, s.mode),
     createdAt: s.startedAt,
     durationMs,
     mode: s.mode,
@@ -294,6 +302,11 @@ export async function finishRecording(
   }
   writeMeeting(meeting)
   return meeting
+}
+
+/** a title the user gave it, as opposed to the "Meeting · Oct 20, 2:30 PM" placeholder */
+export function hasUserTitle(m: Meeting): boolean {
+  return !/^(Virtual meeting|Imported meeting|Meeting|Recovered recording) · /.test(m.title)
 }
 
 /** whether a stopped recording's live transcript is still being collected */

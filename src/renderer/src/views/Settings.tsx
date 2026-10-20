@@ -173,6 +173,78 @@ function OptRow({
 }
 
 /**
+ * The vocabulary as a list of words and phrases: add one (or several,
+ * comma-separated), remove with ×. Stored as the same comma-separated text
+ * the transcriber and summarizer have always read.
+ */
+function VocabList({
+  settings,
+  onChange
+}: {
+  settings: AppSettings
+  onChange: (s: AppSettings) => void
+}): React.JSX.Element {
+  const [draft, setDraft] = useState('')
+  const words = settings.vocabulary
+    .split(/[,;\n]+/)
+    .map((w) => w.trim())
+    .filter(Boolean)
+
+  async function save(next: string[]): Promise<void> {
+    onChange(await window.scribe.settings.update({ vocabulary: next.join(', ') }))
+  }
+
+  async function add(): Promise<void> {
+    const fresh = draft
+      .split(/[,;\n]+/)
+      .map((w) => w.trim())
+      .filter((w) => w && !words.some((x) => x.toLowerCase() === w.toLowerCase()))
+    setDraft('')
+    if (fresh.length > 0) await save([...words, ...fresh])
+  }
+
+  return (
+    <div>
+      <div className="field-label">Vocabulary list</div>
+      <p className="opt-desc">
+        Names, acronyms, and jargon that speech recognition tends to mangle, watched for in every
+        meeting. Applied to future transcriptions and summaries.
+      </p>
+      {words.length > 0 && (
+        <ul className="vocab-list">
+          {words.map((w) => (
+            <li key={w}>
+              <span>{w}</span>
+              <button
+                className="seg-tool"
+                onClick={() => save(words.filter((x) => x !== w))}
+                aria-label={`Remove ${w}`}
+                title="Remove"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="field-row">
+        <input
+          className="text-input"
+          placeholder="Add a word or phrase, e.g. Banner, NJWELL, Dr. Okafor"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          aria-label="Add to the vocabulary"
+        />
+        <button className="btn" onClick={add} disabled={!draft.trim()}>
+          Add
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
  * Call detection: what Windows says is holding the mic right now (so it is
  * easy to see the feature working), and the apps that should never count.
  */
@@ -412,7 +484,6 @@ export function SettingsView({
     return () => obs.disconnect()
   }, [])
   const [yourNameDraft, setYourNameDraft] = useState(settings.yourName)
-  const [vocabDraft, setVocabDraft] = useState(settings.vocabulary)
   const [instrDraft, setInstrDraft] = useState(settings.summaryInstructions)
   const [backingUp, setBackingUp] = useState(false)
   const [claude, setClaude] = useState<{
@@ -938,27 +1009,15 @@ export function SettingsView({
               </div>
             </div>
           )}
-          <div>
-            <label className="field-label" htmlFor="vocab-hints">
-              Vocabulary hints
-            </label>
-            <textarea
-              id="vocab-hints"
-              className="text-input vocab-input"
-              placeholder="Banner, Slate, Canvas, Rowan Global, Dr. Okafor, NJWELL…"
-              value={vocabDraft}
-              onChange={(e) => setVocabDraft(e.target.value)}
-              onBlur={async () => {
-                if (vocabDraft.trim() !== settings.vocabulary) {
-                  onChange(await window.scribe.settings.update({ vocabulary: vocabDraft }))
-                }
-              }}
-            />
-            <p className="opt-desc">
-              Names, acronyms, and jargon that speech recognition tends to mangle. Applied to
-              future transcriptions and summaries.
-            </p>
-          </div>
+          <VocabList settings={settings} onChange={onChange} />
+          <SwitchRow
+            title="Add words from the calendar invite"
+            desc="Each meeting also gets the invitees' names and the unusual words in its title (product names, acronyms, codenames), for that meeting only."
+            checked={settings.vocabFromCalendar}
+            onToggle={async (v) =>
+              onChange(await window.scribe.settings.update({ vocabFromCalendar: v }))
+            }
+          />
         </div>
       </section>
 

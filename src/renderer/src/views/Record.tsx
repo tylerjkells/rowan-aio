@@ -30,9 +30,6 @@ function TimeLeft({ event, now }: { event: CalendarEvent; now: number }): React.
   else chip = `${Math.ceil(left / 60000)} min left`
   return (
     <div className="rec-event" aria-live="off">
-      <span className="rec-event-title" title={event.title}>
-        {event.title}
-      </span>
       <span className="rec-event-span">{span}</span>
       <span className={`rec-left ${left <= WARN_MS ? 'warn' : ''}`}>{chip}</span>
     </div>
@@ -75,7 +72,9 @@ export function RecordView({
   const [notes, setNotes] = useState('')
   const [prepNote, setPrepNote] = useState<{ id: string; entry: PrepEntry } | null>(null)
   const [liveEvent, setLiveEvent] = useState<CalendarEvent | null>(null)
+  const [recTitle, setRecTitle] = useState('')
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autostarted = useRef<number | null>(null)
 
   // prep written on the calendar follows you in here: if a calendar event is
@@ -100,6 +99,7 @@ export function RecordView({
 
   // the calendar event this recording belongs to, for its name and how long is left
   useEffect(() => {
+    setRecTitle('')
     if (!rec) {
       setLiveEvent(null)
       return
@@ -142,6 +142,15 @@ export function RecordView({
     // a native insert at the caret: synchronous (fast typing can't overtake
     // it), keeps undo working, and fires the usual change event
     document.execCommand('insertText', false, `[${noteStamp(rec.elapsedMs())}] ${e.key}`)
+  }
+
+  /** a name typed mid-recording goes to the session now, so it survives leaving the page */
+  function updateTitle(text: string): void {
+    setRecTitle(text)
+    if (!rec) return
+    if (titleTimer.current) clearTimeout(titleTimer.current)
+    const id = rec.id
+    titleTimer.current = setTimeout(() => window.scribe.rec.setTitle(id, text), 400)
   }
 
   function updateNotes(text: string): void {
@@ -282,6 +291,20 @@ export function RecordView({
         <span className="dot" aria-hidden="true" />
         {paused ? 'PAUSED' : `RECORDING ${rec.mode === 'virtual' ? '· MIC + SYSTEM AUDIO' : '· MIC'}`}
       </span>
+      <input
+        className="rec-title"
+        value={recTitle}
+        placeholder={liveEvent?.title ?? 'Name this recording'}
+        onChange={(e) => updateTitle(e.target.value)}
+        onBlur={() => rec && window.scribe.rec.setTitle(rec.id, recTitle)}
+        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        aria-label="Recording name"
+        title={
+          liveEvent
+            ? 'Named after the calendar event unless you type a name'
+            : 'Give this recording a name'
+        }
+      />
       <div className="rec-timer" aria-live="off">
         {formatDuration(elapsed)}
       </div>

@@ -126,6 +126,8 @@ const api = {
       ipcRenderer.invoke('rec:finish', id, webm, durationMs, energy, autoEnd),
     cancel: (id: string): Promise<void> => ipcRenderer.invoke('rec:cancel', id),
     stashNotes: (id: string, text: string): void => ipcRenderer.send('rec:stashNotes', id, text),
+    /** name the recording while it runs; it wins over the calendar event's title */
+    setTitle: (id: string, title: string): void => ipcRenderer.send('rec:setTitle', id, title),
     readNotes: (id: string): Promise<string> => ipcRenderer.invoke('rec:readNotes', id),
     onLive: (cb: (u: LiveUpdate) => void): (() => void) => {
       const handler = (_e: unknown, u: LiveUpdate): void => cb(u)

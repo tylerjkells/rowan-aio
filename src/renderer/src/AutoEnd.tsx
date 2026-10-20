@@ -162,6 +162,7 @@ export function AutoEndWatch({
   if (!rec || !settings || !pending || busy) return <></>
 
   const seconds = Math.max(0, Math.ceil((pending.at - now) / 1000))
+  const remaining = Math.min(1, Math.max(0, (pending.at - now) / GRACE_MS))
   const why =
     pending.reason === 'silence'
       ? `no audio for ${settings.autoEndSilenceMinutes} minutes`
@@ -180,6 +181,9 @@ export function AutoEndWatch({
       <button className="btn btn-primary" onClick={() => fire(pending.reason)}>
         Stop now
       </button>
+      <span className="autoend-bar" aria-hidden="true">
+        <span style={{ transform: `scaleX(${remaining})` }} />
+      </span>
     </div>
   )
 }

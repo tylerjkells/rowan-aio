@@ -731,6 +731,8 @@ export interface AppSettings {
   theme: AppTheme
   /** names, acronyms, and jargon fed to transcription and summaries */
   vocabulary: string
+  /** add the calendar invite's names and unusual title words to a meeting's hints */
+  vocabFromCalendar: boolean
   /** standing instructions added to every summary ("always list budget figures") */
   summaryInstructions: string
   /** tag name (lowercased) -> index into TAG_COLORS, assigned as tags are first used */

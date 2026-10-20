@@ -27,8 +27,8 @@ export async function refreshTrayFeed(): Promise<void> {
   const calendar = getSettings().hasCalendar
 
   if (rec) {
-    recording = { since: new Date(rec.startedAt).getTime(), title: null }
-    if (calendar) {
+    recording = { since: new Date(rec.startedAt).getTime(), title: rec.title ?? null }
+    if (calendar && !recording.title) {
       try {
         recording.title = (await findLiveEvent(rec.startedAt))?.title ?? null
       } catch {

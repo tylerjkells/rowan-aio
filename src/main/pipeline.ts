@@ -6,9 +6,10 @@ import {
   wavPath,
   labelSpeakers,
   isCatchingUp,
-  collectLiveTranscript
+  collectLiveTranscript,
+  hasUserTitle
 } from './store'
-import { transcribe, meetingPrompt } from './whisper'
+import { transcribe, meetingPrompt, vocabularyPrompt } from './whisper'
 import { summarizeTranscript } from './summarize'
 import { activeAiModel } from './ai'
 import { getSettings } from './settings'
@@ -77,7 +78,9 @@ export async function processMeeting(id: string): Promise<void> {
           (percent) => {
             meeting = update(meeting!, { stage: 'transcribing', progress: percent })
           },
-          meetingPrompt(settings.vocabulary, meeting.attendees, meeting.title) || undefined
+          (settings.vocabFromCalendar
+            ? meetingPrompt(settings.vocabulary, meeting.attendees, meeting.title)
+            : vocabularyPrompt(settings.vocabulary)) || undefined
         )
         if (transcript.length === 0) {
           // keep the wav so "Try again" (or a different model) has something to work with
@@ -141,8 +144,7 @@ export async function summarizeMeeting(
       meeting.createdAt,
       instructions
     )
-    const keepUserTitle =
-      meeting.title && !/^(Virtual meeting|Imported meeting|Meeting) · /.test(meeting.title)
+    const keepUserTitle = !!meeting.title && hasUserTitle(meeting)
     update(meeting, {
       summary,
       title: keepUserTitle ? meeting.title : summary.title,

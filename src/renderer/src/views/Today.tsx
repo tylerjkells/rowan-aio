@@ -54,6 +54,33 @@ function isToday(iso: string): boolean {
   )
 }
 
+/** a meeting starting this soon gets the Join & record button */
+const JOIN_SOON_MS = 10 * 60 * 1000
+
+/** "3 meetings left today · Next in 12 min" above the schedule */
+function DayChips({ events, now }: { events: CalendarEvent[]; now: number }): React.JSX.Element {
+  const left = events.filter((e) => new Date(e.end).getTime() > now)
+  const next = left.find((e) => new Date(e.start).getTime() > now)
+  const onNow = left.find((e) => new Date(e.start).getTime() <= now)
+  let nextLabel: string | null = null
+  if (next) {
+    const mins = Math.round((new Date(next.start).getTime() - now) / 60000)
+    nextLabel =
+      mins < 1 ? 'Next starting now' : mins < 60 ? `Next in ${mins} min` : `Next at ${formatTime(next.start)}`
+  }
+  return (
+    <div className="day-chips">
+      <span className="day-chip">
+        {left.length === 0
+          ? 'No more meetings today'
+          : `${left.length} ${left.length === 1 ? 'meeting' : 'meetings'} left today`}
+      </span>
+      {onNow && <span className="day-chip live">On now: {onNow.title}</span>}
+      {nextLabel && <span className="day-chip">{nextLabel}</span>}
+    </div>
+  )
+}
+
 function BriefPanel({
   brief,
   onOpen
@@ -135,11 +162,14 @@ export function TodayView({
   onActions,
   onDigest,
   onMail,
-  onProjects
+  onProjects,
+  onJoinRecord
 }: {
   meetings: MeetingListItem[]
   onOpen: (id: string) => void
   onRecord: () => void
+  /** open the call link and start recording in one go */
+  onJoinRecord: (joinUrl: string) => void
   onSettings: () => void
   onActions: () => void
   onDigest: () => void
@@ -298,6 +328,7 @@ export function TodayView({
         <MorningBrief onMail={onMail} />
         <section className="today-section">
           <div className="card-subhead">Schedule</div>
+          {timedEvents.length > 0 && <DayChips events={timedEvents} now={now} />}
 
           {settings && !settings.hasCalendar && (
             <div className="today-connect">
@@ -398,7 +429,22 @@ export function TodayView({
                       )}
                       {brief && briefOpen && <BriefPanel brief={brief} onOpen={onOpen} />}
                     </span>
-                    {live ? (
+                    {ev.joinUrl && !past && start - now <= JOIN_SOON_MS ? (
+                      <span className="sched-actions">
+                        <button
+                          className="btn btn-primary sched-record"
+                          onClick={() => onJoinRecord(ev.joinUrl!)}
+                          title="Open the call and start recording it"
+                        >
+                          <MicIcon /> Join &amp; record
+                        </button>
+                        {live && (
+                          <button className="link-btn sched-record-only" onClick={onRecord}>
+                            Record only
+                          </button>
+                        )}
+                      </span>
+                    ) : live ? (
                       <button className="btn btn-primary sched-record" onClick={onRecord}>
                         <MicIcon /> Record
                       </button>

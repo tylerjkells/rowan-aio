@@ -28,6 +28,8 @@ import {
   deleteMeeting,
   findAudio,
   finishRecording,
+  hasUserTitle,
+  setRecordingTitle,
   finishRetranscribe,
   listMeetings,
   meetingDir,
@@ -597,7 +599,8 @@ function registerIpc(): void {
       try {
         const event = await findLiveEvent(meeting.createdAt)
         if (event) {
-          meeting.title = event.title
+          // a name typed while recording wins over the event's
+          if (!hasUserTitle(meeting)) meeting.title = event.title
           if (event.attendees.length > 0) meeting.attendees = event.attendees
           writeMeeting(meeting)
         }
@@ -613,6 +616,10 @@ function registerIpc(): void {
   )
   ipcMain.handle('rec:cancel', (_e, id: string) => {
     cancelRecording(id)
+    refreshTrayFeed().catch(() => {})
+  })
+  ipcMain.on('rec:setTitle', (_e, id: string, title: string) => {
+    setRecordingTitle(id, String(title ?? ''))
     refreshTrayFeed().catch(() => {})
   })
   ipcMain.on('rec:stashNotes', (_e, id: string, text: string) => {

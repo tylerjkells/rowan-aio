@@ -462,6 +462,7 @@ export function MeetingView({
   const [emailDraft, setEmailDraft] = useState<{ subject: string; body: string } | null>(null)
   const [knownOwners, setKnownOwners] = useState<string[]>([])
   const [hasApiKey, setHasApiKey] = useState(false)
+  const [autoSummarize, setAutoSummarize] = useState(true)
   const [aiProvider, setAiProvider] = useState<'claude' | 'openai'>('claude')
   const [hasClickup, setHasClickup] = useState(false)
   const [pushIdx, setPushIdx] = useState<number | null>(null)
@@ -497,6 +498,7 @@ export function MeetingView({
         const seen = items.flatMap((i) => i.owners).filter((o) => o !== 'Me')
         setKnownOwners(['Me', ...[...new Set([...settings.people, ...seen])].sort()])
         setHasApiKey(settings.aiReady)
+        setAutoSummarize(settings.autoSummarize)
         setAiProvider(settings.aiProvider)
         setHasClickup(settings.hasClickup)
         setStandingInstructions(settings.summaryInstructions)
@@ -845,17 +847,11 @@ export function MeetingView({
       )}
 
       {working && (
-        <div className="stage-banner" aria-live="polite">
-          <span className="spinner" aria-hidden="true" />
-          {meeting.stage === 'summarizing'
-            ? 'Writing the summary with Claude…'
-            : 'Transcribing on this machine. You can leave this page.'}
-          {meeting.stage === 'transcribing' && typeof meeting.progress === 'number' && (
-            <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${meeting.progress}%` }} />
-            </div>
-          )}
-        </div>
+        <ProcessingSteps
+          stage={meeting.stage}
+          progress={meeting.progress}
+          summarize={hasApiKey && (autoSummarize || meeting.stage === 'summarizing')}
+        />
       )}
 
       {retranscribing && (
@@ -1340,6 +1336,59 @@ export function MeetingView({
           onClose={() => setInstructionsOpen(false)}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * What happens to a fresh recording, step by step: done steps ticked, the
+ * current one spinning (with progress when there is any), later ones waiting.
+ */
+function ProcessingSteps({
+  stage,
+  progress,
+  summarize
+}: {
+  stage: Meeting['stage']
+  progress?: number
+  summarize: boolean
+}): React.JSX.Element {
+  const steps: { key: string; label: string; state: 'done' | 'now' | 'later'; progress?: number }[] = [
+    {
+      key: 'transcribe',
+      label: 'Transcribing on this machine',
+      state: stage === 'summarizing' ? 'done' : 'now',
+      progress: stage === 'transcribing' && typeof progress === 'number' ? progress : undefined
+    }
+  ]
+  if (summarize) {
+    steps.push({
+      key: 'summary',
+      label: 'Writing the summary',
+      state: stage === 'summarizing' ? 'now' : 'later'
+    })
+  }
+  return (
+    <div className="stage-banner proc-steps" aria-live="polite">
+      <ol>
+        {steps.map((s) => (
+          <li key={s.key} className={`proc-step ${s.state}`}>
+            <span className="proc-icon" aria-hidden="true">
+              {s.state === 'done' ? '✓' : s.state === 'now' ? <span className="spinner" /> : '○'}
+            </span>
+            <span className="proc-label">
+              {s.label}
+              {s.progress !== undefined && <span className="proc-pct">{s.progress}%</span>}
+            </span>
+            {s.progress !== undefined && (
+              <span className="progress-track proc-track">
+                <span className="progress-fill" style={{ width: `${s.progress}%` }} />
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+      <span className="opt-desc">You can leave this page; it carries on in the background.</span>
     </div>
   )
 }

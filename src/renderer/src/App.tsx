@@ -347,6 +347,11 @@ export default function App(): React.JSX.Element {
               onDigest={() => setDigestRequested(true)}
               onMail={() => setView({ name: 'mail' })}
               onProjects={() => setView({ name: 'projects' })}
+              onJoinRecord={(joinUrl) => {
+                // the click is a real gesture, so recording can start straight away
+                window.open(joinUrl, '_blank')
+                setView({ name: 'record', autostart: { mode: 'virtual', nonce: Date.now() } })
+              }}
             />
           )}
           {view.name === 'library' && (
