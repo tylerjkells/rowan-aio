@@ -3,6 +3,7 @@ export type RecordingMode = 'in-person' | 'virtual' | 'imported'
 export type MeetingStage =
   | 'recorded'
   | 'transcribing'
+  | 'identifying'
   | 'summarizing'
   | 'ready'
   | 'transcript-only'
@@ -21,6 +22,32 @@ export interface TranscriptSegment {
   speaker?: string
   /** tinydiarize: the speaker changes after this segment */
   turn?: boolean
+  /** which voice the voice engine heard on this line (a key of meeting.voices) */
+  voice?: number
+}
+
+/** one voice the voice engine found in a meeting */
+export interface VoiceMeta {
+  /** who it is: a person's name, 'me', or a "Speaker 2" placeholder */
+  name: string
+  /**
+   * how the name was settled: your microphone on a call ('mic'), you
+   * ('you'), a remembered voiceprint ('voice'), or the AI ('ai')
+   */
+  source?: 'mic' | 'you' | 'voice' | 'ai'
+  /** seconds of speech in this voice */
+  seconds: number
+  /** the closest remembered voiceprint, when there was one */
+  match?: { name: string; distance: number; strong: boolean }
+}
+
+export interface VoiceEngineStatus {
+  /** this platform has a voice engine build */
+  supported: boolean
+  /** engine and models are downloaded */
+  ready: boolean
+  /** people the voiceprint library can recognize */
+  people: number
 }
 
 /** periodic per-source loudness sample captured while recording */
@@ -138,6 +165,10 @@ export interface Meeting {
   tags?: string[]
   /** the summary text was changed by hand; regenerating asks before replacing it */
   summaryEdited?: boolean
+  /** voices the voice engine found, keyed by the voice number on transcript lines */
+  voices?: Record<string, VoiceMeta>
+  /** why the last voice identification run failed, if it did */
+  voiceError?: string
 }
 
 /** Lightweight listing shape (no transcript body) */
@@ -733,6 +764,8 @@ export interface AppSettings {
   vocabulary: string
   /** add the calendar invite's names and unusual title words to a meeting's hints */
   vocabFromCalendar: boolean
+  /** tell voices apart and recognize remembered ones after each recording */
+  voiceId: boolean
   /** standing instructions added to every summary ("always list budget figures") */
   summaryInstructions: string
   /** tag name (lowercased) -> index into TAG_COLORS, assigned as tags are first used */

@@ -10,8 +10,10 @@ import type {
   EngineStatus,
   MicApp,
   UsageSummary,
+  VoiceEngineStatus,
   WhisperModel
 } from '../../../shared/types'
+import type { VoiceSetupProgress } from '../../../preload/index'
 
 const THEMES: { id: AppTheme; title: string; desc: string; bg: string; accent: string }[] = [
   { id: 'studio', title: 'Studio', desc: 'Warm dark, signal red. The default.', bg: '#1b1717', accent: '#dc5546' },
@@ -169,6 +171,110 @@ function OptRow({
       </span>
       {tag && <span className="opt-tag">{tag}</span>}
     </button>
+  )
+}
+
+/**
+ * Voice recognition: switching it on downloads the voice engine the first
+ * time (with progress); once ready it says how many people it knows, and
+ * every voiceprint can be forgotten in one go.
+ */
+function VoiceRecognition({
+  settings,
+  onChange
+}: {
+  settings: AppSettings
+  onChange: (s: AppSettings) => void
+}): React.JSX.Element {
+  const [status, setStatus] = useState<VoiceEngineStatus | null>(null)
+  const [progress, setProgress] = useState<VoiceSetupProgress | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [forgetArmed, setForgetArmed] = useState(false)
+
+  useEffect(() => {
+    window.scribe.voice.status().then(setStatus)
+    return window.scribe.voice.onProgress(setProgress)
+  }, [])
+
+  async function toggle(on: boolean): Promise<void> {
+    setError(null)
+    if (!on) {
+      onChange(await window.scribe.settings.update({ voiceId: false }))
+      return
+    }
+    if (!status?.ready) {
+      setBusy(true)
+      try {
+        setStatus(await window.scribe.voice.setup())
+      } catch (err) {
+        setError(err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : 'Setup failed')
+        setBusy(false)
+        return
+      }
+      setBusy(false)
+    }
+    onChange(await window.scribe.settings.update({ voiceId: true }))
+  }
+
+  async function forget(): Promise<void> {
+    if (!forgetArmed) {
+      setForgetArmed(true)
+      return
+    }
+    setForgetArmed(false)
+    setStatus(await window.scribe.voice.forget())
+  }
+
+  if (status && !status.supported) {
+    return <p className="opt-desc">Voice recognition needs 64-bit Windows.</p>
+  }
+
+  return (
+    <>
+      <SwitchRow
+        title="Recognize voices"
+        desc="After each recording, tell the voices apart and name the ones you have named before. In-person meetings get real speakers instead of guesses. The first time, this downloads the voice engine (about 55 MB)."
+        checked={settings.voiceId && !!status?.ready}
+        onToggle={toggle}
+      />
+      {busy && progress && (
+        <div className="setup-progress" aria-live="polite">
+          {progress.detail}
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{
+                width: progress.percent >= 0 ? `${progress.percent}%` : '100%',
+                opacity: progress.percent >= 0 ? 1 : 0.35
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {error && (
+        <p className="field-note error" role="alert">
+          {error}
+        </p>
+      )}
+      {settings.voiceId && status?.ready && (
+        <>
+          <p className="opt-desc">
+            {status.people > 0
+              ? `Knows ${status.people} ${status.people === 1 ? 'voice' : 'voices'} so far.`
+              : 'No voices remembered yet.'}{' '}
+            Rename a &ldquo;Speaker 2&rdquo; in a transcript and that voice is remembered for next
+            time; on calls, your own voice is learned from your microphone. Older meetings can be
+            run from their transcript with Identify voices.
+          </p>
+          <div className="field-row">
+            <button className={`btn ${forgetArmed ? 'btn-solid-danger' : 'btn-ghost btn-danger'}`} onClick={forget}>
+              {forgetArmed ? 'Click again to forget every voiceprint' : 'Forget all voiceprints'}
+            </button>
+          </div>
+        </>
+      )}
+    </>
   )
 }
 
@@ -1018,6 +1124,20 @@ export function SettingsView({
               onChange(await window.scribe.settings.update({ vocabFromCalendar: v }))
             }
           />
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <header className="settings-label">
+          <h2>Voice recognition</h2>
+          <p className="hint">
+            Works out who is speaking from how they sound, on this machine. Voiceprints (a few
+            hundred numbers per voice) are kept only here and never leave it; transcripts keep
+            their names if you forget them.
+          </p>
+        </header>
+        <div className="settings-body">
+          <VoiceRecognition settings={settings} onChange={onChange} />
         </div>
       </section>
 

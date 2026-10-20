@@ -116,6 +116,13 @@ export function StageBadge({
           Transcribing{typeof progress === 'number' && progress > 0 ? ` ${progress}%` : '…'}
         </span>
       )
+    case 'identifying':
+      return (
+        <span className="badge badge-working">
+          <span className="spinner" aria-hidden="true" />
+          Identifying voices{typeof progress === 'number' && progress > 0 ? ` ${progress}%` : '…'}
+        </span>
+      )
     case 'summarizing':
       return (
         <span className="badge badge-working">

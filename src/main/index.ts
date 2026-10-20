@@ -201,7 +201,19 @@ import {
 } from './claudeConnect'
 import { engineStatus, setupEngine } from './whisper'
 import { activeAiModel, testOpenaiKey } from './ai'
-import { processMeeting, summarizeMeeting } from './pipeline'
+import { processMeeting, runVoiceIdentification, summarizeMeeting } from './pipeline'
+import {
+  appendVoicePcm,
+  beginVoicePcm,
+  cancelVoicePcm,
+  confirmVoiceNames,
+  finishVoicePcm,
+  forgetVoiceprints,
+  setupVoiceEngine,
+  syncVoiceprints,
+  voiceEngineStatus,
+  voiceIdActive
+} from './voiceid'
 import { askAboutMeeting, testApiKey } from './summarize'
 import { askLibrary, clearAskHistory, readAskHistory } from './ask'
 import { createImportedMeeting } from './importer'
@@ -471,7 +483,22 @@ app.whenReady().then(() => {
     .catch(() => [])
     .then(() => {
       for (const m of listMeetings()) {
-        if (m.stage === 'recorded' || m.stage === 'transcribing' || m.stage === 'summarizing') {
+        if (m.stage === 'identifying') {
+          // a voice run on a finished meeting was cut off: put it back as it
+          // was rather than rerun the pipeline (which would rewrite the summary)
+          const full = readMeeting(m.id)
+          rmSync(join(meetingDir(m.id), 'voice-input.wav'), { force: true })
+          if (full?.summary) {
+            writeMeeting({ ...full, stage: 'ready', progress: undefined })
+            continue
+          }
+        }
+        if (
+          m.stage === 'recorded' ||
+          m.stage === 'transcribing' ||
+          m.stage === 'identifying' ||
+          m.stage === 'summarizing'
+        ) {
           processMeeting(m.id)
         }
       }
@@ -572,6 +599,46 @@ function registerIpc(): void {
   ipcMain.handle('nav:take', (_e, gesture: boolean) => takePendingNav(gesture === true))
   ipcMain.handle('app:meetingUrl', (_e, id: string, ms?: number) => meetingUrl(id, ms))
   ipcMain.handle('mic:state', () => micState())
+
+  // --- voice recognition ---
+  ipcMain.handle('voice:status', () => voiceEngineStatus())
+  ipcMain.handle('voice:setup', async (e) => {
+    try {
+      return await setupVoiceEngine((p) => e.sender.send('voice:progress', p))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Voice engine setup failed'
+      e.sender.send('voice:progress', { percent: -1, detail: msg, error: msg })
+      throw err
+    }
+  })
+  ipcMain.handle('voice:forget', () => {
+    forgetVoiceprints()
+    return voiceEngineStatus()
+  })
+  /**
+   * Identify voices in one meeting. With its transcription audio still on
+   * disk that runs at once (returns 'done'); an older meeting needs its
+   * recording decoded first, which the renderer does and streams in through
+   * voice:begin / voice:pcm / voice:finish (returns 'needs-audio').
+   */
+  ipcMain.handle('voice:identify', async (_e, id: string): Promise<'done' | 'needs-audio'> => {
+    if (!voiceIdActive()) throw new Error('Voice recognition is off or not set up (Settings → Voice recognition).')
+    const wav = join(meetingDir(id), 'whisper-input.wav')
+    if (!existsSync(wav)) return 'needs-audio'
+    await runVoiceIdentification(id, wav)
+    return 'done'
+  })
+  ipcMain.handle('voice:begin', (_e, id: string) => beginVoicePcm(id))
+  ipcMain.on('voice:pcm', (_e, id: string, chunk: ArrayBuffer) => appendVoicePcm(id, Buffer.from(chunk)))
+  ipcMain.handle('voice:cancel', (_e, id: string) => cancelVoicePcm(id))
+  ipcMain.handle('voice:finish', async (_e, id: string) => {
+    const wav = await finishVoicePcm(id)
+    try {
+      return await runVoiceIdentification(id, wav)
+    } finally {
+      rmSync(wav, { force: true })
+    }
+  })
 
   // --- recording ---
   ipcMain.handle('rec:begin', (_e, mode: RecordingMode) => {
@@ -876,6 +943,11 @@ function registerIpc(): void {
       if (seg.speaker === from) seg.speaker = target
     }
     if (target !== 'me' && !/^speaker \d+$/i.test(target)) addPerson(target)
+    // naming a voice teaches the voiceprint library who that is
+    if (m.voices) {
+      m.voices = confirmVoiceNames(m)
+      syncVoiceprints(m)
+    }
     writeMeeting(m)
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send('meeting:updated', m)
@@ -916,10 +988,12 @@ function registerIpc(): void {
   ipcMain.handle('meetings:identifySpeakers', async (_e, id: string): Promise<Meeting | null> => {
     const meeting = readMeeting(id)
     if (!meeting) throw new Error('Meeting not found')
-    const transcript = await identifySpeakers(meeting)
+    const { transcript, voices } = await identifySpeakers(meeting)
     meeting.transcript = transcript
+    meeting.voices = voices
+    if (voices) syncVoiceprints(meeting)
     // real names discovered here feed the team directory
-    for (const name of new Set(transcript.map((s) => s.speaker))) {
+    for (const name of new Set((transcript ?? []).map((s) => s.speaker))) {
       if (name && name !== 'me' && name !== 'them' && !/^speaker \d+$/i.test(name)) {
         addPerson(name)
       }

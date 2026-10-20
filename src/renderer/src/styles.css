@@ -10260,3 +10260,13 @@ button.tkr-hbar:focus-visible {
 .vocab-list li + li {
   border-top: 1px solid var(--line-soft);
 }
+
+/* one color per speaker in the transcript */
+.speaker-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: 1px;
+}

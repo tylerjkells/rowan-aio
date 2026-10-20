@@ -62,6 +62,7 @@ import type {
   ToolboxData,
   TranscriptSegment,
   UsageSummary,
+  VoiceEngineStatus,
   WeeklyDigest,
   WhisperModel
 } from '../shared/types'
@@ -78,6 +79,13 @@ export interface MicChange {
   started: MicApp[]
   stopped: MicApp[]
   doubtful: string[]
+}
+
+export interface VoiceSetupProgress {
+  percent: number
+  detail: string
+  done?: boolean
+  error?: string
 }
 
 export interface StorageStats {
@@ -218,6 +226,22 @@ const api = {
       ipcRenderer.on('meeting:updated', handler)
       return () => ipcRenderer.removeListener('meeting:updated', handler)
     }
+  },
+  voice: {
+    status: (): Promise<VoiceEngineStatus> => ipcRenderer.invoke('voice:status'),
+    setup: (): Promise<VoiceEngineStatus> => ipcRenderer.invoke('voice:setup'),
+    onProgress: (cb: (p: VoiceSetupProgress) => void): (() => void) => {
+      const handler = (_e: unknown, p: VoiceSetupProgress): void => cb(p)
+      ipcRenderer.on('voice:progress', handler)
+      return () => ipcRenderer.removeListener('voice:progress', handler)
+    },
+    forget: (): Promise<VoiceEngineStatus> => ipcRenderer.invoke('voice:forget'),
+    /** 'needs-audio': decode the recording and stream it via begin/pcm/finish */
+    identify: (id: string): Promise<'done' | 'needs-audio'> => ipcRenderer.invoke('voice:identify', id),
+    begin: (id: string): Promise<boolean> => ipcRenderer.invoke('voice:begin', id),
+    pcm: (id: string, chunk: ArrayBuffer): void => ipcRenderer.send('voice:pcm', id, chunk),
+    finish: (id: string): Promise<Meeting | null> => ipcRenderer.invoke('voice:finish', id),
+    cancel: (id: string): Promise<void> => ipcRenderer.invoke('voice:cancel', id)
   },
   tags: {
     /** every tag in use, most used first */

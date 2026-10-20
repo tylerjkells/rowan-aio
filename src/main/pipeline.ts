@@ -13,6 +13,7 @@ import { transcribe, meetingPrompt, vocabularyPrompt } from './whisper'
 import { summarizeTranscript } from './summarize'
 import { activeAiModel } from './ai'
 import { getSettings } from './settings'
+import { identifyVoices, syncVoiceprints, voiceIdActive } from './voiceid'
 import type { Meeting } from '../shared/types'
 
 function broadcast(meeting: Meeting): void {
@@ -60,7 +61,9 @@ export async function processMeeting(id: string): Promise<void> {
     }
 
     if (meeting.transcript && meeting.transcript.length > 0) {
-      // live transcription already produced the transcript; drop the safety wav
+      // live transcription already produced the transcript: the voice engine
+      // gets the recording's audio, then the safety wav goes
+      meeting = (await voiceStep(id)) ?? meeting
       rmSync(wavPath(id), { force: true })
     }
 
@@ -89,6 +92,7 @@ export async function processMeeting(id: string): Promise<void> {
         }
         labelSpeakers(id, transcript)
         meeting = update(meeting, { transcript, progress: undefined })
+        meeting = (await voiceStep(id)) ?? meeting
         rmSync(wav, { force: true })
       } catch (err) {
         update(meeting, {
@@ -108,6 +112,47 @@ export async function processMeeting(id: string): Promise<void> {
   } finally {
     inFlight.delete(id)
   }
+}
+
+/**
+ * Tell voices apart and name the ones the voiceprint library knows, when
+ * voice recognition is on. Never fails the meeting: an engine problem is
+ * noted on it and the summary goes ahead with the labels it already had.
+ */
+async function voiceStep(id: string): Promise<Meeting | null> {
+  if (!voiceIdActive() || !existsSync(wavPath(id))) return null
+  return runVoiceIdentification(id, wavPath(id))
+}
+
+/**
+ * Run the voice engine on a meeting's audio (the transcription wav, or one
+ * decoded from the saved recording for an older meeting) and apply what it
+ * finds. Returns the updated meeting, or null when the meeting is gone.
+ */
+export async function runVoiceIdentification(id: string, wav: string): Promise<Meeting | null> {
+  let meeting = readMeeting(id)
+  if (!meeting?.transcript?.length) return meeting
+  const before = meeting.stage
+  meeting = update(meeting, { stage: 'identifying', progress: 0, voiceError: undefined })
+  try {
+    const patch = await identifyVoices(id, wav, (percent) => {
+      const fresh = readMeeting(id)
+      if (fresh) update(fresh, { stage: 'identifying', progress: percent })
+    })
+    const fresh = readMeeting(id)
+    if (!fresh) return null
+    meeting = update(fresh, { ...patch, stage: before, progress: undefined })
+    syncVoiceprints(meeting)
+  } catch (err) {
+    const fresh = readMeeting(id)
+    if (!fresh) return null
+    meeting = update(fresh, {
+      stage: before,
+      progress: undefined,
+      voiceError: err instanceof Error ? err.message : 'Voice recognition failed.'
+    })
+  }
+  return meeting
 }
 
 /**

@@ -23,6 +23,7 @@ interface StoredSettings {
   theme: AppTheme
   vocabulary: string
   vocabFromCalendar: boolean
+  voiceId: boolean
   summaryInstructions: string
   /** tag name (lowercased) -> TAG_COLORS index */
   tagColors: Record<string, number>
@@ -83,6 +84,7 @@ const DEFAULTS: StoredSettings = {
   theme: 'studio',
   vocabulary: '',
   vocabFromCalendar: true,
+  voiceId: false,
   summaryInstructions: '',
   tagColors: {},
   closeToTray: true,
@@ -157,6 +159,7 @@ export function getSettings(): AppSettings {
     theme: s.theme ?? 'studio',
     vocabulary: s.vocabulary ?? '',
     vocabFromCalendar: s.vocabFromCalendar !== false,
+    voiceId: s.voiceId === true,
     summaryInstructions: s.summaryInstructions ?? '',
     tagColors: s.tagColors ?? {},
     closeToTray: s.closeToTray !== false,
@@ -223,6 +226,7 @@ export function updateSettings(
       | 'theme'
       | 'vocabulary'
       | 'vocabFromCalendar'
+      | 'voiceId'
       | 'summaryInstructions'
       | 'closeToTray'
       | 'launchAtLogin'
@@ -285,6 +289,7 @@ export function updateSettings(
   if (patch.theme) s.theme = patch.theme
   if (typeof patch.vocabulary === 'string') s.vocabulary = patch.vocabulary.trim()
   if (typeof patch.vocabFromCalendar === 'boolean') s.vocabFromCalendar = patch.vocabFromCalendar
+  if (typeof patch.voiceId === 'boolean') s.voiceId = patch.voiceId
   if (typeof patch.summaryInstructions === 'string')
     s.summaryInstructions = patch.summaryInstructions.trim().slice(0, 2000)
   if (typeof patch.closeToTray === 'boolean') s.closeToTray = patch.closeToTray

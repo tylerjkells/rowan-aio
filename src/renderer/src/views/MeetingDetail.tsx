@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Meeting } from '../../../shared/types'
+import type { Meeting, VoiceMeta } from '../../../shared/types'
+import { TAG_COLORS } from '../../../shared/tags'
 import {
   BackIcon,
   ChevronIcon,
@@ -14,7 +15,7 @@ import {
 import { parseDueDate } from '../../../shared/dates'
 import { ClickupPushDialog } from '../ClickupPush'
 import { exportFilename, followUpEmail, meetingToMarkdown, summaryToMarkdown } from '../markdown'
-import { retranscribeMeeting } from '../retranscribe'
+import { identifyMeetingVoices, retranscribeMeeting } from '../retranscribe'
 import {
   EditableList,
   EditableText,
@@ -463,6 +464,11 @@ export function MeetingView({
   const [knownOwners, setKnownOwners] = useState<string[]>([])
   const [hasApiKey, setHasApiKey] = useState(false)
   const [autoSummarize, setAutoSummarize] = useState(true)
+  /** voice recognition is switched on and its engine downloaded */
+  const [voiceReady, setVoiceReady] = useState(false)
+  const [voiceOn, setVoiceOn] = useState(false)
+  const [voicePhase, setVoicePhase] = useState<string | null>(null)
+  const [voiceRunError, setVoiceRunError] = useState<string | null>(null)
   const [aiProvider, setAiProvider] = useState<'claude' | 'openai'>('claude')
   const [hasClickup, setHasClickup] = useState(false)
   const [pushIdx, setPushIdx] = useState<number | null>(null)
@@ -499,6 +505,10 @@ export function MeetingView({
         setKnownOwners(['Me', ...[...new Set([...settings.people, ...seen])].sort()])
         setHasApiKey(settings.aiReady)
         setAutoSummarize(settings.autoSummarize)
+        setVoiceOn(settings.voiceId)
+        if (settings.voiceId) {
+          window.scribe.voice.status().then((st) => setVoiceReady(st.ready))
+        }
         setAiProvider(settings.aiProvider)
         setHasClickup(settings.hasClickup)
         setStandingInstructions(settings.summaryInstructions)
@@ -548,7 +558,10 @@ export function MeetingView({
   if (!meeting) return <></>
 
   const working =
-    meeting.stage === 'transcribing' || meeting.stage === 'summarizing' || meeting.stage === 'recorded'
+    meeting.stage === 'transcribing' ||
+    meeting.stage === 'identifying' ||
+    meeting.stage === 'summarizing' ||
+    meeting.stage === 'recorded'
 
   async function rename(): Promise<void> {
     const next = titleRef.current?.value ?? ''
@@ -593,6 +606,24 @@ export function MeetingView({
       setRetranscribeError(err instanceof Error ? err.message : 'Re-transcription failed.')
     } finally {
       setRetranscribing(null)
+    }
+  }
+
+  async function identifyVoices(): Promise<void> {
+    if (!meeting || voicePhase) return
+    setVoiceRunError(null)
+    setVoicePhase('Starting…')
+    try {
+      await identifyMeetingVoices(meeting.id, setVoicePhase)
+      const fresh = await window.scribe.meetings.get(meeting.id)
+      if (fresh) {
+        setMeeting(fresh)
+        if (fresh.summary && !fresh.voiceError) setTranscriptEdited(true)
+      }
+    } catch (err) {
+      setVoiceRunError(err instanceof Error ? err.message : 'Voice recognition failed.')
+    } finally {
+      setVoicePhase(null)
     }
   }
 
@@ -703,6 +734,7 @@ export function MeetingView({
   }
 
   const linkable = meeting.hasAudio
+  const speakerColors = speakerColorMap(meeting.transcript)
 
   return (
     <div className="main-narrow">
@@ -850,6 +882,7 @@ export function MeetingView({
         <ProcessingSteps
           stage={meeting.stage}
           progress={meeting.progress}
+          voices={(voiceOn && voiceReady && meeting.hasAudio) || meeting.stage === 'identifying'}
           summarize={hasApiKey && (autoSummarize || meeting.stage === 'summarizing')}
         />
       )}
@@ -1144,11 +1177,25 @@ export function MeetingView({
                     Re-transcribe
                   </button>
                 )}
+                {voiceOn && voiceReady && meeting.hasAudio && (
+                  <button
+                    className="btn transcript-identify"
+                    disabled={!!voicePhase || working || !!retranscribing}
+                    title="Tell the voices apart on this machine and recognize the ones you have named before"
+                    onClick={identifyVoices}
+                  >
+                    {voicePhase ?? (meeting.voices ? 'Re-identify voices' : 'Identify voices')}
+                  </button>
+                )}
                 {hasApiKey && (
                   <button
                     className="btn transcript-identify"
                     disabled={identifying}
-                    title="Attribute lines to named speakers from conversational context (uses your AI provider, costs a few cents)"
+                    title={
+                      meeting.voices
+                        ? 'Name each voice from what people call each other and the voiceprint matches (uses your AI provider, costs a few cents)'
+                        : 'Attribute lines to named speakers from conversational context (uses your AI provider, costs a few cents)'
+                    }
                     onClick={async () => {
                       setIdentifying(true)
                       setIdentifyError(null)
@@ -1170,6 +1217,11 @@ export function MeetingView({
                 {identifyError && (
                   <span className="field-note error" role="alert">
                     {identifyError}
+                  </span>
+                )}
+                {(voiceRunError ?? meeting.voiceError) && !voicePhase && (
+                  <span className="field-note error" role="alert">
+                    Voice recognition: {voiceRunError ?? meeting.voiceError}
                   </span>
                 )}
                 {transcriptEdited && meeting.summary && (
@@ -1204,6 +1256,8 @@ export function MeetingView({
                           <SpeakerChip
                             speaker={seg.speaker!}
                             label={label!}
+                            color={speakerColors.get(seg.speaker!)}
+                            hint={voiceHint(seg.voice !== undefined ? meeting.voices?.[String(seg.voice)] : undefined)}
                             suggestions={speakerChoices}
                             onRename={async (to) => {
                               const updated = await window.scribe.meetings.renameSpeaker(
@@ -1347,20 +1401,32 @@ export function MeetingView({
 function ProcessingSteps({
   stage,
   progress,
+  voices,
   summarize
 }: {
   stage: Meeting['stage']
   progress?: number
+  /** voice recognition runs on this meeting */
+  voices: boolean
   summarize: boolean
 }): React.JSX.Element {
+  const pastTranscribing = stage === 'identifying' || stage === 'summarizing'
   const steps: { key: string; label: string; state: 'done' | 'now' | 'later'; progress?: number }[] = [
     {
       key: 'transcribe',
       label: 'Transcribing on this machine',
-      state: stage === 'summarizing' ? 'done' : 'now',
+      state: pastTranscribing ? 'done' : 'now',
       progress: stage === 'transcribing' && typeof progress === 'number' ? progress : undefined
     }
   ]
+  if (voices) {
+    steps.push({
+      key: 'voices',
+      label: 'Identifying voices',
+      state: stage === 'summarizing' ? 'done' : stage === 'identifying' ? 'now' : 'later',
+      progress: stage === 'identifying' && typeof progress === 'number' ? progress : undefined
+    })
+  }
   if (summarize) {
     steps.push({
       key: 'summary',
@@ -1391,6 +1457,37 @@ function ProcessingSteps({
       <span className="opt-desc">You can leave this page; it carries on in the background.</span>
     </div>
   )
+}
+
+/** speaker dot colors: yours is the accent, others take the tag palette in order of first appearance */
+function speakerColorMap(transcript: Meeting['transcript']): Map<string, string> {
+  const colors = new Map<string, string>([['me', 'var(--accent)']])
+  let next = 0
+  for (const seg of transcript ?? []) {
+    if (seg.speaker && !colors.has(seg.speaker)) {
+      colors.set(seg.speaker, TAG_COLORS[next++ % TAG_COLORS.length])
+    }
+  }
+  return colors
+}
+
+/** how a voice's name was settled, for the chip's tooltip */
+function voiceHint(meta: VoiceMeta | undefined): string | undefined {
+  if (!meta) return undefined
+  switch (meta.source) {
+    case 'mic':
+      return 'Your voice, from your microphone'
+    case 'you':
+      return 'Named by you; this voice is remembered'
+    case 'voice':
+      return `Recognized by voice${meta.match ? ` (match ${Math.round((1 - meta.match.distance) * 100)}%)` : ''}`
+    case 'ai':
+      return 'Named by the AI from the conversation; rename it if that is wrong'
+    default:
+      return meta.match
+        ? `Might be ${meta.match.name} by voice; rename to confirm`
+        : 'A voice not heard before; rename it and Rowan will remember it'
+  }
 }
 
 /** an action item's wording, editable while the summary is being edited */
@@ -1723,14 +1820,21 @@ function RegenerateButton({
 function SpeakerChip({
   speaker,
   label,
+  color,
+  hint,
   suggestions,
   onRename
 }: {
   speaker: string
   label: string
+  /** this speaker's dot color in the transcript */
+  color?: string
+  /** how the voice engine settled the name */
+  hint?: string
   suggestions: string[]
   onRename: (to: string) => void
 }): React.JSX.Element {
+  const dot = color ? <span className="speaker-dot" style={{ background: color }} aria-hidden="true" /> : null
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [typed, setTyped] = useState(false)
@@ -1738,14 +1842,19 @@ function SpeakerChip({
 
   const editable = speaker !== 'me' && speaker !== 'them'
   if (!editable) {
-    return <span className={`speaker-chip ${speaker === 'me' ? 'me' : 'them'}`}>{label}</span>
+    return (
+      <span className={`speaker-chip ${speaker === 'me' ? 'me' : 'them'}`} title={hint}>
+        {dot}
+        {label}
+      </span>
+    )
   }
 
   if (!editing) {
     return (
       <button
         className="speaker-chip them speaker-chip-btn"
-        title={`Replace "${label}" with a person everywhere in this transcript`}
+        title={`${hint ? `${hint}. ` : ''}Click to replace "${label}" with a person everywhere in this transcript`}
         onClick={(e) => {
           e.stopPropagation()
           setDraft('')
@@ -1754,6 +1863,7 @@ function SpeakerChip({
           setEditing(true)
         }}
       >
+        {dot}
         {label}
       </button>
     )

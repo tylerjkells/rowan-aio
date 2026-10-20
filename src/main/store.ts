@@ -333,7 +333,7 @@ export async function collectLiveTranscript(
   }
 }
 
-async function pcmToWav(rawPath: string, dest: string, bytes: number): Promise<void> {
+export async function pcmToWav(rawPath: string, dest: string, bytes: number): Promise<void> {
   const wav = createWriteStream(dest)
   wav.write(wavHeader(bytes))
   await new Promise<void>((resolve, reject) => {
