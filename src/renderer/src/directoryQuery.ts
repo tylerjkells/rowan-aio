@@ -41,7 +41,7 @@ nm AS (
 ),
 phone AS (
   -- an office line, never a home or cell number, written 856-256-5083: the team only.
-  -- Numbers without all ten digits are left out.
+  -- Numbers without all ten digits, and 555 placeholders, are left out.
   SELECT entity_uid,
          REGEXP_REPLACE(digits, '^(\\d{3})(\\d{3})(\\d{4})$', '\\1-\\2-\\3')
            || CASE WHEN phone_ext IS NOT NULL THEN ' x' || phone_ext END AS phone,
@@ -56,6 +56,7 @@ phone AS (
              AND NVL(phone_status_ind, 'A') <> 'I'
              AND NVL(phone_unlist_ind, 'N') <> 'Y')
    WHERE LENGTH(digits) = 10
+     AND digits NOT LIKE '555%'
 )
 SELECT n.full_name              AS "Name",
        t.position_title         AS "Title",
