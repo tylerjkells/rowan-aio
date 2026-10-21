@@ -287,6 +287,28 @@ function runEngineNow(wav: string, onProgress: (percent: number) => void): Promi
     model: MODEL
   }
   writeFileSync(`${job}.in.json`, JSON.stringify(input))
+
+  // The worker only reports between 20-minute blocks, so a shorter meeting
+  // would sit at 0% until it's done. In between, the bar moves on an estimate
+  // from the audio's length: about 4 minutes per hour of audio on 4 threads.
+  // It eases off as it nears the end rather than stopping, and never goes
+  // back.
+  const audioSec = Math.max(1, (statSync(wav).size - 44) / 32000)
+  const expectedMs = audioSec * 73 * (4 / input.threads)
+  const startedAt = Date.now()
+  let reported = 0
+  let shown = 0
+  const show = (): void => {
+    const t = (Date.now() - startedAt) / expectedMs
+    const estimate = t < 1 ? 80 * t : 80 + 5 * (1 - Math.exp(1 - t))
+    const percent = Math.round(Math.max(reported, estimate))
+    if (percent > shown) {
+      shown = percent
+      onProgress(percent)
+    }
+  }
+  const ticker = setInterval(show, 1000)
+
   return new Promise<VoiceResult>((resolve, reject) => {
     const p = spawn(process.execPath, [workerPath(), `${job}.in.json`, `${job}.out.json`], {
       windowsHide: true,
@@ -303,10 +325,17 @@ function runEngineNow(wav: string, onProgress: (percent: number) => void): Promi
       const s = d.toString()
       stderr += s
       const m = s.match(/progress (\d+)/g)
-      if (m) onProgress(Number(m[m.length - 1].split(' ')[1]))
+      if (m) {
+        reported = Number(m[m.length - 1].split(' ')[1])
+        show()
+      }
     })
-    p.on('error', reject)
+    p.on('error', (err) => {
+      clearInterval(ticker)
+      reject(err)
+    })
     p.on('close', (code) => {
+      clearInterval(ticker)
       if (running === p) running = null
       try {
         if (code !== 0) {
@@ -626,18 +655,10 @@ export function applyVoices(
   return { transcript, voices }
 }
 
-/** run the engine on a meeting's audio and save its voiceprints; returns what to write back */
-export async function identifyVoices(
-  meetingId: string,
-  wav: string,
-  onProgress: (percent: number) => void
-): Promise<Pick<Meeting, 'transcript' | 'voices'>> {
-  const result = await runVoiceEngine(wav, onProgress)
-  // re-read: the meeting may have been renamed or edited while the engine ran
-  const meeting = readMeeting(meetingId)
-  if (!meeting) throw new Error('The meeting was deleted.')
+/** save a finished engine run's voiceprints for a meeting; returns what to write back to it */
+export function saveVoiceRun(meeting: Meeting, result: VoiceResult): Pick<Meeting, 'transcript' | 'voices'> {
   const patch = applyVoices(meeting, result)
-  writeFileSync(printsPath(meetingId), JSON.stringify({ model: result.model, voices: result.voices }))
+  writeFileSync(printsPath(meeting.id), JSON.stringify({ model: result.model, voices: result.voices }))
   return patch
 }
 
