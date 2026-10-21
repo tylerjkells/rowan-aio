@@ -1163,7 +1163,7 @@ function registerIpc(): void {
     return listPeople()
   })
   ipcMain.handle('people:importScan', () => scanDirectoryCsv())
-  ipcMain.handle('people:importApply', (_e, rows: DirectoryImportRow[], opts?: { keepTitles?: boolean }) => {
+  ipcMain.handle('people:importApply', (_e, rows: DirectoryImportRow[], opts?: { fillExisting?: boolean }) => {
     applyDirectoryImport(rows, opts)
     return listPeople()
   })

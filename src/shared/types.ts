@@ -617,6 +617,8 @@ export interface PersonDetails {
 export interface DirectoryImportRow {
   name: string
   details: PersonDetails
+  /** the person already in People this row is (by email or name); 'Me' for you */
+  existing?: string
 }
 
 /** result of scanning a CSV file chosen for directory import */

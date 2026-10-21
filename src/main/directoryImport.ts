@@ -1,8 +1,10 @@
 import { dialog } from 'electron'
 import { readFileSync } from 'fs'
 import { basename } from 'path'
-import { addPerson } from './settings'
+import { addPerson, getSettings } from './settings'
 import { bulkMergeDetails } from './directory'
+import { listPeople } from './people'
+import { SELF, sameFullName } from './identity'
 import type { DirectoryImportRow, DirectoryImportScan, PersonDetails } from '../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -176,16 +178,63 @@ export async function scanDirectoryCsv(): Promise<DirectoryImportScan | null> {
     byKey.set(name.toLowerCase(), { name, details })
   }
 
-  return { file, rows: [...byKey.values()], skipped, mapped }
+  return { file, rows: matchExisting([...byKey.values()]), skipped, mapped }
 }
 
 /**
- * Add everyone to the roster and merge their details in one write. With
- * keepTitles, a title already in the directory stays: the file only fills
- * in blank ones (HR titles are job classes, not what people go by).
+ * Who in an import is already in People: the same email first, then the
+ * same name, then the same person under another first name ("Ty Kells" is
+ * Tyler Kells) when only one fits. You are matched to yourself. Managers are
+ * renamed to the names People knows them by, so the org chart links up.
  */
-export function applyDirectoryImport(rows: DirectoryImportRow[], opts: { keepTitles?: boolean } = {}): number {
-  for (const r of rows) addPerson(r.name)
-  bulkMergeDetails(rows, opts)
-  return rows.length
+function matchExisting(rows: DirectoryImportRow[]): DirectoryImportRow[] {
+  const people = listPeople()
+  const yourName = getSettings().yourName.trim()
+  const byEmail = new Map<string, string>()
+  for (const p of people) {
+    const email = p.details?.email?.trim().toLowerCase()
+    if (email && !byEmail.has(email)) byEmail.set(email, p.name)
+  }
+  /** the name People knows someone by, if they're there */
+  const known = (name: string, email?: string): string | undefined => {
+    if (yourName && sameFullName(name, yourName)) return SELF
+    const byMail = email ? byEmail.get(email.toLowerCase()) : undefined
+    if (byMail) return byMail
+    const exact = people.find((p) => p.name.toLowerCase() === name.toLowerCase())
+    if (exact) return exact.name
+    const close = people.filter((p) => sameFullName(name, p.name))
+    return close.length === 1 ? close[0].name : undefined
+  }
+
+  const matched = rows.map((r) => ({ ...r, existing: known(r.name, r.details.email) }))
+  const renamed = new Map(
+    matched
+      .filter((r) => r.existing)
+      .map((r) => [r.name.toLowerCase(), r.existing === SELF ? yourName : r.existing!])
+  )
+  return matched.map((r) => {
+    const manager = r.details.reportsTo
+    if (!manager) return r
+    const found = known(manager)
+    const to = renamed.get(manager.toLowerCase()) ?? (found === SELF ? yourName : found)
+    return to && to !== manager ? { ...r, details: { ...r.details, reportsTo: to } } : r
+  })
+}
+
+/**
+ * Add the people who aren't in People yet, with their details. Nobody
+ * already there changes, unless fillExisting: then their blank details are
+ * filled in from the file, and nothing already filled in is touched. You are
+ * never added or changed.
+ */
+export function applyDirectoryImport(rows: DirectoryImportRow[], opts: { fillExisting?: boolean } = {}): number {
+  const fresh = rows.filter((r) => !r.existing)
+  for (const r of fresh) addPerson(r.name)
+  const fill = opts.fillExisting
+    ? rows
+        .filter((r) => r.existing && r.existing !== SELF)
+        .map((r) => ({ name: r.existing!, details: r.details }))
+    : []
+  bulkMergeDetails([...fresh, ...fill], { fillOnly: true })
+  return fresh.length + fill.length
 }

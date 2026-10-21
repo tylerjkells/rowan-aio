@@ -183,7 +183,7 @@ function ImportDialog({
 }): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null)
   const [busy, setBusy] = useState(false)
-  const [keepTitles, setKeepTitles] = useState(true)
+  const [fillExisting, setFillExisting] = useState(false)
 
   useEffect(() => {
     ref.current?.showModal()
@@ -191,11 +191,16 @@ function ImportDialog({
 
   async function apply(): Promise<void> {
     setBusy(true)
-    await window.scribe.people.importApply(scan.rows, { keepTitles: !!scan.mapped.title && keepTitles })
+    await window.scribe.people.importApply(scan.rows, { fillExisting })
     onClose(true)
   }
 
-  const preview = scan.rows.slice(0, 8)
+  const fresh = scan.rows.filter((r) => !r.existing)
+  const already = scan.rows.filter((r) => r.existing)
+  // matched under another name: listed, so a wrong match is easy to spot
+  const renamed = already.filter((r) => r.existing!.toLowerCase() !== r.name.toLowerCase())
+  const count = fresh.length + (fillExisting ? already.filter((r) => r.existing !== 'Me').length : 0)
+  const preview = fresh.slice(0, 8)
 
   return (
     <dialog
@@ -212,9 +217,8 @@ function ImportDialog({
       ) : (
         <>
           <p>
-            {scan.rows.length} {scan.rows.length === 1 ? 'person' : 'people'} found
-            {scan.skipped > 0 && <> · {scan.skipped} rows skipped (missing or unusable name)</>}.
-            Fields in the file update existing people; everything else is kept.
+            {fresh.length} new · {already.length} already in People
+            {scan.skipped > 0 && <> · {scan.skipped} rows skipped (missing or unusable name)</>}
           </p>
           <div className="import-mapping">
             {Object.entries(scan.mapped).map(([field, header]) => (
@@ -223,36 +227,60 @@ function ImportDialog({
               </span>
             ))}
           </div>
-          <div className="import-preview">
-            {preview.map((r) => (
-              <div className="import-preview-row" key={r.name}>
-                <span className="import-preview-name">{r.name}</span>
-                <span className="import-preview-sub">
-                  {[r.details.title, r.details.department, r.details.reportsTo && `→ ${r.details.reportsTo}`]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-              </div>
-            ))}
-            {scan.rows.length > preview.length && (
-              <div className="import-preview-more">…and {scan.rows.length - preview.length} more</div>
-            )}
-          </div>
-          {scan.mapped.title && (
-            <label className="import-keep">
-              <input type="checkbox" checked={keepTitles} onChange={(e) => setKeepTitles(e.target.checked)} />
-              Keep the titles already in People; only fill in blank ones
-            </label>
+          {fresh.length > 0 ? (
+            <div className="import-preview">
+              {preview.map((r) => (
+                <div className="import-preview-row" key={r.name}>
+                  <span className="import-preview-name">{r.name}</span>
+                  <span className="import-preview-sub">
+                    {[r.details.title, r.details.department, r.details.reportsTo && `→ ${r.details.reportsTo}`]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </div>
+              ))}
+              {fresh.length > preview.length && (
+                <div className="import-preview-more">…and {fresh.length - preview.length} more</div>
+              )}
+            </div>
+          ) : (
+            <p className="tk-hint">Everyone in this file is already in People.</p>
+          )}
+          {renamed.length > 0 && (
+            <p className="tk-hint">
+              Already here under another name:{' '}
+              {renamed
+                .slice(0, 6)
+                .map((r) => `${r.name} is ${r.existing === 'Me' ? 'you' : r.existing}`)
+                .join(', ')}
+              {renamed.length > 6 && `, and ${renamed.length - 6} more`}.
+            </p>
+          )}
+          {already.length > 0 && (
+            <div className="import-mode" role="radiogroup" aria-label="People already here">
+              <label>
+                <input type="radio" checked={!fillExisting} onChange={() => setFillExisting(false)} />
+                Only add the new people. Everyone already here stays exactly as they are.
+              </label>
+              <label>
+                <input type="radio" checked={fillExisting} onChange={() => setFillExisting(true)} />
+                Also fill in blank details for people already here. Nothing already filled in changes.
+              </label>
+            </div>
           )}
         </>
       )}
       <div className="confirm-actions">
         <button className="btn" onClick={() => onClose(false)} disabled={busy}>
-          Cancel
+          {count > 0 ? 'Cancel' : 'Close'}
         </button>
-        {!scan.error && scan.rows.length > 0 && (
+        {!scan.error && count > 0 && (
           <button className="btn btn-primary" onClick={apply} disabled={busy}>
-            {busy ? 'Importing…' : `Import ${scan.rows.length}`}
+            {busy
+              ? 'Importing…'
+              : fillExisting
+                ? `Import ${count}`
+                : `Add ${count} ${count === 1 ? 'person' : 'people'}`}
           </button>
         )}
       </div>
@@ -410,8 +438,8 @@ function OdsDialog({
       )}
 
       <p className="tk-hint">
-        New people are added and everyone else&apos;s details are refreshed from the file. Nobody is
-        removed: for anyone who has left, open their page and use Edit details → Remove.
+        Only people who aren&apos;t in People yet are added; everyone already here stays as they are.
+        Nobody is removed: for anyone who has left, open their page and use Edit details → Remove.
       </p>
       <div className="confirm-actions">
         <button className="btn" onClick={onClose}>

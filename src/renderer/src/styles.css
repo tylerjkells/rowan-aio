@@ -10474,11 +10474,16 @@ button.tkr-hbar:focus-visible {
 .ods-paste {
   min-height: 140px;
 }
-.import-keep {
+.import-mode {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--s2);
   margin-top: var(--s3);
   font-size: 13px;
   color: var(--ink-soft);
+}
+.import-mode label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
 }
