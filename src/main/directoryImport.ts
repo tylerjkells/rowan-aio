@@ -37,6 +37,29 @@ const normalizeHeader = (h: string): string => h.toLowerCase().replace(/[^a-z0-9
 const isValidName = (name: string): boolean =>
   !!name && name.toLowerCase() !== 'me' && !/[()&+/,]|\b(and|or)\b/i.test(name)
 
+/** words HR systems write in capitals that stay that way when the rest is tidied */
+const ACRONYMS = new Set(['AVP', 'VP', 'SVP', 'EVP', 'PT', 'FT', 'IT', 'HR', 'ID', 'IR', 'LMS', 'SEM', 'OASIS', 'RO', 'RU', 'CEO', 'CFO', 'CIO', 'COO', 'II', 'III', 'IV'])
+const SMALL_WORDS = new Set(['a', 'an', 'and', 'as', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with'])
+
+/**
+ * Banner's all-caps titles, readable: "DIRECTOR, OFFICE OF INSTITUTIONAL
+ * RESEARCH" → "Director, Office of Institutional Research". Anything already
+ * in mixed case is left as it is.
+ */
+function tidyCaps(s: string): string {
+  if (!/[A-Z]/.test(s) || /[a-z]/.test(s)) return s
+  let first = true
+  return s.replace(/[A-Z0-9']+/g, (w) => {
+    const out = ACRONYMS.has(w)
+      ? w
+      : !first && SMALL_WORDS.has(w.toLowerCase())
+        ? w.toLowerCase()
+        : w.charAt(0) + w.slice(1).toLowerCase()
+    first = false
+    return out
+  })
+}
+
 /** "Primas-Young, Carol" → "Carol Primas-Young" (single-comma exports only) */
 function unLastFirst(name: string): string {
   const m = /^([^,]+),\s*([^,]+)$/.exec(name)
@@ -142,8 +165,8 @@ export async function scanDirectoryCsv(): Promise<DirectoryImportScan | null> {
       continue
     }
     const details: PersonDetails = {
-      title: cell('title') || undefined,
-      department: cell('department') || undefined,
+      title: tidyCaps(cell('title')) || undefined,
+      department: tidyCaps(cell('department')) || undefined,
       email: cell('email') || undefined,
       phone: cell('phone') || undefined,
       office: cell('office') || undefined,
@@ -156,9 +179,13 @@ export async function scanDirectoryCsv(): Promise<DirectoryImportScan | null> {
   return { file, rows: [...byKey.values()], skipped, mapped }
 }
 
-/** Add everyone to the roster and merge their details in one write. */
-export function applyDirectoryImport(rows: DirectoryImportRow[]): number {
+/**
+ * Add everyone to the roster and merge their details in one write. With
+ * keepTitles, a title already in the directory stays: the file only fills
+ * in blank ones (HR titles are job classes, not what people go by).
+ */
+export function applyDirectoryImport(rows: DirectoryImportRow[], opts: { keepTitles?: boolean } = {}): number {
   for (const r of rows) addPerson(r.name)
-  bulkMergeDetails(rows)
+  bulkMergeDetails(rows, opts)
   return rows.length
 }

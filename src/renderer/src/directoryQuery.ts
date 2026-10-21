@@ -29,26 +29,33 @@ team AS (
  CONNECT BY NOCYCLE PRIOR person_uid = supervisor_uid
 ),
 nm AS (
-  -- names the way people go by them, and their Rowan email: the team and their managers only
+  -- names the way people go by them, and their Rowan email: the team and their managers only.
+  -- Banner's FNU ("first name unknown") placeholder is left off.
   SELECT person_uid,
-         COALESCE(preferred_first_name, first_name) || ' ' || last_name AS full_name,
+         LTRIM(CASE WHEN UPPER(COALESCE(preferred_first_name, first_name)) <> 'FNU'
+                    THEN COALESCE(preferred_first_name, first_name) END || ' ' || last_name) AS full_name,
          CASE WHEN LOWER(email_preferred_address) LIKE '%@rowan.edu'
               THEN LOWER(email_preferred_address) END AS email
     FROM odsmgr.person_detail
    WHERE person_uid IN (SELECT person_uid FROM team UNION SELECT supervisor_uid FROM team)
 ),
 phone AS (
-  -- an office line, never a home or cell number: the team only
+  -- an office line, never a home or cell number, written 856-256-5083: the team only.
+  -- Numbers without all ten digits are left out.
   SELECT entity_uid,
-         phone_number_combined || CASE WHEN phone_ext IS NOT NULL THEN ' x' || phone_ext END AS phone,
+         REGEXP_REPLACE(digits, '^(\\d{3})(\\d{3})(\\d{4})$', '\\1-\\2-\\3')
+           || CASE WHEN phone_ext IS NOT NULL THEN ' x' || phone_ext END AS phone,
          ROW_NUMBER() OVER (PARTITION BY entity_uid
                             ORDER BY CASE phone_primary_ind WHEN 'Y' THEN 0 ELSE 1 END,
                                      phone_seq_number DESC) AS rn
-    FROM odsmgr.telephone
-   WHERE entity_uid IN (SELECT person_uid FROM team)
-     AND REGEXP_LIKE(UPPER(phone_type_desc), 'OFFICE|BUSINESS|CAMPUS|WORK')
-     AND NVL(phone_status_ind, 'A') <> 'I'
-     AND NVL(phone_unlist_ind, 'N') <> 'Y'
+    FROM (SELECT entity_uid, phone_ext, phone_primary_ind, phone_seq_number,
+                 REGEXP_REPLACE(phone_number_combined, '[^0-9]') AS digits
+            FROM odsmgr.telephone
+           WHERE entity_uid IN (SELECT person_uid FROM team)
+             AND REGEXP_LIKE(UPPER(phone_type_desc), 'OFFICE|BUSINESS|CAMPUS|WORK')
+             AND NVL(phone_status_ind, 'A') <> 'I'
+             AND NVL(phone_unlist_ind, 'N') <> 'Y')
+   WHERE LENGTH(digits) = 10
 )
 SELECT n.full_name              AS "Name",
        t.position_title         AS "Title",

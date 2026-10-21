@@ -183,6 +183,7 @@ function ImportDialog({
 }): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null)
   const [busy, setBusy] = useState(false)
+  const [keepTitles, setKeepTitles] = useState(true)
 
   useEffect(() => {
     ref.current?.showModal()
@@ -190,7 +191,7 @@ function ImportDialog({
 
   async function apply(): Promise<void> {
     setBusy(true)
-    await window.scribe.people.importApply(scan.rows)
+    await window.scribe.people.importApply(scan.rows, { keepTitles: !!scan.mapped.title && keepTitles })
     onClose(true)
   }
 
@@ -237,6 +238,12 @@ function ImportDialog({
               <div className="import-preview-more">…and {scan.rows.length - preview.length} more</div>
             )}
           </div>
+          {scan.mapped.title && (
+            <label className="import-keep">
+              <input type="checkbox" checked={keepTitles} onChange={(e) => setKeepTitles(e.target.checked)} />
+              Keep the titles already in People; only fill in blank ones
+            </label>
+          )}
         </>
       )}
       <div className="confirm-actions">

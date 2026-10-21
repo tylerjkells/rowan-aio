@@ -330,8 +330,9 @@ const api = {
     rename: (from: string, to: string): Promise<PersonSummary[]> =>
       ipcRenderer.invoke('people:rename', from, to),
     importScan: (): Promise<DirectoryImportScan | null> => ipcRenderer.invoke('people:importScan'),
-    importApply: (rows: DirectoryImportRow[]): Promise<PersonSummary[]> =>
-      ipcRenderer.invoke('people:importApply', rows)
+    /** keepTitles: titles already in the directory stay; the file only fills blank ones */
+    importApply: (rows: DirectoryImportRow[], opts?: { keepTitles?: boolean }): Promise<PersonSummary[]> =>
+      ipcRenderer.invoke('people:importApply', rows, opts)
   },
   dashboards: {
     list: (): Promise<DashboardEntry[]> => ipcRenderer.invoke('dashboards:list'),
