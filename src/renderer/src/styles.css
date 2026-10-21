@@ -10451,3 +10451,39 @@ button.tkr-hbar:focus-visible {
   margin-right: 5px;
   vertical-align: 1px;
 }
+
+/* People → Update from ODS: the saved directory query, ready to copy */
+.ods-query-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+.ods-select {
+  flex: 1;
+  min-width: 200px;
+}
+.ods-sql {
+  max-height: 220px;
+  white-space: pre;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+}
+.ods-paste {
+  min-height: 140px;
+}
+.import-mode {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-top: var(--s3);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.import-mode label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}

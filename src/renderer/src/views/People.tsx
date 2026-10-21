@@ -3,9 +3,11 @@ import type {
   DirectoryImportScan,
   PersonDetails,
   PersonProfile,
-  PersonSummary
+  PersonSummary,
+  ToolboxQuery
 } from '../../../shared/types'
 import { BackIcon, DueEditor, formatWhen, isOverdue, useConfirm } from '../ui'
+import { DIRECTORY_SQL } from '../directoryQuery'
 
 const keyOf = (name: string): string => name.trim().toLowerCase()
 const byName = (a: PersonSummary, b: PersonSummary): number => a.name.localeCompare(b.name)
@@ -181,6 +183,7 @@ function ImportDialog({
 }): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null)
   const [busy, setBusy] = useState(false)
+  const [fillExisting, setFillExisting] = useState(false)
 
   useEffect(() => {
     ref.current?.showModal()
@@ -188,11 +191,16 @@ function ImportDialog({
 
   async function apply(): Promise<void> {
     setBusy(true)
-    await window.scribe.people.importApply(scan.rows)
+    await window.scribe.people.importApply(scan.rows, { fillExisting })
     onClose(true)
   }
 
-  const preview = scan.rows.slice(0, 8)
+  const fresh = scan.rows.filter((r) => !r.existing)
+  const already = scan.rows.filter((r) => r.existing)
+  // matched under another name: listed, so a wrong match is easy to spot
+  const renamed = already.filter((r) => r.existing!.toLowerCase() !== r.name.toLowerCase())
+  const count = fresh.length + (fillExisting ? already.filter((r) => r.existing !== 'Me').length : 0)
+  const preview = fresh.slice(0, 8)
 
   return (
     <dialog
@@ -209,9 +217,8 @@ function ImportDialog({
       ) : (
         <>
           <p>
-            {scan.rows.length} {scan.rows.length === 1 ? 'person' : 'people'} found
-            {scan.skipped > 0 && <> · {scan.skipped} rows skipped (missing or unusable name)</>}.
-            Fields in the file update existing people; everything else is kept.
+            {fresh.length} new · {already.length} already in People
+            {scan.skipped > 0 && <> · {scan.skipped} rows skipped (missing or unusable name)</>}
           </p>
           <div className="import-mapping">
             {Object.entries(scan.mapped).map(([field, header]) => (
@@ -220,32 +227,227 @@ function ImportDialog({
               </span>
             ))}
           </div>
-          <div className="import-preview">
-            {preview.map((r) => (
-              <div className="import-preview-row" key={r.name}>
-                <span className="import-preview-name">{r.name}</span>
-                <span className="import-preview-sub">
-                  {[r.details.title, r.details.department, r.details.reportsTo && `→ ${r.details.reportsTo}`]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-              </div>
-            ))}
-            {scan.rows.length > preview.length && (
-              <div className="import-preview-more">…and {scan.rows.length - preview.length} more</div>
-            )}
-          </div>
+          {fresh.length > 0 ? (
+            <div className="import-preview">
+              {preview.map((r) => (
+                <div className="import-preview-row" key={r.name}>
+                  <span className="import-preview-name">{r.name}</span>
+                  <span className="import-preview-sub">
+                    {[r.details.title, r.details.department, r.details.reportsTo && `→ ${r.details.reportsTo}`]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </div>
+              ))}
+              {fresh.length > preview.length && (
+                <div className="import-preview-more">…and {fresh.length - preview.length} more</div>
+              )}
+            </div>
+          ) : (
+            <p className="tk-hint">Everyone in this file is already in People.</p>
+          )}
+          {renamed.length > 0 && (
+            <p className="tk-hint">
+              Already here under another name:{' '}
+              {renamed
+                .slice(0, 6)
+                .map((r) => `${r.name} is ${r.existing === 'Me' ? 'you' : r.existing}`)
+                .join(', ')}
+              {renamed.length > 6 && `, and ${renamed.length - 6} more`}.
+            </p>
+          )}
+          {already.length > 0 && (
+            <div className="import-mode" role="radiogroup" aria-label="People already here">
+              <label>
+                <input type="radio" checked={!fillExisting} onChange={() => setFillExisting(false)} />
+                Only add the new people. Everyone already here stays exactly as they are.
+              </label>
+              <label>
+                <input type="radio" checked={fillExisting} onChange={() => setFillExisting(true)} />
+                Also fill in blank details for people already here. Nothing already filled in changes.
+              </label>
+            </div>
+          )}
         </>
       )}
       <div className="confirm-actions">
         <button className="btn" onClick={() => onClose(false)} disabled={busy}>
-          Cancel
+          {count > 0 ? 'Cancel' : 'Close'}
         </button>
-        {!scan.error && scan.rows.length > 0 && (
+        {!scan.error && count > 0 && (
           <button className="btn btn-primary" onClick={apply} disabled={busy}>
-            {busy ? 'Importing…' : `Import ${scan.rows.length}`}
+            {busy
+              ? 'Importing…'
+              : fillExisting
+                ? `Import ${count}`
+                : `Add ${count} ${count === 1 ? 'person' : 'people'}`}
           </button>
         )}
+      </div>
+    </dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Update from ODS: the steps for refreshing the directory, with the query to
+// run. The query itself lives in Toolbox → SQL; this remembers which saved
+// query it is, so it's never more than a click away when new people start.
+// ---------------------------------------------------------------------------
+
+const DIRECTORY_QUERY = 'People directory'
+/** the query that ships with the app, listed ahead of the saved ones */
+const BUILT_IN: ToolboxQuery = {
+  id: 'built-in',
+  name: 'Rowan Online and Vijay’s team (built in)',
+  sql: DIRECTORY_SQL,
+  addedAt: ''
+}
+/** a saved query whose name says it's the directory export: picked ahead of the built-in one */
+const looksLikeDirectory = (q: ToolboxQuery): boolean =>
+  /directory|people|employee|staff|org ?chart|roster/i.test(q.name)
+
+function OdsDialog({
+  onClose,
+  onChooseCsv
+}: {
+  onClose: () => void
+  onChooseCsv: () => void
+}): React.JSX.Element {
+  const ref = useRef<HTMLDialogElement>(null)
+  const [queries, setQueries] = useState<ToolboxQuery[] | null>(null)
+  const [chosen, setChosen] = useState(() => localStorage.getItem('peopleQueryId') ?? '')
+  const [pasting, setPasting] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    ref.current?.showModal()
+    window.scribe.toolbox.get().then((d) => {
+      setQueries(d.queries)
+      setChosen((id) =>
+        id === BUILT_IN.id || d.queries.some((q) => q.id === id)
+          ? id
+          : (d.queries.find(looksLikeDirectory)?.id ?? BUILT_IN.id)
+      )
+    })
+  }, [])
+
+  function pick(id: string): void {
+    setChosen(id)
+    setCopied(false)
+    localStorage.setItem('peopleQueryId', id)
+  }
+
+  async function saveDraft(): Promise<void> {
+    if (!draft.trim()) return
+    const d = await window.scribe.toolbox.saveQuery({
+      name: DIRECTORY_QUERY,
+      sql: draft,
+      note: 'The directory export for People → Update from ODS.'
+    })
+    setQueries(d.queries)
+    // a new query goes to the top of the list
+    pick(d.queries[0].id)
+    setPasting(false)
+    setDraft('')
+  }
+
+  async function copy(q: ToolboxQuery): Promise<void> {
+    await navigator.clipboard.writeText(q.sql)
+    pick(q.id)
+    setCopied(true)
+  }
+
+  const options = queries ? [BUILT_IN, ...queries] : []
+  const query = options.find((q) => q.id === chosen) ?? BUILT_IN
+
+  return (
+    <dialog
+      ref={ref}
+      className="confirm tk-dialog"
+      onClose={onClose}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose()
+      }}
+    >
+      <h3>Update people from ODS</h3>
+      <ol className="tk-steps">
+        <li>
+          {pasting
+            ? 'Run your directory query in ODS. Paste it below once and it’s kept here for next time.'
+            : 'Copy the directory query below and run it in ODS.'}
+        </li>
+        <li>
+          Export the results as a CSV file. Name is the only column it needs; Title, Department,
+          Email, Phone, Manager, Office and Notes fill in the rest, in any order.
+        </li>
+        <li>Choose that file here. You&apos;ll see a preview before anything changes.</li>
+      </ol>
+
+      {queries === null ? (
+        <p className="tk-hint">Loading your saved queries…</p>
+      ) : pasting ? (
+        <>
+          <label className="pd-field">
+            <span>Paste the query you run for the directory export</span>
+            <textarea
+              className="text-input sql-input ods-paste"
+              spellCheck={false}
+              placeholder="SELECT …"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              autoFocus
+            />
+          </label>
+          <p className="tk-hint">
+            It&apos;s saved in Toolbox → SQL as “{DIRECTORY_QUERY}” and shows up here from then on.
+          </p>
+          <div className="ods-query-bar">
+            <button className="btn" onClick={saveDraft} disabled={!draft.trim()}>
+              Save query
+            </button>
+            <button className="link-btn" onClick={() => setPasting(false)}>
+              Pick one instead
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="ods-query-bar">
+            <select
+              className="text-input ods-select"
+              value={query.id}
+              onChange={(e) => pick(e.target.value)}
+              aria-label="Directory query"
+            >
+              {options.map((q) => (
+                <option key={q.id} value={q.id}>
+                  {q.name}
+                </option>
+              ))}
+            </select>
+            <button className="btn" onClick={() => copy(query)}>
+              {copied ? 'Copied' : 'Copy SQL'}
+            </button>
+            <button className="link-btn" onClick={() => setPasting(true)}>
+              Paste a new one
+            </button>
+          </div>
+          <pre className="sql-block ods-sql">{query.sql}</pre>
+        </>
+      )}
+
+      <p className="tk-hint">
+        Only people who aren&apos;t in People yet are added; everyone already here stays as they are.
+        Nobody is removed: for anyone who has left, open their page and use Edit details → Remove.
+      </p>
+      <div className="confirm-actions">
+        <button className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button className="btn btn-primary" onClick={onChooseCsv}>
+          Choose CSV…
+        </button>
       </div>
     </dialog>
   )
@@ -440,6 +642,7 @@ export function PeopleView({
   )
   const [editing, setEditing] = useState<PersonSummary | 'new' | null>(null)
   const [importScan, setImportScan] = useState<DirectoryImportScan | null>(null)
+  const [updating, setUpdating] = useState(false)
   const [query, setQuery] = useState('')
   const [chartFocus, setChartFocus] = useState<string | null>(null)
 
@@ -453,7 +656,10 @@ export function PeopleView({
 
   async function startImport(): Promise<void> {
     const scan = await window.scribe.people.importScan()
-    if (scan) setImportScan(scan)
+    if (scan) {
+      setUpdating(false)
+      setImportScan(scan)
+    }
   }
 
   const q = query.trim().toLowerCase()
@@ -491,6 +697,8 @@ export function PeopleView({
           if (imported) load()
         }}
       />
+    ) : updating ? (
+      <OdsDialog onClose={() => setUpdating(false)} onChooseCsv={startImport} />
     ) : null
 
   if (loaded && people.length === 0) {
@@ -507,8 +715,8 @@ export function PeopleView({
             <button className="btn btn-primary" onClick={() => setEditing('new')}>
               Add person
             </button>
-            <button className="btn" onClick={startImport}>
-              Import CSV
+            <button className="btn" onClick={() => setUpdating(true)}>
+              Import from ODS
             </button>
           </div>
         </div>
@@ -600,8 +808,12 @@ export function PeopleView({
           <button className="btn" onClick={() => setEditing('new')}>
             Add person
           </button>
-          <button className="btn btn-ghost" onClick={startImport} title="Populate the directory from a CSV export (SQL, Excel, HR system)">
-            Import CSV
+          <button
+            className="btn btn-ghost"
+            onClick={() => setUpdating(true)}
+            title="Bring in new people and refresh everyone's details: the query to run, then the CSV it exports"
+          >
+            Update from ODS
           </button>
         </div>
       </div>

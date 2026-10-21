@@ -64,6 +64,20 @@ const NICKNAMES: Record<string, string[]> = {
   nat: ['natalie', 'nathan'], mel: ['melissa', 'melanie'], carol: ['caroline', 'carolyn']
 }
 
+/**
+ * Two full names for one person: the same surname, and first names that are
+ * the same, a short form of one another ("Ty" for "Tyler"), or a known
+ * nickname ("Mike" for "Michael").
+ */
+export function sameFullName(a: string, b: string): boolean {
+  const [af, ...ar] = norm(a).split(/\s+/)
+  const [bf, ...br] = norm(b).split(/\s+/)
+  if (ar.length === 0 || ar.join(' ') !== br.join(' ')) return false
+  if (af === bf) return true
+  const [short, long] = af.length <= bf.length ? [af, bf] : [bf, af]
+  return (short.length >= 2 && long.startsWith(short)) || (NICKNAMES[short] ?? []).includes(long)
+}
+
 /** looks like several people or a hedge, not one name */
 function isCompound(s: string): boolean {
   return /[()&+/,]|\b(and|or)\b/i.test(s)
