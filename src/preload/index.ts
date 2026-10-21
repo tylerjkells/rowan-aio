@@ -94,6 +94,13 @@ export interface StorageStats {
   audioBytes: number
 }
 
+export interface Rect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 const api = {
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
@@ -374,6 +381,13 @@ const api = {
   clipboard: {
     writeRich: (html: string, text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeRich', html, text)
+  },
+  capture: {
+    /** a part of the page, in page pixels and on screen, onto the clipboard as an image */
+    copy: (rect: Rect): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('capture:copy', rect),
+    /** the same, saved as a PNG wherever the user picks */
+    save: (rect: Rect, name: string): Promise<{ ok: boolean; error?: string; path?: string }> =>
+      ipcRenderer.invoke('capture:save', rect, name)
   },
   brand: {
     get: (): Promise<BrandData> => ipcRenderer.invoke('brand:get'),

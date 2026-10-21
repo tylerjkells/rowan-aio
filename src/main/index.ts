@@ -1202,6 +1202,28 @@ function registerIpc(): void {
   ipcMain.handle('clipboard:writeRich', (_e, html: string, text: string) => {
     clipboard.write({ html, text })
   })
+  // a part of the page as a picture (the service report's snapshot): onto
+  // the clipboard, or into a PNG. The rect is in page pixels and must be on
+  // screen; the image comes out at the display's scale, so it stays sharp.
+  ipcMain.handle('capture:copy', async (e, rect: Electron.Rectangle) => {
+    const image = await e.sender.capturePage(rect)
+    if (image.isEmpty()) return { ok: false, error: 'Nothing was captured' }
+    clipboard.writeImage(image)
+    return { ok: true }
+  })
+  ipcMain.handle('capture:save', async (e, rect: Electron.Rectangle, name: string) => {
+    const image = await e.sender.capturePage(rect)
+    if (image.isEmpty()) return { ok: false, error: 'Nothing was captured' }
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const opts = {
+      defaultPath: join(app.getPath('downloads'), name),
+      filters: [{ name: 'PNG image', extensions: ['png'] }]
+    }
+    const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+    if (res.canceled || !res.filePath) return { ok: false }
+    writeFileSync(res.filePath, image.toPNG())
+    return { ok: true, path: res.filePath }
+  })
 
   ipcMain.handle('brand:get', () => getBrand())
   ipcMain.handle('brand:save', (_e, data: BrandData) => saveBrand(data))
