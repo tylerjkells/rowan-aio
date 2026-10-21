@@ -6,6 +6,10 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.37.0': [
+    'A meeting snapshot of the service report. Switch the report to Snapshot for one page-sized summary of the period, light and ready for a document: a sentence on what came in and what got resolved, the four key numbers, the last 8 weeks (or 6 months) of opened vs resolved, the open queue up to today, and who resolved what. Copy image puts it on the clipboard so you can paste it straight into your meeting notes; Save image keeps a PNG.',
+    'Clicking a meeting reminder joins and records even after it has slid into the notification center, and a reminder can no longer open a blank Electron window instead of Rowan.'
+  ],
   '0.36.0': [
     'Rowan notices calls. When Teams, Webex, Zoom or a browser starts using your microphone and nothing is recording, a notification offers to record it. Once the call app lets go of the mic, the recording stops by itself after the usual 30-second warning. Both are in Settings → Call detection and Auto-end recordings, along with a list of apps to ignore.',
     'Join & record. The meeting reminder now arrives a minute before the start; clicking it opens the call link and starts recording in one go. The Today page has a Join & record button for the meeting that is on now or about to start, and the tray icon shows a red dot while recording, your next meeting when you hover over it, and today\'s remaining meetings in its menu.',
