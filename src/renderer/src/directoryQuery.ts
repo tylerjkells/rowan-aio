@@ -6,10 +6,12 @@
 export const DIRECTORY_SQL = `-- People directory for Rowan AIO: everyone in Rowan Online, plus B. Vijayakumar,
 -- and everyone who reports up to either of them. Export the results as CSV,
 -- then People -> Update from ODS -> Choose CSV.
+-- The team is picked from EMPLOYEE first; names and phones are then looked up
+-- for just those people, since PERSON_DETAIL and TELEPHONE cover everyone in ODS.
 WITH emp AS (
   -- one row per active or on-leave employee: their primary job
-  SELECT person_uid, position_title, home_organization_desc, supervisor_uid
-    FROM (SELECT e.person_uid, e.position_title, e.home_organization_desc, e.supervisor_uid,
+  SELECT /*+ MATERIALIZE */ person_uid, name, position_title, home_organization_desc, supervisor_uid
+    FROM (SELECT e.person_uid, e.name, e.position_title, e.home_organization_desc, e.supervisor_uid,
                  ROW_NUMBER() OVER (PARTITION BY e.person_uid
                                     ORDER BY CASE e.position_contract_type WHEN 'P' THEN 0 ELSE 1 END,
                                              e.effective_date DESC) AS rn
@@ -17,45 +19,46 @@ WITH emp AS (
            WHERE e.employee_status IN ('A', 'L'))
    WHERE rn = 1
 ),
+team AS (
+  -- the starting points, then everyone under them, however many levels down
+  SELECT /*+ MATERIALIZE */ DISTINCT person_uid, supervisor_uid, position_title, home_organization_desc
+    FROM emp
+   START WITH UPPER(home_organization_desc) LIKE '%ROWAN ONLINE%'
+           OR UPPER(name) LIKE 'VIJAY%, B%'
+           OR UPPER(name) LIKE 'B% VIJAY%'
+ CONNECT BY NOCYCLE PRIOR person_uid = supervisor_uid
+),
 nm AS (
-  -- names the way people go by them, and their Rowan email
-  SELECT person_uid, first_name, last_name,
+  -- names the way people go by them, and their Rowan email: the team and their managers only
+  SELECT person_uid,
          COALESCE(preferred_first_name, first_name) || ' ' || last_name AS full_name,
          CASE WHEN LOWER(email_preferred_address) LIKE '%@rowan.edu'
               THEN LOWER(email_preferred_address) END AS email
     FROM odsmgr.person_detail
-),
-team AS (
-  -- the starting points, then everyone under them, however many levels down
-  SELECT DISTINCT person_uid
-    FROM emp
-   START WITH UPPER(home_organization_desc) LIKE '%ROWAN ONLINE%'
-           OR person_uid IN (SELECT person_uid FROM nm
-                              WHERE UPPER(last_name) LIKE 'VIJAY%' AND UPPER(first_name) LIKE 'B%')
- CONNECT BY NOCYCLE PRIOR person_uid = supervisor_uid
+   WHERE person_uid IN (SELECT person_uid FROM team UNION SELECT supervisor_uid FROM team)
 ),
 phone AS (
-  -- an office line, never a home or cell number
+  -- an office line, never a home or cell number: the team only
   SELECT entity_uid,
          phone_number_combined || CASE WHEN phone_ext IS NOT NULL THEN ' x' || phone_ext END AS phone,
          ROW_NUMBER() OVER (PARTITION BY entity_uid
                             ORDER BY CASE phone_primary_ind WHEN 'Y' THEN 0 ELSE 1 END,
                                      phone_seq_number DESC) AS rn
     FROM odsmgr.telephone
-   WHERE REGEXP_LIKE(UPPER(phone_type_desc), 'OFFICE|BUSINESS|CAMPUS|WORK')
+   WHERE entity_uid IN (SELECT person_uid FROM team)
+     AND REGEXP_LIKE(UPPER(phone_type_desc), 'OFFICE|BUSINESS|CAMPUS|WORK')
      AND NVL(phone_status_ind, 'A') <> 'I'
      AND NVL(phone_unlist_ind, 'N') <> 'Y'
 )
 SELECT n.full_name              AS "Name",
-       e.position_title         AS "Title",
-       e.home_organization_desc AS "Department",
+       t.position_title         AS "Title",
+       t.home_organization_desc AS "Department",
        n.email                  AS "Email",
        p.phone                  AS "Phone",
        s.full_name              AS "Manager"
   FROM team t
-  JOIN emp e        ON e.person_uid = t.person_uid
-  JOIN nm n         ON n.person_uid = e.person_uid
-  LEFT JOIN nm s    ON s.person_uid = e.supervisor_uid
-  LEFT JOIN phone p ON p.entity_uid = e.person_uid AND p.rn = 1
+  JOIN nm n         ON n.person_uid = t.person_uid
+  LEFT JOIN nm s    ON s.person_uid = t.supervisor_uid
+  LEFT JOIN phone p ON p.entity_uid = t.person_uid AND p.rn = 1
  ORDER BY "Department", "Name"
 `
