@@ -738,6 +738,206 @@ function attentionOf(t: TeamTicket, now: number): string[] {
   return out
 }
 
+// ---- snapshot -------------------------------------------------------------------
+// The meeting view: one light sheet sized for a document page, copied as an
+// image and pasted into the weekly notes. The period sits at the end of a
+// short run of the periods before it, so a quiet week still has a story.
+
+/** the periods leading up to this one and ending with it: 8 weeks, 6 months, or the year's 12 */
+function trendOf(key: PeriodKey, p: Period): (Range & { label: string })[] {
+  if (key === 'year') return bucketsOf(p)
+  if (key === 'week') {
+    return Array.from({ length: 8 }, (_, i) => {
+      const start = addDays(p.start, (i - 7) * 7)
+      return { start, end: addDays(start, 7), label: fmt(start, { month: 'short', day: 'numeric' }) }
+    })
+  }
+  return Array.from({ length: 6 }, (_, i) => {
+    const start = addMonths(p.start, i - 5)
+    const month = start.toLocaleDateString(undefined, { month: 'short' })
+    return i < 5
+      ? { start, end: addMonths(p.start, i - 4), label: month }
+      : { start, end: p.end, label: key === 'mtd' ? `${month} so far` : month }
+  })
+}
+
+const span = (a: Date, b: Date, o: Intl.DateTimeFormatOptions): string =>
+  new Intl.DateTimeFormat(undefined, o).formatRange(a, b)
+
+function snapshotTitle(key: PeriodKey, p: Period): string {
+  const last = addDays(p.end, -1)
+  if (key === 'week') return `Week of ${span(p.start, last, { month: 'short', day: 'numeric', year: 'numeric' })}`
+  if (key === 'month') return fmt(p.start, { month: 'long', year: 'numeric' })
+  if (key === 'mtd') return `${fmt(p.start, { month: 'long', year: 'numeric' })} to date`
+  return `Last 12 months, ${span(p.start, last, { month: 'short', year: 'numeric' })}`
+}
+
+/** the period in a sentence or two, to open the snapshot */
+function headlineOf(key: PeriodKey, p: Period, opened: number, resolved: number, queue: [number, number] | null): string {
+  const when =
+    key === 'week'
+      ? 'Last week'
+      : key === 'month'
+        ? `In ${fmt(p.start, { month: 'long' })}`
+        : key === 'mtd'
+          ? 'So far this month'
+          : 'Over the last 12 months'
+  const came = opened === 0 ? 'no new tickets came in' : `${opened} ${opened === 1 ? 'ticket' : 'tickets'} came in`
+  const out = `${when}, ${came} and the team resolved ${resolved === 0 ? 'none' : resolved}.`
+  if (!queue) return out
+  const [before, now] = queue
+  const since = fmt(p.start, { month: 'short', day: 'numeric' })
+  const move =
+    now === before
+      ? `is holding at ${now} since ${since}`
+      : `is ${now > before ? 'up' : 'down'} ${Math.abs(now - before)} since ${since}, to ${now}`
+  return `${out} The open queue ${move}.`
+}
+
+/** opened and resolved per period; with stress, the latest pair at full strength and labelled, the rest for context */
+function TrendColumns({
+  buckets,
+  opened,
+  resolved,
+  stress
+}: {
+  buckets: { label: string }[]
+  opened: number[]
+  resolved: number[]
+  stress: boolean
+}): React.JSX.Element {
+  const W = 400
+  const H = 170
+  const L = 26
+  const R = 4
+  const T = 16
+  const B = 22
+  const iw = W - L - R
+  const ih = H - T - B
+  const max = Math.max(1, ...opened, ...resolved)
+  const step = niceStep(max)
+  const top = Math.ceil(max / step) * step
+  const band = iw / buckets.length
+  const w = Math.min(16, (band - 10) / 2)
+  const pair = w * 2 + 2
+  const y = (v: number): number => T + ih - (v / top) * ih
+  const last = buckets.length - 1
+  const ticks: number[] = []
+  for (let v = 0; v <= top; v += step) ticks.push(v)
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Tickets opened and resolved in each period">
+      {ticks.map((v) => (
+        <g key={v}>
+          <line className="tkr-gridline" x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
+          <text className="tkr-axis" x={L - 7} y={y(v) + 4} textAnchor="end">
+            {v}
+          </text>
+        </g>
+      ))}
+      {buckets.map((b, i) => {
+        const x0 = L + i * band + (band - pair) / 2
+        const now = stress && i === last
+        const past = stress && !now
+        return (
+          <g key={i}>
+            <title>{`${b.label}: ${opened[i]} opened, ${resolved[i]} resolved`}</title>
+            <path
+              className={`tkr-col tkr-opened ${past ? 'past' : ''}`}
+              d={columnPath(x0, y(opened[i]), w, T + ih - y(opened[i]))}
+            />
+            <path
+              className={`tkr-col tkr-closed ${past ? 'past' : ''}`}
+              d={columnPath(x0 + w + 2, y(resolved[i]), w, T + ih - y(resolved[i]))}
+            />
+            {now && (
+              <>
+                <text className="tkr-cap strong" x={x0 + w / 2} y={y(opened[i]) - 5} textAnchor="middle">
+                  {opened[i]}
+                </text>
+                <text className="tkr-cap strong" x={x0 + w * 1.5 + 2} y={y(resolved[i]) - 5} textAnchor="middle">
+                  {resolved[i]}
+                </text>
+              </>
+            )}
+            <text className={`tkr-axis ${now ? 'now' : ''}`} x={L + i * band + band / 2} y={H - 6} textAnchor="middle">
+              {b.label}
+            </text>
+          </g>
+        )
+      })}
+      <line className="tkr-baseline" x1={L} x2={W - R} y1={T + ih} y2={T + ih} />
+    </svg>
+  )
+}
+
+/** the open queue at the end of each period: where it started and where it is, labelled */
+function TrendLine({ points }: { points: { label: string; value: number }[] }): React.JSX.Element {
+  const W = 236
+  const H = 170
+  const L = 26
+  const R = 14
+  const T = 18
+  const B = 22
+  const iw = W - L - R
+  const ih = H - T - B
+  const n = points.length
+  const max = Math.max(1, ...points.map((p) => p.value))
+  const step = niceStep(max)
+  const top = Math.ceil(max / step) * step
+  const x = (i: number): number => L + (n <= 1 ? iw / 2 : (i * iw) / (n - 1))
+  const y = (v: number): number => T + ih - (v / top) * ih
+  const ticks: number[] = []
+  for (let v = 0; v <= top; v += step) ticks.push(v)
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p.value)}`).join('')
+  const area = n ? `${line}L${x(n - 1)},${T + ih}L${x(0)},${T + ih}Z` : ''
+  const last = n - 1
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Open tickets at the end of each period">
+      {ticks.map((v) => (
+        <g key={v}>
+          <line className="tkr-gridline" x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
+          <text className="tkr-axis" x={L - 7} y={y(v) + 4} textAnchor="end">
+            {v}
+          </text>
+        </g>
+      ))}
+      <g className="tkr-opened">
+        <path className="tkr-area" d={area} />
+        <path className="tkr-line" d={line} />
+        {points.map((p, i) => (
+          <circle key={i} className="tkr-hit" cx={x(i)} cy={y(p.value)} r={10}>
+            <title>{`${p.label}: ${p.value} open`}</title>
+          </circle>
+        ))}
+        {n > 1 && (
+          <text className="tkr-cap" x={x(0)} y={y(points[0].value) - 9} textAnchor="start">
+            {points[0].value}
+          </text>
+        )}
+        {n > 0 && (
+          <>
+            <circle className="tkr-dot" cx={x(last)} cy={y(points[last].value)} r={4} />
+            <text className="tkr-cap strong" x={x(last)} y={y(points[last].value) - 10} textAnchor="middle">
+              {points[last].value}
+            </text>
+          </>
+        )}
+      </g>
+      {n > 0 && (
+        <text className="tkr-axis" x={x(0)} y={H - 6} textAnchor="start">
+          {points[0].label}
+        </text>
+      )}
+      {n > 1 && (
+        <text className="tkr-axis now" x={x(last)} y={H - 6} textAnchor="end">
+          {points[last].label}
+        </text>
+      )}
+      <line className="tkr-baseline" x1={L} x2={W - R} y1={T + ih} y2={T + ih} />
+    </svg>
+  )
+}
+
 // ---- the view -------------------------------------------------------------------
 
 export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Element {
@@ -751,11 +951,22 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
   const [updating, setUpdating] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
   const [presenting, setPresenting] = useState(false)
+  const [view, setView] = useState<'report' | 'snapshot'>(() =>
+    localStorage.getItem('teamView') === 'snapshot' ? 'snapshot' : 'report'
+  )
+  const [snapStatus, setSnapStatus] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const snapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     window.scribe.team.get().then(setDesk)
   }, [])
+
+  useEffect(() => {
+    if (!snapStatus) return
+    const t = setTimeout(() => setSnapStatus(null), 6000)
+    return () => clearTimeout(t)
+  }, [snapStatus])
 
   // presenting hides the app's chrome and goes full screen; leaving full
   // screen (Esc) ends it
@@ -785,6 +996,32 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
     localStorage.setItem('teamPeriod', p)
   }
 
+  function changeView(v: 'report' | 'snapshot'): void {
+    setView(v)
+    localStorage.setItem('teamView', v)
+  }
+
+  /** the snapshot sheet as a picture: onto the clipboard, or saved as a PNG */
+  async function captureSnapshot(save: boolean): Promise<void> {
+    const el = snapRef.current
+    if (!el) return
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    const b = el.getBoundingClientRect()
+    if (b.top < 0 || b.left < 0 || b.bottom > window.innerHeight || b.right > window.innerWidth) {
+      setSnapStatus('Make the window a little bigger so the whole snapshot shows, then try again.')
+      return
+    }
+    // just inside the sheet's edges, so no sliver of the page behind it comes along
+    const x = Math.ceil(b.left)
+    const y = Math.ceil(b.top)
+    const rect = { x, y, width: Math.floor(b.right) - x, height: Math.floor(b.bottom) - y }
+    const name = `RO Operations ${snapshotTitle(period, p)}.png`.replace(/[\\/:*?"<>|,]/g, '')
+    const r = save ? await window.scribe.capture.save(rect, name) : await window.scribe.capture.copy(rect)
+    if (r.ok) setSnapStatus(save ? 'Saved.' : 'Copied. Paste it into the meeting notes.')
+    else if (r.error) setSnapStatus(`Couldn't capture it: ${r.error}.`)
+  }
+
   /** click a bar to filter to it; click it again to let go */
   function pickFor(dim: Dim): Pick {
     return {
@@ -802,7 +1039,8 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
 
   const tickets = desk?.tickets ?? []
   const p = useMemo(() => periodOf(period), [period])
-  const coverage = desk?.coverageStart ? new Date(desk.coverageStart) : null
+  const coverageStart = desk?.coverageStart ?? null
+  const coverage = coverageStart ? new Date(coverageStart) : null
   const covered = (r: Range): boolean => !!coverage && coverage <= r.start
 
   const report = useMemo(() => {
@@ -873,6 +1111,10 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
       .map((t) => ({ t, age: ageOf(t), idle: (now - Date.parse(t.updatedAt)) / 864e5, why: attentionOf(t, now) }))
       .sort((a, b) => b.age - a.age)
 
+    // the snapshot's run of periods, leaving out any from before the history starts
+    const historyFrom = coverageStart ? Date.parse(coverageStart) : null
+    const trend = trendOf(period, p).filter((b) => historyFrom === null || historyFrom <= b.start.getTime())
+
     return {
       ctx,
       cur,
@@ -883,6 +1125,14 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
       openedSeries: buckets.map((b) => all.filter((t) => inRange(at(t.openedAt), b)).length),
       closedSeries: buckets.map((b) => all.filter((t) => isDone(t) && inRange(at(doneAt(t)), b)).length),
       queueSeries: buckets.map((b) => ({ label: b.label, value: openAt(all, Math.min(b.end.getTime(), now)) })),
+      trend,
+      trendOpened: trend.map((b) => all.filter((t) => inRange(at(t.openedAt), b)).length),
+      trendResolved: trend.map((b) => all.filter((t) => isDone(t) && inRange(at(doneAt(t)), b)).length),
+      trendQueue: [
+        ...trend.map((b) => ({ label: b.label, value: openAt(all, Math.min(b.end.getTime(), now)) })),
+        // a finished period's line runs on to today, so it ends where the Open now tile is
+        ...(p.end.getTime() < now ? [{ label: 'Now', value: open.length }] : [])
+      ],
       team,
       byRequester: top.map(([label, value]) => ({ label, value })),
       topShare: rq.length ? top.reduce((a, [, v]) => a + v, 0) / rq.length : null,
@@ -902,7 +1152,7 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
       hasReplies: tickets.some((t) => t.firstReplyAt !== undefined),
       hasResolved: tickets.some((t) => t.resolvedAt !== undefined)
     }
-  }, [tickets, p, filters])
+  }, [tickets, p, filters, period, coverageStart])
 
   /** change vs an earlier figure, coloured by whether that direction is good */
   function delta(
@@ -947,6 +1197,27 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
         ))}
       </div>
       <span className="mailc-read-bar-gap" />
+      {tickets.length > 0 && (
+        <div className="mode-toggle view-toggle tkr-periods" role="radiogroup" aria-label="View">
+          <button
+            className={view === 'report' ? 'active' : ''}
+            role="radio"
+            aria-checked={view === 'report'}
+            onClick={() => changeView('report')}
+          >
+            Full report
+          </button>
+          <button
+            className={view === 'snapshot' ? 'active' : ''}
+            role="radio"
+            aria-checked={view === 'snapshot'}
+            onClick={() => changeView('snapshot')}
+            title="One page for the meeting notes, ready to copy as an image"
+          >
+            Snapshot
+          </button>
+        </div>
+      )}
       {presenting ? (
         <button className="btn" onClick={stopPresenting}>
           Exit present
@@ -1027,6 +1298,436 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
   const queueRows = queueView === 'attention' ? report.attention : report.oldest
   const sp = report.speed
 
+  const fullReport = (
+    <>
+      <section className="tkr-kpis" aria-label="Key numbers">
+        <div className="tkr-kpi">
+          <span className="tkr-kpi-label">Tickets opened</span>
+          <span className="tkr-kpi-value">{cur.opened.length}</span>
+          {delta(cur.opened.length, prev.opened.length, { goodUp: false })}
+        </div>
+        <div className="tkr-kpi">
+          <span className="tkr-kpi-label">Tickets resolved</span>
+          <span className="tkr-kpi-value">{cur.resolved.length}</span>
+          {delta(cur.resolved.length, prev.resolved.length)}
+        </div>
+        <div className="tkr-kpi">
+          <span className="tkr-kpi-label">Median time to resolve</span>
+          <span className="tkr-kpi-value">
+            {days(cur.median)}
+            {cur.median !== null && <small> {days(cur.median) === '<1' || days(cur.median) === '1' ? 'day' : 'days'}</small>}
+          </span>
+          {delta(cur.median, prev.median, { goodUp: false, unit: ' days', dec: 1 })}
+        </div>
+        <div className="tkr-kpi">
+          <span className="tkr-kpi-label">Median first reply</span>
+          <span className="tkr-kpi-value">
+            {report.hasReplies ? replyNum : 'n/a'}
+            {report.hasReplies && replyUnit && <small> {replyUnit}</small>}
+          </span>
+          {report.hasReplies ? (
+            delta(cur.replyMedian, prev.replyMedian, { goodUp: false, fmt: hrs })
+          ) : (
+            <span className="tkr-delta">Fills in on the next update</span>
+          )}
+        </div>
+        <div className="tkr-kpi">
+          <span className="tkr-kpi-label">Resolved within 14 days</span>
+          <span className="tkr-kpi-value">{pctOf(cur.within[14])}</span>
+          {delta(cur.within[14], prev.within[14], { pct: true })}
+        </div>
+        <div className="tkr-kpi">
+          <span className="tkr-kpi-label">Open right now</span>
+          <span className="tkr-kpi-value">{open.length}</span>
+          {delta(open.length, report.openAtStart, {
+            goodUp: false,
+            vs: `since ${fmt(p.start, { month: 'short', day: 'numeric' })}`,
+            cover: p
+          })}
+        </div>
+      </section>
+
+      <div className="tkr-grid">
+        <section className="tkr-card span-8">
+          <h3>Opened vs resolved</h3>
+          <p className="tkr-note">{bucketWord}. Resolved bars taller than opened means the queue is shrinking.</p>
+          <OpenedClosed buckets={report.buckets} opened={report.openedSeries} closed={report.closedSeries} />
+        </section>
+        <section className="tkr-card span-4">
+          <h3>Open queue</h3>
+          <p className="tkr-note">Tickets open at the end of each {endWord}.</p>
+          <QueueLine points={report.queueSeries} />
+        </section>
+
+        {/* ahead of Team members so it pairs with Open queue when the page narrows */}
+        <section className="tkr-card span-4">
+          <h3>How tickets ended</h3>
+          <p className="tkr-note">Tickets resolved this period.</p>
+          <HBars items={report.byOutcome} series="closed" pick={pickFor('outcome')} />
+          {(report.chased > 0 || report.reopened > 0 || report.reassigned > 0) && (
+            <ul className="tkr-facts">
+              {report.chased > 0 && (
+                <li>
+                  <b>{report.chased}</b> opened this period had the requester ask for an update
+                </li>
+              )}
+              {report.reopened > 0 && (
+                <li>
+                  <b>{report.reopened}</b> reopened after being resolved
+                </li>
+              )}
+              {report.reassigned > 0 && (
+                <li>
+                  <b>{report.reassigned}</b> moved between assignment groups
+                </li>
+              )}
+            </ul>
+          )}
+        </section>
+        <section className="tkr-card span-8">
+          <h3>Team members</h3>
+          <p className="tkr-note">
+            Resolved this period and open now, by who each ticket is assigned to. Click a name to
+            filter the page to them.
+          </p>
+          <TeamTable rows={report.team} pick={pickFor('person')} showReply={report.hasReplies} />
+        </section>
+
+        <section className="tkr-card span-4">
+          <h3>Time to resolve</h3>
+          <p className="tkr-note">How long this period&apos;s resolved tickets were open.</p>
+          <HBars items={report.byTime} series="closed" pick={pickFor('speed')} />
+          {sp.durations.length > 0 && (
+            <p className="tkr-stats">
+              Within 3 days <b>{pctOf(sp.within[3])}</b> · 7 days <b>{pctOf(sp.within[7])}</b> · 30 days{' '}
+              <b>{pctOf(sp.within[30])}</b>
+              <br />9 in 10 resolved within <b>{days(sp.p90)} days</b>
+            </p>
+          )}
+        </section>
+        <section className="tkr-card span-4">
+          <h3>{report.useType ? 'Request types' : 'How requests came in'}</h3>
+          <p className="tkr-note">
+            Opened this period, {report.useType ? 'by request type' : 'by channel'}, with the median days to
+            resolve each.
+          </p>
+          <HBars items={report.byType} series="opened" pick={pickFor('type')} />
+        </section>
+        <section className="tkr-card span-4">
+          <h3>Top requesters</h3>
+          <p className="tkr-note">
+            {report.topShare !== null && report.requesterCount > report.byRequester.length
+              ? `These ${report.byRequester.length} opened ${pctOf(report.topShare)} of this period's tickets.`
+              : 'Who opened the most tickets this period.'}
+          </p>
+          <HBars items={report.byRequester} series="opened" pick={pickFor('requester')} />
+        </section>
+
+        <section className="tkr-card span-6">
+          <h3>Open queue by age</h3>
+          <p className="tkr-note">Everything open right now, whatever the period.</p>
+          <HBars items={report.byAge} series="opened" pick={pickFor('age')} empty="Nothing open." />
+        </section>
+        <section className="tkr-card span-6 md-12">
+          <h3>Open queue by status</h3>
+          <p className="tkr-note">Everything open right now, whatever the period.</p>
+          <HBars items={report.byState} series="opened" pick={pickFor('status')} empty="Nothing open." />
+        </section>
+
+        <section className="tkr-card span-12">
+          <div className="tkr-card-head">
+            <h3>{queueView === 'attention' ? `Needs attention (${report.attention.length})` : `Oldest open (${open.length})`}</h3>
+            <div className="mode-toggle view-toggle tkr-periods" role="radiogroup" aria-label="Which open tickets">
+              <button
+                className={queueView === 'attention' ? 'active' : ''}
+                role="radio"
+                aria-checked={queueView === 'attention'}
+                onClick={() => setQueueView('attention')}
+              >
+                Needs attention
+              </button>
+              <button
+                className={queueView === 'oldest' ? 'active' : ''}
+                role="radio"
+                aria-checked={queueView === 'oldest'}
+                onClick={() => setQueueView('oldest')}
+              >
+                Oldest open
+              </button>
+            </div>
+          </div>
+          <p className="tkr-note">
+            {queueView === 'attention'
+              ? 'Open tickets that are unassigned, quiet for 14 days or more, still waiting on a first reply, or chased by the requester. Oldest first.'
+              : 'Everything open right now, oldest first.'}
+          </p>
+          {queueRows.length === 0 ? (
+            <p className="tkr-none">{queueView === 'attention' ? 'Nothing needs attention.' : 'The queue is clear.'}</p>
+          ) : (
+            <div className="tkr-table-wrap">
+              <table className="tkr-table">
+                <thead>
+                  <tr>
+                    <th>Ticket</th>
+                    <th>Request</th>
+                    <th>Requester</th>
+                    <th>Assigned to</th>
+                    <th className="num">Open</th>
+                    <th className="num">Last update</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(queueAll ? queueRows : queueRows.slice(0, 10)).map(({ t, age, idle, why }) => (
+                    <tr key={t.number}>
+                      <td>{link(t)}</td>
+                      <td>
+                        {t.title}
+                        {why.length > 0 && (
+                          <span className="tkr-tags">
+                            {why.map((w) => (
+                              <span className="tkr-tag" key={w}>
+                                {w}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                      </td>
+                      <td>{person(t.caller)}</td>
+                      <td>{person(t.assignee) || 'Unassigned'}</td>
+                      <td className="num">{Math.floor(age)} d</td>
+                      <td className="num">{idle < 1 ? 'Today' : `${Math.floor(idle)} d ago`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {queueRows.length > 10 && (
+                <button className="link-btn tkr-more" onClick={() => setQueueAll(!queueAll)}>
+                  {queueAll ? 'Show the first 10' : `Show all ${queueRows.length}`}
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="tkr-card span-12">
+          <h3>Tickets resolved this period ({cur.resolved.length})</h3>
+          <p className="tkr-note">Newest first.</p>
+          {cur.resolved.length === 0 ? (
+            <p className="tkr-none">No tickets resolved in this period.</p>
+          ) : (
+            <div className="tkr-table-wrap">
+              <table className="tkr-table">
+                <thead>
+                  <tr>
+                    <th>Ticket</th>
+                    <th>Request</th>
+                    <th>Requester</th>
+                    <th>Assigned to</th>
+                    <th className="num">Opened</th>
+                    <th className="num">Resolved</th>
+                    <th className="num">Days</th>
+                    {report.hasReplies && <th className="num">First reply</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {cur.resolved
+                    .slice()
+                    .sort((a, b) => Date.parse(doneAt(b)) - Date.parse(doneAt(a)))
+                    .map((t) => {
+                      const outcome = outcomeOf(t)
+                      const by = t.resolvedBy && t.resolvedBy !== t.assignee ? person(t.resolvedBy) : ''
+                      const reply = replyHours(t)
+                      return (
+                        <tr key={t.number}>
+                          <td>{link(t)}</td>
+                          <td>
+                            {t.title}
+                            {outcome !== 'Resolved' && (
+                              <span className="tkr-tags">
+                                <span className="tkr-tag">{outcome}</span>
+                              </span>
+                            )}
+                          </td>
+                          <td>{person(t.caller)}</td>
+                          <td>
+                            {person(t.assignee) || 'Unassigned'}
+                            {by && <span className="tkr-sub">Resolved by {by}</span>}
+                          </td>
+                          <td className="num">{short(t.openedAt)}</td>
+                          <td className="num">{short(doneAt(t))}</td>
+                          <td className="num">{days(Math.max(0, resolveDays(t)))}</td>
+                          {report.hasReplies && <td className="num">{reply === null ? '–' : hrs(reply)}</td>}
+                        </tr>
+                      )
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+      <p className="tkr-foot">
+        Source: support.rowan.edu, RO Operations assignment group. Resolve times run from when a
+        ticket was opened to when it was marked resolved. First reply is the team&apos;s first
+        comment the requester could see.
+        {coverage && ` History from ${fmt(coverage, { month: 'long', year: 'numeric' })}.`}
+      </p>
+    </>
+  )
+
+  const resolvedBy = report.team
+    .filter((r) => r.resolved > 0 && (!filters.person || r.label === filters.person))
+    .map((r) => ({ label: r.label, value: r.resolved }))
+  const trendWord = period === 'week' ? 'week' : 'month'
+  // the tiles are narrow: name the comparison briefly
+  const snapVs =
+    period === 'mtd'
+      ? `vs ${span(p.prev.start, addDays(p.prev.end, -1), { month: 'short', day: 'numeric' })}`
+      : `vs prior ${period === 'year' ? 'year' : trendWord}`
+  const snapshot = (
+    <div className="tks-wrap">
+      {!presenting && (
+        <div className="tks-actions">
+          <button className="btn btn-primary" onClick={() => captureSnapshot(false)}>
+            Copy image
+          </button>
+          <button className="btn btn-ghost" onClick={() => captureSnapshot(true)}>
+            Save image…
+          </button>
+          <span className="tks-status" role="status">
+            {snapStatus ?? 'Sized for a document page. Copy it, then paste into the meeting notes.'}
+          </span>
+        </div>
+      )}
+      <div className="tks" ref={snapRef}>
+        <header className="tks-head">
+          <div>
+            <p className="tks-eyebrow">RO Operations · Service report</p>
+            <h3 className="tks-title">{snapshotTitle(period, p)}</h3>
+          </div>
+          {desk.syncedAt && (
+            <span className="tks-asof">
+              Data as of{' '}
+              {new Date(desk.syncedAt).toLocaleString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+              })}
+            </span>
+          )}
+        </header>
+        {chips.length > 0 && (
+          <p className="tks-filtered">
+            Filtered to {chips.map((d) => `${DIM_LABEL[d].toLowerCase()} ${filters[d]}`).join(', ')}
+          </p>
+        )}
+        <p className="tks-headline">
+          {headlineOf(
+            period,
+            p,
+            cur.opened.length,
+            cur.resolved.length,
+            covered(p) ? [report.openAtStart, open.length] : null
+          )}
+        </p>
+
+        <section className="tkr-kpis" aria-label="Key numbers">
+          <div className="tkr-kpi">
+            <span className="tkr-kpi-label">Opened</span>
+            <span className="tkr-kpi-value">{cur.opened.length}</span>
+            {delta(cur.opened.length, prev.opened.length, { goodUp: false, vs: snapVs })}
+          </div>
+          <div className="tkr-kpi">
+            <span className="tkr-kpi-label">Resolved</span>
+            <span className="tkr-kpi-value">{cur.resolved.length}</span>
+            {delta(cur.resolved.length, prev.resolved.length, { vs: snapVs })}
+          </div>
+          <div className="tkr-kpi">
+            <span className="tkr-kpi-label">Median to resolve</span>
+            <span className="tkr-kpi-value">
+              {days(cur.median)}
+              {cur.median !== null && <small> {days(cur.median) === '<1' || days(cur.median) === '1' ? 'day' : 'days'}</small>}
+            </span>
+            {delta(cur.median, prev.median, { goodUp: false, unit: ' days', dec: 1, vs: snapVs })}
+          </div>
+          <div className="tkr-kpi">
+            <span className="tkr-kpi-label">Open now</span>
+            <span className="tkr-kpi-value">{open.length}</span>
+            {delta(open.length, report.openAtStart, {
+              goodUp: false,
+              vs: `since ${fmt(p.start, { month: 'short', day: 'numeric' })}`,
+              cover: p
+            })}
+          </div>
+        </section>
+
+        <div className="tks-row tks-trend">
+          <section>
+            <div className="tks-sec-head">
+              <h4>Opened vs resolved</h4>
+              <span className="tkr-legend">
+                <span>
+                  <i className="tkr-key tkr-opened" /> Opened
+                </span>
+                <span>
+                  <i className="tkr-key tkr-closed" /> Resolved
+                </span>
+              </span>
+            </div>
+            <p className="tks-sub">
+              {period === 'year'
+                ? 'Each month of the last 12'
+                : `The last ${report.trend.length} ${trendWord}s, this ${trendWord} in full color`}
+            </p>
+            <TrendColumns
+              buckets={report.trend}
+              opened={report.trendOpened}
+              resolved={report.trendResolved}
+              stress={period !== 'year'}
+            />
+          </section>
+          <section>
+            <h4>Open queue</h4>
+            <p className="tks-sub">
+              Open at the end of each {trendWord}
+              {report.trendQueue.at(-1)?.label === 'Now' ? ', and now' : ''}
+            </p>
+            <TrendLine points={report.trendQueue} />
+          </section>
+        </div>
+
+        <div className="tks-row tks-split">
+          <section>
+            <h4>Resolved by</h4>
+            <p className="tks-sub">Tickets each person resolved</p>
+            <HBars items={resolvedBy.slice(0, 5)} series="closed" empty="Nothing resolved." />
+            {resolvedBy.length > 5 && <p className="tks-more">and {resolvedBy.length - 5} more</p>}
+          </section>
+          <section>
+            <h4>Open by age</h4>
+            <p className="tks-sub">
+              {report.oldest.length > 0
+                ? `The oldest has been open ${Math.floor(report.oldest[0].age)} days`
+                : 'Everything open right now'}
+            </p>
+            <HBars items={report.byAge} series="opened" empty="Nothing open." />
+          </section>
+          <section>
+            <h4>Open by status</h4>
+            <p className="tks-sub">Everything open right now</p>
+            <HBars items={report.byState.slice(0, 5)} series="opened" empty="Nothing open." />
+          </section>
+        </div>
+
+        <p className="tks-foot">
+          ServiceNow (support.rowan.edu), RO Operations assignment group. Time to resolve runs from
+          opened to resolved.
+        </p>
+      </div>
+    </div>
+  )
+
   return (
     <div className={`tkr ${presenting ? 'presenting' : ''}`} ref={rootRef}>
       {toolbar}
@@ -1047,24 +1748,26 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
             </span>
           </div>
         )}
-        <p className="tkr-range">
-          <b>{p.label}</b>
-          {!covered(p) && coverage && (
-            <span> (data starts {fmt(coverage)}, so this period is only partly covered)</span>
-          )}
-          {desk.syncedAt && (
-            <span className="tkr-asof">
-              Data as of{' '}
-              {new Date(desk.syncedAt).toLocaleString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit'
-              })}
-            </span>
-          )}
-          {!presenting && chips.length === 0 && <span className="tkr-hint">Click a bar or a name to filter the page</span>}
-        </p>
+        {view === 'report' && (
+          <p className="tkr-range">
+            <b>{p.label}</b>
+            {!covered(p) && coverage && (
+              <span> (data starts {fmt(coverage)}, so this period is only partly covered)</span>
+            )}
+            {desk.syncedAt && (
+              <span className="tkr-asof">
+                Data as of{' '}
+                {new Date(desk.syncedAt).toLocaleString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit'
+                })}
+              </span>
+            )}
+            {!presenting && chips.length === 0 && <span className="tkr-hint">Click a bar or a name to filter the page</span>}
+          </p>
+        )}
         {chips.length > 0 && (
           <div className="tkr-filters" role="group" aria-label="Filters">
             <span className="tkr-filters-label">Filtered to</span>
@@ -1091,278 +1794,7 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
           </div>
         )}
 
-        <section className="tkr-kpis" aria-label="Key numbers">
-          <div className="tkr-kpi">
-            <span className="tkr-kpi-label">Tickets opened</span>
-            <span className="tkr-kpi-value">{cur.opened.length}</span>
-            {delta(cur.opened.length, prev.opened.length, { goodUp: false })}
-          </div>
-          <div className="tkr-kpi">
-            <span className="tkr-kpi-label">Tickets resolved</span>
-            <span className="tkr-kpi-value">{cur.resolved.length}</span>
-            {delta(cur.resolved.length, prev.resolved.length)}
-          </div>
-          <div className="tkr-kpi">
-            <span className="tkr-kpi-label">Median time to resolve</span>
-            <span className="tkr-kpi-value">
-              {days(cur.median)}
-              {cur.median !== null && <small> {days(cur.median) === '<1' || days(cur.median) === '1' ? 'day' : 'days'}</small>}
-            </span>
-            {delta(cur.median, prev.median, { goodUp: false, unit: ' days', dec: 1 })}
-          </div>
-          <div className="tkr-kpi">
-            <span className="tkr-kpi-label">Median first reply</span>
-            <span className="tkr-kpi-value">
-              {report.hasReplies ? replyNum : 'n/a'}
-              {report.hasReplies && replyUnit && <small> {replyUnit}</small>}
-            </span>
-            {report.hasReplies ? (
-              delta(cur.replyMedian, prev.replyMedian, { goodUp: false, fmt: hrs })
-            ) : (
-              <span className="tkr-delta">Fills in on the next update</span>
-            )}
-          </div>
-          <div className="tkr-kpi">
-            <span className="tkr-kpi-label">Resolved within 14 days</span>
-            <span className="tkr-kpi-value">{pctOf(cur.within[14])}</span>
-            {delta(cur.within[14], prev.within[14], { pct: true })}
-          </div>
-          <div className="tkr-kpi">
-            <span className="tkr-kpi-label">Open right now</span>
-            <span className="tkr-kpi-value">{open.length}</span>
-            {delta(open.length, report.openAtStart, {
-              goodUp: false,
-              vs: `since ${fmt(p.start, { month: 'short', day: 'numeric' })}`,
-              cover: p
-            })}
-          </div>
-        </section>
-
-        <div className="tkr-grid">
-          <section className="tkr-card span-8">
-            <h3>Opened vs resolved</h3>
-            <p className="tkr-note">{bucketWord}. Resolved bars taller than opened means the queue is shrinking.</p>
-            <OpenedClosed buckets={report.buckets} opened={report.openedSeries} closed={report.closedSeries} />
-          </section>
-          <section className="tkr-card span-4">
-            <h3>Open queue</h3>
-            <p className="tkr-note">Tickets open at the end of each {endWord}.</p>
-            <QueueLine points={report.queueSeries} />
-          </section>
-
-          {/* ahead of Team members so it pairs with Open queue when the page narrows */}
-          <section className="tkr-card span-4">
-            <h3>How tickets ended</h3>
-            <p className="tkr-note">Tickets resolved this period.</p>
-            <HBars items={report.byOutcome} series="closed" pick={pickFor('outcome')} />
-            {(report.chased > 0 || report.reopened > 0 || report.reassigned > 0) && (
-              <ul className="tkr-facts">
-                {report.chased > 0 && (
-                  <li>
-                    <b>{report.chased}</b> opened this period had the requester ask for an update
-                  </li>
-                )}
-                {report.reopened > 0 && (
-                  <li>
-                    <b>{report.reopened}</b> reopened after being resolved
-                  </li>
-                )}
-                {report.reassigned > 0 && (
-                  <li>
-                    <b>{report.reassigned}</b> moved between assignment groups
-                  </li>
-                )}
-              </ul>
-            )}
-          </section>
-          <section className="tkr-card span-8">
-            <h3>Team members</h3>
-            <p className="tkr-note">
-              Resolved this period and open now, by who each ticket is assigned to. Click a name to
-              filter the page to them.
-            </p>
-            <TeamTable rows={report.team} pick={pickFor('person')} showReply={report.hasReplies} />
-          </section>
-
-          <section className="tkr-card span-4">
-            <h3>Time to resolve</h3>
-            <p className="tkr-note">How long this period&apos;s resolved tickets were open.</p>
-            <HBars items={report.byTime} series="closed" pick={pickFor('speed')} />
-            {sp.durations.length > 0 && (
-              <p className="tkr-stats">
-                Within 3 days <b>{pctOf(sp.within[3])}</b> · 7 days <b>{pctOf(sp.within[7])}</b> · 30 days{' '}
-                <b>{pctOf(sp.within[30])}</b>
-                <br />9 in 10 resolved within <b>{days(sp.p90)} days</b>
-              </p>
-            )}
-          </section>
-          <section className="tkr-card span-4">
-            <h3>{report.useType ? 'Request types' : 'How requests came in'}</h3>
-            <p className="tkr-note">
-              Opened this period, {report.useType ? 'by request type' : 'by channel'}, with the median days to
-              resolve each.
-            </p>
-            <HBars items={report.byType} series="opened" pick={pickFor('type')} />
-          </section>
-          <section className="tkr-card span-4">
-            <h3>Top requesters</h3>
-            <p className="tkr-note">
-              {report.topShare !== null && report.requesterCount > report.byRequester.length
-                ? `These ${report.byRequester.length} opened ${pctOf(report.topShare)} of this period's tickets.`
-                : 'Who opened the most tickets this period.'}
-            </p>
-            <HBars items={report.byRequester} series="opened" pick={pickFor('requester')} />
-          </section>
-
-          <section className="tkr-card span-6">
-            <h3>Open queue by age</h3>
-            <p className="tkr-note">Everything open right now, whatever the period.</p>
-            <HBars items={report.byAge} series="opened" pick={pickFor('age')} empty="Nothing open." />
-          </section>
-          <section className="tkr-card span-6 md-12">
-            <h3>Open queue by status</h3>
-            <p className="tkr-note">Everything open right now, whatever the period.</p>
-            <HBars items={report.byState} series="opened" pick={pickFor('status')} empty="Nothing open." />
-          </section>
-
-          <section className="tkr-card span-12">
-            <div className="tkr-card-head">
-              <h3>{queueView === 'attention' ? `Needs attention (${report.attention.length})` : `Oldest open (${open.length})`}</h3>
-              <div className="mode-toggle view-toggle tkr-periods" role="radiogroup" aria-label="Which open tickets">
-                <button
-                  className={queueView === 'attention' ? 'active' : ''}
-                  role="radio"
-                  aria-checked={queueView === 'attention'}
-                  onClick={() => setQueueView('attention')}
-                >
-                  Needs attention
-                </button>
-                <button
-                  className={queueView === 'oldest' ? 'active' : ''}
-                  role="radio"
-                  aria-checked={queueView === 'oldest'}
-                  onClick={() => setQueueView('oldest')}
-                >
-                  Oldest open
-                </button>
-              </div>
-            </div>
-            <p className="tkr-note">
-              {queueView === 'attention'
-                ? 'Open tickets that are unassigned, quiet for 14 days or more, still waiting on a first reply, or chased by the requester. Oldest first.'
-                : 'Everything open right now, oldest first.'}
-            </p>
-            {queueRows.length === 0 ? (
-              <p className="tkr-none">{queueView === 'attention' ? 'Nothing needs attention.' : 'The queue is clear.'}</p>
-            ) : (
-              <div className="tkr-table-wrap">
-                <table className="tkr-table">
-                  <thead>
-                    <tr>
-                      <th>Ticket</th>
-                      <th>Request</th>
-                      <th>Requester</th>
-                      <th>Assigned to</th>
-                      <th className="num">Open</th>
-                      <th className="num">Last update</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(queueAll ? queueRows : queueRows.slice(0, 10)).map(({ t, age, idle, why }) => (
-                      <tr key={t.number}>
-                        <td>{link(t)}</td>
-                        <td>
-                          {t.title}
-                          {why.length > 0 && (
-                            <span className="tkr-tags">
-                              {why.map((w) => (
-                                <span className="tkr-tag" key={w}>
-                                  {w}
-                                </span>
-                              ))}
-                            </span>
-                          )}
-                        </td>
-                        <td>{person(t.caller)}</td>
-                        <td>{person(t.assignee) || 'Unassigned'}</td>
-                        <td className="num">{Math.floor(age)} d</td>
-                        <td className="num">{idle < 1 ? 'Today' : `${Math.floor(idle)} d ago`}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {queueRows.length > 10 && (
-                  <button className="link-btn tkr-more" onClick={() => setQueueAll(!queueAll)}>
-                    {queueAll ? 'Show the first 10' : `Show all ${queueRows.length}`}
-                  </button>
-                )}
-              </div>
-            )}
-          </section>
-
-          <section className="tkr-card span-12">
-            <h3>Tickets resolved this period ({cur.resolved.length})</h3>
-            <p className="tkr-note">Newest first.</p>
-            {cur.resolved.length === 0 ? (
-              <p className="tkr-none">No tickets resolved in this period.</p>
-            ) : (
-              <div className="tkr-table-wrap">
-                <table className="tkr-table">
-                  <thead>
-                    <tr>
-                      <th>Ticket</th>
-                      <th>Request</th>
-                      <th>Requester</th>
-                      <th>Assigned to</th>
-                      <th className="num">Opened</th>
-                      <th className="num">Resolved</th>
-                      <th className="num">Days</th>
-                      {report.hasReplies && <th className="num">First reply</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cur.resolved
-                      .slice()
-                      .sort((a, b) => Date.parse(doneAt(b)) - Date.parse(doneAt(a)))
-                      .map((t) => {
-                        const outcome = outcomeOf(t)
-                        const by = t.resolvedBy && t.resolvedBy !== t.assignee ? person(t.resolvedBy) : ''
-                        const reply = replyHours(t)
-                        return (
-                          <tr key={t.number}>
-                            <td>{link(t)}</td>
-                            <td>
-                              {t.title}
-                              {outcome !== 'Resolved' && (
-                                <span className="tkr-tags">
-                                  <span className="tkr-tag">{outcome}</span>
-                                </span>
-                              )}
-                            </td>
-                            <td>{person(t.caller)}</td>
-                            <td>
-                              {person(t.assignee) || 'Unassigned'}
-                              {by && <span className="tkr-sub">Resolved by {by}</span>}
-                            </td>
-                            <td className="num">{short(t.openedAt)}</td>
-                            <td className="num">{short(doneAt(t))}</td>
-                            <td className="num">{days(Math.max(0, resolveDays(t)))}</td>
-                            {report.hasReplies && <td className="num">{reply === null ? '–' : hrs(reply)}</td>}
-                          </tr>
-                        )
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        </div>
-        <p className="tkr-foot">
-          Source: support.rowan.edu, RO Operations assignment group. Resolve times run from when a
-          ticket was opened to when it was marked resolved. First reply is the team&apos;s first
-          comment the requester could see.
-          {coverage && ` History from ${fmt(coverage, { month: 'long', year: 'numeric' })}.`}
-        </p>
+        {view === 'snapshot' ? snapshot : fullReport}
       </div>
       {dialog}
     </div>

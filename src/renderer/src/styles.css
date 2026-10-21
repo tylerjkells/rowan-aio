@@ -9138,6 +9138,187 @@ button.tkr-hbar:focus-visible {
   padding-bottom: var(--s5);
 }
 
+/* ---------- service report snapshot ----------
+   The meeting view: one sheet sized for a document page, copied as an image.
+   It is light in every theme because it lands on a white page, so it sets
+   its own tokens and the report's pieces inside it (tiles, bars, charts)
+   follow them. Rowan Gold and Brown mark it as ours; the data keeps the
+   report's blue and orange, validated on white. Square corners: the copied
+   image is exactly the sheet. */
+.tks-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) 0 var(--s4);
+}
+.tks-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 720px;
+  max-width: 100%;
+}
+.tks-status {
+  margin-left: var(--s2);
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+.tks {
+  --ink: #221c19;
+  --ink-soft: #564d48;
+  --ink-faint: #7a706a;
+  --bg: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-overlay: #f5f2f0;
+  --line: #e0dad6;
+  --line-soft: #ebe6e3;
+  --line-strong: #cfc7c2;
+  --series-closed: #2a78d6;
+  --series-opened: #eb6834;
+  --delta-good: oklch(0.5 0.13 150);
+  --delta-bad: oklch(0.52 0.18 27);
+  --rowan-brown: #57150b;
+  --rowan-gold: #ffcc00;
+  flex: none;
+  width: 720px;
+  padding: 24px 28px 16px;
+  border-top: 6px solid var(--rowan-gold);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.18),
+    0 10px 30px rgb(0 0 0 / 0.16);
+}
+.tks-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+}
+.tks-eyebrow {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rowan-brown);
+}
+.tks-title {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.tks-asof {
+  padding-top: 1px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+.tks-filtered {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--rowan-brown);
+}
+.tks-headline {
+  margin: 8px 0 16px;
+  max-width: 62ch;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.tks .tkr-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 0;
+  border-radius: 8px;
+}
+.tks .tkr-kpi {
+  padding: 12px 14px;
+  background: #faf8f7;
+}
+.tks .tkr-kpi-value {
+  font-size: 28px;
+}
+.tks-row {
+  display: grid;
+  gap: 24px;
+  margin-top: 18px;
+}
+.tks-trend {
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+}
+.tks-split {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+.tks h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.tks-sec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.tks-sec-head .tkr-legend {
+  gap: var(--s3);
+  margin: 0;
+  font-size: 11.5px;
+}
+.tks-sub {
+  margin: 1px 0 8px;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+.tks svg {
+  display: block;
+  overflow: visible;
+}
+.tks .tkr-col.past {
+  opacity: 0.4;
+}
+.tks .tkr-axis.now {
+  fill: var(--ink);
+  font-weight: 650;
+}
+.tks .tkr-hbars {
+  gap: 1px;
+}
+.tks .tkr-hbar {
+  grid-template-columns: minmax(64px, 56%) minmax(0, 1fr) auto;
+  gap: var(--s2);
+  padding: 2px 0;
+  font-size: 12.5px;
+}
+.tks .tkr-hbar:hover {
+  background: none;
+}
+.tks .tkr-hbar-fill {
+  height: 12px;
+}
+.tks .tkr-none,
+.tks-more {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.tks-foot {
+  margin: 16px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
 /* ---------- dashboards ---------- */
 
 /* sits in the main column; the shell swaps it in for the routed view */

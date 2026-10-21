@@ -155,7 +155,8 @@ import {
   startRecordNudge,
   notifyAutoEnd,
   dismissNotifications,
-  onRecordingStarted
+  onRecordingStarted,
+  listenForToastClicks
 } from './nudge'
 import { micState, startMicWatch } from './micwatch'
 import { refreshTrayFeed, startTrayFeed } from './trayfeed'
@@ -323,8 +324,26 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'scribe-media', privileges: { stream: true, supportFetchAPI: true, corsEnabled: true } }
 ])
 
-// Windows toasts need the app identity to match the installed shortcut
-app.setAppUserModelId('com.tylerkells.meetingscribe')
+// Windows toasts need the app identity to match the installed shortcut. A
+// toast click goes to whichever exe last registered an activator under that
+// identity, so dev runs and test builds get identities of their own: sharing
+// one, a dev run started after the installed app took over its toast clicks,
+// and once it quit Windows launched its bare electron.exe (Electron's welcome
+// window) instead of joining the meeting. A fixed activator per channel also
+// keeps each run from registering a fresh one.
+const TOAST_IDENTITY: Record<typeof channel, [aumid: string, activator: string]> = {
+  stable: ['com.tylerkells.meetingscribe', '{863CCA35-2763-429C-A9DC-A6521FEF7727}'],
+  test: ['com.tylerkells.meetingscribe.test', '{3840518C-46DA-435E-B835-88D211D21DE6}'],
+  dev: ['com.tylerkells.meetingscribe.dev', '{E8B83D8E-B95A-4624-819D-CFB9D4469E70}']
+}
+app.setAppUserModelId(TOAST_IDENTITY[channel][0])
+if (process.platform === 'win32') {
+  try {
+    app.setToastActivatorCLSID(TOAST_IDENTITY[channel][1])
+  } catch {
+    // Electron keeps its generated one; clicks still reach this run
+  }
+}
 
 // One instance only: with close-to-tray, a "closed" app is still running, and
 // a second launch would fight it for the same data folder. Launching again
@@ -463,6 +482,7 @@ app.whenReady().then(() => {
   if (launchUrl) openAppUrl(launchUrl)
   setupAutoUpdate()
   startMicWatch()
+  listenForToastClicks()
   startRecordNudge()
   startTrayFeed()
   refreshClaudeServer()
@@ -1181,6 +1201,28 @@ function registerIpc(): void {
   // Outlook, Teams and Webex and as the bare URL anywhere else
   ipcMain.handle('clipboard:writeRich', (_e, html: string, text: string) => {
     clipboard.write({ html, text })
+  })
+  // a part of the page as a picture (the service report's snapshot): onto
+  // the clipboard, or into a PNG. The rect is in page pixels and must be on
+  // screen; the image comes out at the display's scale, so it stays sharp.
+  ipcMain.handle('capture:copy', async (e, rect: Electron.Rectangle) => {
+    const image = await e.sender.capturePage(rect)
+    if (image.isEmpty()) return { ok: false, error: 'Nothing was captured' }
+    clipboard.writeImage(image)
+    return { ok: true }
+  })
+  ipcMain.handle('capture:save', async (e, rect: Electron.Rectangle, name: string) => {
+    const image = await e.sender.capturePage(rect)
+    if (image.isEmpty()) return { ok: false, error: 'Nothing was captured' }
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const opts = {
+      defaultPath: join(app.getPath('downloads'), name),
+      filters: [{ name: 'PNG image', extensions: ['png'] }]
+    }
+    const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+    if (res.canceled || !res.filePath) return { ok: false }
+    writeFileSync(res.filePath, image.toPNG())
+    return { ok: true, path: res.filePath }
   })
 
   ipcMain.handle('brand:get', () => getBrand())

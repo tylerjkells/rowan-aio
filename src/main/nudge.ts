@@ -8,10 +8,12 @@ import type { AutoEndReason, CalendarEvent, MicApp, RecordingMode } from '../sha
 
 // A local Notification can be garbage-collected while its toast still sits in
 // the notification center — the click handler dies with it and Windows falls
-// back to a raw app activation. Hold the latest one until it's dismissed.
+// back to a raw app activation. Hold the latest one until it's withdrawn.
 let liveNotification: Notification | null = null
 /** what the live toast is about, so it can be withdrawn once it no longer applies */
 let liveTopic: { kind: 'calendar' | 'call' | 'info'; key: string } | null = null
+/** what clicking the live toast does; taken once, by whichever click path gets there first */
+let liveAction: (() => void) | null = null
 let withdrawTimer: NodeJS.Timeout | null = null
 
 /**
@@ -25,6 +27,28 @@ export function dismissNotifications(): void {
   liveNotification?.close()
   liveNotification = null
   liveTopic = null
+  liveAction = null
+}
+
+function runLiveAction(): void {
+  const action = liveAction
+  dismissNotifications()
+  action?.()
+}
+
+/**
+ * Every toast click Windows routes to this run, whether or not the
+ * Notification object still exists to hear it: one clicked from the
+ * notification center, or one that started the app. Alongside the toast's
+ * own click event, so whichever arrives first acts and the other finds
+ * nothing left to do.
+ */
+export function listenForToastClicks(): void {
+  if (process.platform !== 'win32' || typeof Notification.handleActivation !== 'function') return
+  Notification.handleActivation(() => {
+    if (liveAction) runLiveAction()
+    else showMainWindow()
+  })
 }
 
 function notify(
@@ -39,17 +63,13 @@ function notify(
   dismissNotifications()
   const n = new Notification({ title, body })
   n.on('click', () => {
-    onClick()
-    if (liveNotification === n) dismissNotifications()
+    if (liveNotification === n) runLiveAction()
   })
-  n.on('close', () => {
-    if (liveNotification === n) {
-      liveNotification = null
-      liveTopic = null
-    }
-  })
+  // no letting go on 'close': Windows sends it when the popup times out into
+  // the notification center, where the toast can still be clicked
   liveNotification = n
   liveTopic = topic
+  liveAction = onClick
   if (ttlMs) {
     withdrawTimer = setTimeout(() => {
       if (liveNotification === n) dismissNotifications()
