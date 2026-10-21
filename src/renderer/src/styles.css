@@ -10465,6 +10465,7 @@ button.tkr-hbar:focus-visible {
 }
 .ods-sql {
   max-height: 220px;
+  white-space: pre;
   overflow: auto;
   border: 1px solid var(--line-soft);
   border-radius: var(--r-ctl);

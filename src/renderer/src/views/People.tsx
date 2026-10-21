@@ -7,6 +7,7 @@ import type {
   ToolboxQuery
 } from '../../../shared/types'
 import { BackIcon, DueEditor, formatWhen, isOverdue, useConfirm } from '../ui'
+import { DIRECTORY_SQL } from '../directoryQuery'
 
 const keyOf = (name: string): string => name.trim().toLowerCase()
 const byName = (a: PersonSummary, b: PersonSummary): number => a.name.localeCompare(b.name)
@@ -259,7 +260,14 @@ function ImportDialog({
 // ---------------------------------------------------------------------------
 
 const DIRECTORY_QUERY = 'People directory'
-/** a saved query whose name says it's the directory export: the first guess */
+/** the query that ships with the app, listed ahead of the saved ones */
+const BUILT_IN: ToolboxQuery = {
+  id: 'built-in',
+  name: 'Rowan Online and Vijay’s team (built in)',
+  sql: DIRECTORY_SQL,
+  addedAt: ''
+}
+/** a saved query whose name says it's the directory export: picked ahead of the built-in one */
 const looksLikeDirectory = (q: ToolboxQuery): boolean =>
   /directory|people|employee|staff|org ?chart|roster/i.test(q.name)
 
@@ -281,7 +289,11 @@ function OdsDialog({
     ref.current?.showModal()
     window.scribe.toolbox.get().then((d) => {
       setQueries(d.queries)
-      setChosen((id) => (d.queries.some((q) => q.id === id) ? id : (d.queries.find(looksLikeDirectory)?.id ?? '')))
+      setChosen((id) =>
+        id === BUILT_IN.id || d.queries.some((q) => q.id === id)
+          ? id
+          : (d.queries.find(looksLikeDirectory)?.id ?? BUILT_IN.id)
+      )
     })
   }, [])
 
@@ -311,8 +323,8 @@ function OdsDialog({
     setCopied(true)
   }
 
-  const query = queries?.find((q) => q.id === chosen) ?? null
-  const paste = pasting || queries?.length === 0
+  const options = queries ? [BUILT_IN, ...queries] : []
+  const query = options.find((q) => q.id === chosen) ?? BUILT_IN
 
   return (
     <dialog
@@ -326,7 +338,7 @@ function OdsDialog({
       <h3>Update people from ODS</h3>
       <ol className="tk-steps">
         <li>
-          {paste
+          {pasting
             ? 'Run your directory query in ODS. Paste it below once and it’s kept here for next time.'
             : 'Copy the directory query below and run it in ODS.'}
         </li>
@@ -339,7 +351,7 @@ function OdsDialog({
 
       {queries === null ? (
         <p className="tk-hint">Loading your saved queries…</p>
-      ) : paste ? (
+      ) : pasting ? (
         <>
           <label className="pd-field">
             <span>Paste the query you run for the directory export</span>
@@ -359,11 +371,9 @@ function OdsDialog({
             <button className="btn" onClick={saveDraft} disabled={!draft.trim()}>
               Save query
             </button>
-            {queries.length > 0 && (
-              <button className="link-btn" onClick={() => setPasting(false)}>
-                Pick a saved one instead
-              </button>
-            )}
+            <button className="link-btn" onClick={() => setPasting(false)}>
+              Pick one instead
+            </button>
           </div>
         </>
       ) : (
@@ -371,34 +381,24 @@ function OdsDialog({
           <div className="ods-query-bar">
             <select
               className="text-input ods-select"
-              value={query?.id ?? ''}
+              value={query.id}
               onChange={(e) => pick(e.target.value)}
               aria-label="Directory query"
             >
-              {!query && <option value="">Pick your directory query…</option>}
-              {queries.map((q) => (
+              {options.map((q) => (
                 <option key={q.id} value={q.id}>
                   {q.name}
                 </option>
               ))}
             </select>
-            {query && (
-              <button className="btn" onClick={() => copy(query)}>
-                {copied ? 'Copied' : 'Copy SQL'}
-              </button>
-            )}
+            <button className="btn" onClick={() => copy(query)}>
+              {copied ? 'Copied' : 'Copy SQL'}
+            </button>
             <button className="link-btn" onClick={() => setPasting(true)}>
               Paste a new one
             </button>
           </div>
-          {query ? (
-            <pre className="sql-block ods-sql">{query.sql}</pre>
-          ) : (
-            <p className="tk-hint">
-              These are your saved queries from Toolbox → SQL. Pick the one you use for the
-              directory and it&apos;s remembered.
-            </p>
-          )}
+          <pre className="sql-block ods-sql">{query.sql}</pre>
         </>
       )}
 
