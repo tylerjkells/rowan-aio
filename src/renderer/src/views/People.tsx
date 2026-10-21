@@ -3,7 +3,8 @@ import type {
   DirectoryImportScan,
   PersonDetails,
   PersonProfile,
-  PersonSummary
+  PersonSummary,
+  ToolboxQuery
 } from '../../../shared/types'
 import { BackIcon, DueEditor, formatWhen, isOverdue, useConfirm } from '../ui'
 
@@ -252,6 +253,172 @@ function ImportDialog({
 }
 
 // ---------------------------------------------------------------------------
+// Update from ODS: the steps for refreshing the directory, with the query to
+// run. The query itself lives in Toolbox → SQL; this remembers which saved
+// query it is, so it's never more than a click away when new people start.
+// ---------------------------------------------------------------------------
+
+const DIRECTORY_QUERY = 'People directory'
+/** a saved query whose name says it's the directory export: the first guess */
+const looksLikeDirectory = (q: ToolboxQuery): boolean =>
+  /directory|people|employee|staff|org ?chart|roster/i.test(q.name)
+
+function OdsDialog({
+  onClose,
+  onChooseCsv
+}: {
+  onClose: () => void
+  onChooseCsv: () => void
+}): React.JSX.Element {
+  const ref = useRef<HTMLDialogElement>(null)
+  const [queries, setQueries] = useState<ToolboxQuery[] | null>(null)
+  const [chosen, setChosen] = useState(() => localStorage.getItem('peopleQueryId') ?? '')
+  const [pasting, setPasting] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    ref.current?.showModal()
+    window.scribe.toolbox.get().then((d) => {
+      setQueries(d.queries)
+      setChosen((id) => (d.queries.some((q) => q.id === id) ? id : (d.queries.find(looksLikeDirectory)?.id ?? '')))
+    })
+  }, [])
+
+  function pick(id: string): void {
+    setChosen(id)
+    setCopied(false)
+    localStorage.setItem('peopleQueryId', id)
+  }
+
+  async function saveDraft(): Promise<void> {
+    if (!draft.trim()) return
+    const d = await window.scribe.toolbox.saveQuery({
+      name: DIRECTORY_QUERY,
+      sql: draft,
+      note: 'The directory export for People → Update from ODS.'
+    })
+    setQueries(d.queries)
+    // a new query goes to the top of the list
+    pick(d.queries[0].id)
+    setPasting(false)
+    setDraft('')
+  }
+
+  async function copy(q: ToolboxQuery): Promise<void> {
+    await navigator.clipboard.writeText(q.sql)
+    pick(q.id)
+    setCopied(true)
+  }
+
+  const query = queries?.find((q) => q.id === chosen) ?? null
+  const paste = pasting || queries?.length === 0
+
+  return (
+    <dialog
+      ref={ref}
+      className="confirm tk-dialog"
+      onClose={onClose}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose()
+      }}
+    >
+      <h3>Update people from ODS</h3>
+      <ol className="tk-steps">
+        <li>
+          {paste
+            ? 'Run your directory query in ODS. Paste it below once and it’s kept here for next time.'
+            : 'Copy the directory query below and run it in ODS.'}
+        </li>
+        <li>
+          Export the results as a CSV file. Name is the only column it needs; Title, Department,
+          Email, Phone, Manager, Office and Notes fill in the rest, in any order.
+        </li>
+        <li>Choose that file here. You&apos;ll see a preview before anything changes.</li>
+      </ol>
+
+      {queries === null ? (
+        <p className="tk-hint">Loading your saved queries…</p>
+      ) : paste ? (
+        <>
+          <label className="pd-field">
+            <span>Paste the query you run for the directory export</span>
+            <textarea
+              className="text-input sql-input ods-paste"
+              spellCheck={false}
+              placeholder="SELECT …"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              autoFocus
+            />
+          </label>
+          <p className="tk-hint">
+            It&apos;s saved in Toolbox → SQL as “{DIRECTORY_QUERY}” and shows up here from then on.
+          </p>
+          <div className="ods-query-bar">
+            <button className="btn" onClick={saveDraft} disabled={!draft.trim()}>
+              Save query
+            </button>
+            {queries.length > 0 && (
+              <button className="link-btn" onClick={() => setPasting(false)}>
+                Pick a saved one instead
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="ods-query-bar">
+            <select
+              className="text-input ods-select"
+              value={query?.id ?? ''}
+              onChange={(e) => pick(e.target.value)}
+              aria-label="Directory query"
+            >
+              {!query && <option value="">Pick your directory query…</option>}
+              {queries.map((q) => (
+                <option key={q.id} value={q.id}>
+                  {q.name}
+                </option>
+              ))}
+            </select>
+            {query && (
+              <button className="btn" onClick={() => copy(query)}>
+                {copied ? 'Copied' : 'Copy SQL'}
+              </button>
+            )}
+            <button className="link-btn" onClick={() => setPasting(true)}>
+              Paste a new one
+            </button>
+          </div>
+          {query ? (
+            <pre className="sql-block ods-sql">{query.sql}</pre>
+          ) : (
+            <p className="tk-hint">
+              These are your saved queries from Toolbox → SQL. Pick the one you use for the
+              directory and it&apos;s remembered.
+            </p>
+          )}
+        </>
+      )}
+
+      <p className="tk-hint">
+        New people are added and everyone else&apos;s details are refreshed from the file. Nobody is
+        removed: for anyone who has left, open their page and use Edit details → Remove.
+      </p>
+      <div className="confirm-actions">
+        <button className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button className="btn btn-primary" onClick={onChooseCsv}>
+          Choose CSV…
+        </button>
+      </div>
+    </dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Org chart
 // ---------------------------------------------------------------------------
 
@@ -440,6 +607,7 @@ export function PeopleView({
   )
   const [editing, setEditing] = useState<PersonSummary | 'new' | null>(null)
   const [importScan, setImportScan] = useState<DirectoryImportScan | null>(null)
+  const [updating, setUpdating] = useState(false)
   const [query, setQuery] = useState('')
   const [chartFocus, setChartFocus] = useState<string | null>(null)
 
@@ -453,7 +621,10 @@ export function PeopleView({
 
   async function startImport(): Promise<void> {
     const scan = await window.scribe.people.importScan()
-    if (scan) setImportScan(scan)
+    if (scan) {
+      setUpdating(false)
+      setImportScan(scan)
+    }
   }
 
   const q = query.trim().toLowerCase()
@@ -491,6 +662,8 @@ export function PeopleView({
           if (imported) load()
         }}
       />
+    ) : updating ? (
+      <OdsDialog onClose={() => setUpdating(false)} onChooseCsv={startImport} />
     ) : null
 
   if (loaded && people.length === 0) {
@@ -507,8 +680,8 @@ export function PeopleView({
             <button className="btn btn-primary" onClick={() => setEditing('new')}>
               Add person
             </button>
-            <button className="btn" onClick={startImport}>
-              Import CSV
+            <button className="btn" onClick={() => setUpdating(true)}>
+              Import from ODS
             </button>
           </div>
         </div>
@@ -600,8 +773,12 @@ export function PeopleView({
           <button className="btn" onClick={() => setEditing('new')}>
             Add person
           </button>
-          <button className="btn btn-ghost" onClick={startImport} title="Populate the directory from a CSV export (SQL, Excel, HR system)">
-            Import CSV
+          <button
+            className="btn btn-ghost"
+            onClick={() => setUpdating(true)}
+            title="Bring in new people and refresh everyone's details: the query to run, then the CSV it exports"
+          >
+            Update from ODS
           </button>
         </div>
       </div>
