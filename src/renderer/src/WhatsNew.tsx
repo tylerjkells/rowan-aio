@@ -6,6 +6,11 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.38.0': [
+    'Meetings finish sooner with voice recognition on. Telling voices apart now starts as soon as you stop recording, alongside the rest of the transcription, instead of waiting for it. Its progress bar moves the whole time instead of sitting at 0% until it finishes.',
+    'People has Update from ODS in place of Import CSV. It gives you the directory query to copy (built in, for Rowan Online and Vijay\'s team) and the steps to run it in ODS and export a CSV. A query saved in Toolbox → SQL can be picked instead, or a new one pasted once and kept.',
+    'An import only adds people who aren\'t in People yet; everyone already there stays as they are. People are matched by email, then name, then the same person under another first name ("Mike" for Michael), and the preview lists those matches. An option fills in blank details for people already there without changing anything filled in. Phone numbers come in as 856-256-5083 and all-caps titles become readable.'
+  ],
   '0.37.0': [
     'A meeting snapshot of the service report. Switch the report to Snapshot for one page-sized summary of the period, light and ready for a document: a sentence on what came in and what got resolved, the four key numbers, the last 8 weeks (or 6 months) of opened vs resolved, the open queue up to today, and who resolved what. Copy image puts it on the clipboard so you can paste it straight into your meeting notes; Save image keeps a PNG.',
     'Clicking a meeting reminder joins and records even after it has slid into the notification center, and a reminder can no longer open a blank Electron window instead of Rowan.'
