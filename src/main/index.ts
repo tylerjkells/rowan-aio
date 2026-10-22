@@ -84,6 +84,7 @@ import {
 import { getBrand, saveBrand } from './brand'
 import { applyTicketPaste, readDesk, setTicketNote } from './tickets'
 import { applyTeamPaste, readTeamDesk } from './team'
+import { exportStatusUpdate, getStatusUpdate, importStatusUpdate, saveStatusUpdate } from './statusUpdate'
 import {
   addToolboxFiles,
   addToolboxGuide,
@@ -240,6 +241,7 @@ import type {
   MeetingSummary,
   PersonDetails,
   RecordingMode,
+  StatusUpdateData,
   TagInfo,
   TicketNote,
   WhisperModel
@@ -1197,6 +1199,12 @@ function registerIpc(): void {
   ipcMain.handle('team:get', () => readTeamDesk())
   ipcMain.handle('team:apply', (_e, text: string) => applyTeamPaste(text))
   ipcMain.handle('team:applyClipboard', () => applyTeamPaste(clipboard.readText()))
+  ipcMain.handle('statusUpdate:get', () => getStatusUpdate())
+  ipcMain.handle('statusUpdate:save', (_e, patch: Partial<StatusUpdateData>) => {
+    saveStatusUpdate(patch)
+  })
+  ipcMain.handle('statusUpdate:import', () => importStatusUpdate())
+  ipcMain.handle('statusUpdate:export', () => exportStatusUpdate())
   // html + plain text together, so a pasted link shows as its label in
   // Outlook, Teams and Webex and as the bare URL anywhere else
   ipcMain.handle('clipboard:writeRich', (_e, html: string, text: string) => {

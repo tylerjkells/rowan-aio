@@ -53,6 +53,8 @@ import type {
   PersonSummary,
   RecordingMode,
   SeriesData,
+  StatusImportResult,
+  StatusUpdateData,
   TagInfo,
   TeamDesk,
   TeamSyncResult,
@@ -378,6 +380,15 @@ const api = {
     /** merge a pasted JSONv2 page of the team's incidents */
     apply: (text: string): Promise<TeamSyncResult> => ipcRenderer.invoke('team:apply', text),
     applyClipboard: (): Promise<TeamSyncResult> => ipcRenderer.invoke('team:applyClipboard')
+  },
+  statusUpdate: {
+    get: (): Promise<StatusUpdateData> => ipcRenderer.invoke('statusUpdate:get'),
+    /** save just the parts that changed */
+    save: (patch: Partial<StatusUpdateData>): Promise<void> => ipcRenderer.invoke('statusUpdate:save', patch),
+    /** replace everything with a picked export file; null = canceled */
+    importFile: (): Promise<StatusImportResult> => ipcRenderer.invoke('statusUpdate:import'),
+    exportFile: (): Promise<{ ok: boolean; path?: string; error?: string } | null> =>
+      ipcRenderer.invoke('statusUpdate:export')
   },
   clipboard: {
     writeRich: (html: string, text: string): Promise<void> =>
