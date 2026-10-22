@@ -7,6 +7,7 @@ import type {
   TicketSyncSummary
 } from '../../../shared/types'
 import { Avatar } from '../ui'
+import { StatusUpdate } from './StatusUpdate'
 import { TeamReport } from './TeamReport'
 
 // ---------------------------------------------------------------------------
@@ -183,13 +184,22 @@ async function copyTicketLink(t: Ticket): Promise<void> {
 // ---- the view ----------------------------------------------------------------
 
 export function TicketsView({ yourName }: { yourName: string }): React.JSX.Element {
-  // your own tickets every time the tab opens; the team report is a click away
-  const [mode, setMode] = useState<'mine' | 'team'>('mine')
+  // your own tickets every time the tab opens; the reports are a click away
+  const [mode, setMode] = useState<'mine' | 'team' | 'status'>('mine')
   if (mode === 'team') return <TeamReport onBack={() => setMode('mine')} />
-  return <MyTickets yourName={yourName} onTeam={() => setMode('team')} />
+  if (mode === 'status') return <StatusUpdate onBack={() => setMode('mine')} />
+  return <MyTickets yourName={yourName} onTeam={() => setMode('team')} onStatus={() => setMode('status')} />
 }
 
-function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void }): React.JSX.Element {
+function MyTickets({
+  yourName,
+  onTeam,
+  onStatus
+}: {
+  yourName: string
+  onTeam: () => void
+  onStatus: () => void
+}): React.JSX.Element {
   const [desk, setDesk] = useState<TicketDesk | null>(null)
   const [notes, setNotes] = useState<Record<string, TicketNote>>({})
   const [view, setView] = useState<DeskView>(
@@ -383,6 +393,9 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
             <button className="btn" onClick={onTeam}>
               Team report
             </button>
+            <button className="btn" onClick={onStatus}>
+              Status update
+            </button>
           </div>
         </div>
         {updateDialog}
@@ -413,25 +426,41 @@ function MyTickets({ yourName, onTeam }: { yourName: string; onTeam: () => void 
         ))}
       </nav>
       <div className="cuc-rail-head">
-        <span>Team</span>
+        <span>Reports</span>
       </div>
-      <button className="cuc-rail-item" onClick={onTeam} title="RO Operations service report: the whole group's ticket stats">
-        <span>Service report</span>
-        <span className="cuc-rail-n" aria-hidden="true">
-          ›
-        </span>
-      </button>
-      <div className="cuc-rail-foot">
+      <nav className="cuc-rail-group" aria-label="Reports">
+        <button className="cuc-rail-item" onClick={onTeam} title="RO Operations service report: the whole group's ticket stats">
+          <span>Service report</span>
+          <span className="cuc-rail-n" aria-hidden="true">
+            ›
+          </span>
+        </button>
         <button
-          className="link-btn"
+          className="cuc-rail-item"
+          onClick={onStatus}
+          title="The RO Ops monthly status update email: completed, in progress and new requests"
+        >
+          <span>Status update</span>
+          <span className="cuc-rail-n" aria-hidden="true">
+            ›
+          </span>
+        </button>
+        <button
+          className="cuc-rail-item"
           onClick={() => setAgendaOpen(true)}
           title="Your open tickets summed up for a meeting agenda, ready for Google Sheets"
         >
-          Agenda summary
+          <span>Agenda summary</span>
         </button>
-        <button className="link-btn" onClick={() => setRecapOpen(true)}>
-          Monthly recap
+        <button
+          className="cuc-rail-item"
+          onClick={() => setRecapOpen(true)}
+          title="Tickets you closed in a month, ready to paste into your recap email"
+        >
+          <span>Monthly recap</span>
         </button>
+      </nav>
+      <div className="cuc-rail-foot">
         <span>
           {desk.syncedAt
             ? `Synced ${new Date(desk.syncedAt).toLocaleString(undefined, {

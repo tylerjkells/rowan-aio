@@ -41,7 +41,12 @@ module of several.)
   the open queue by age and status, and the open tickets that need attention,
   for a week, a month, month to date or 12 months, each against the period
   before. Click any bar or name to filter the whole page to it; a full-screen
-  Present mode keeps the filters. Nothing is written back to ServiceNow.
+  Present mode keeps the filters. Nothing is written back to ServiceNow. A
+  Status update view builds the team's monthly RO Ops status email
+  (completed, in progress and new requests, by area, with an optional
+  spotlight) beside a live preview, flags anything to check before sending,
+  copies it formatted for Outlook, and saves each month under Past issues
+  when you start the next one.
 - **Action items** — every follow-up from every meeting in one place: dated
   items grouped by when, undated ones grouped by meeting, stale ones folded
   away for a bulk review. Done, dismissed, and snoozed are kept apart; select

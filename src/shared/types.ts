@@ -580,6 +580,83 @@ export type TicketSyncResult =
   | { ok: true; desk: TicketDesk; summary: TicketSyncSummary }
   | { ok: false; error: string }
 
+/** the three parts of the monthly status update email */
+export type StatusSection = 'completed' | 'progress' | 'new'
+
+/** one dashboard or project line in the status update */
+export interface StatusItem {
+  id: string
+  section: StatusSection
+  /** Rowan Online, WLS, …; '' for none */
+  area: string
+  name: string
+  note: string
+  order: number
+  /** in progress only: the name of a StatusDef */
+  status?: string
+  /** completed only: a new dashboard, listed with its link */
+  launched?: boolean
+  link?: string
+  target?: string
+  requestedBy?: string
+  /** the note as it went out last month, to flag in-progress notes left unchanged */
+  lastSentNote?: string
+}
+
+/** an in-progress status: its chip color, and whether it counts as On Hold */
+export interface StatusDef {
+  name: string
+  /** a preset palette key from the original builder; color wins when set */
+  tone?: string
+  /** #RRGGBB */
+  color?: string
+  hold?: boolean
+}
+
+export interface StatusMeta {
+  month: string
+  intro: string
+  mailbox: string
+  oh1: string
+  oh2: string
+  /** sections left out of the email; their items are kept */
+  hidden: StatusSection[]
+  spotOn: boolean
+  spotTitle: string
+  spotBody: string
+  spotLink: string
+}
+
+/** the spotlight picture, already shrunk to a JPEG data URL */
+export interface StatusImage {
+  data: string
+  w: number
+  h: number
+}
+
+/** a month as it was sent, saved by Start next month */
+export interface StatusIssue {
+  id: string
+  month: string
+  html: string
+  plain: string
+  archivedAt: string
+  items?: Omit<StatusItem, 'id' | 'order' | 'lastSentNote'>[]
+}
+
+export interface StatusUpdateData {
+  meta: StatusMeta
+  statuses: StatusDef[]
+  items: StatusItem[]
+  issues: StatusIssue[]
+  spotImg: StatusImage | null
+}
+
+export type StatusImportResult =
+  | { ok: true; data: StatusUpdateData }
+  | { ok: false; error: string }
+  | null
+
 /** one color in the brand guide */
 export interface BrandColor {
   name: string
