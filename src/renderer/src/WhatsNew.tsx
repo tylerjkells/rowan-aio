@@ -6,6 +6,10 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.39.0': [
+    'The RO Ops monthly status update is now in Tickets, under Reports: Status update. List what was completed (with new dashboards and their links), what\'s in progress with its status, and the new requests, grouped by area, with an optional spotlight and picture. The email shows beside the editor exactly as it will paste, a check lists anything to fix before sending, and Copy for Outlook copies it ready to paste. Start next month saves the month under Past issues and clears the completed items. Already using the RO Ops Status Builder? Import from a file brings its items over.',
+    'The Tickets rail groups its reports under one Reports heading: Service report, Status update, Agenda summary and Monthly recap. Agenda summary and Monthly recap moved up from the bottom of the rail.'
+  ],
   '0.38.0': [
     'Meetings finish sooner with voice recognition on. Telling voices apart now starts as soon as you stop recording, alongside the rest of the transcription, instead of waiting for it. Its progress bar moves the whole time instead of sitting at 0% until it finishes.',
     'People has Update from ODS in place of Import CSV. It gives you the directory query to copy (built in, for Rowan Online and Vijay\'s team) and the steps to run it in ODS and export a CSV. A query saved in Toolbox → SQL can be picked instead, or a new one pasted once and kept.',
