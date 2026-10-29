@@ -16,7 +16,7 @@ import { randomUUID } from 'crypto'
 import { LiveTranscriber } from './live'
 import { engineStatus, meetingPrompt, vocabularyPrompt } from './whisper'
 import { getSettings } from './settings'
-import { findLiveEvent } from './calendar'
+import { findLiveEvent, inviteesOf } from './calendar'
 import type {
   EnergySample,
   Meeting,
@@ -219,10 +219,10 @@ export function beginRecording(mode: RecordingMode): string {
   // hints; the first chunk is cut 45s in, so this lands well before it
   if (live && settings.hasCalendar && settings.vocabFromCalendar) {
     findLiveEvent(now.toISOString())
-      .then((event) => {
-        if (event && sessions.has(id)) {
-          live.setVocab(meetingPrompt(settings.vocabulary, event.attendees, event.title))
-        }
+      .then(async (event) => {
+        if (!event || !sessions.has(id)) return
+        const invited = await inviteesOf(event)
+        if (sessions.has(id)) live.setVocab(meetingPrompt(settings.vocabulary, invited.names, event.title))
       })
       .catch(() => {})
   }

@@ -26,6 +26,7 @@ import type {
   EngineProgress,
   EngineStatus,
   EventBrief,
+  InviteLookup,
   LibraryQA,
   DashboardEntry,
   DashboardInput,
@@ -208,7 +209,8 @@ const api = {
       ipcRenderer.invoke('meetings:setSpeakers', id, names),
     setAttendees: (id: string, names: string[]): Promise<Meeting | null> =>
       ipcRenderer.invoke('meetings:setAttendees', id, names),
-    attendeesFromCalendar: (id: string): Promise<string[] | null> =>
+    /** who was invited: from the calendar, else the invitation email */
+    attendeesFromCalendar: (id: string): Promise<InviteLookup | null> =>
       ipcRenderer.invoke('meetings:attendeesFromCalendar', id),
     import: (title: string, dateIso: string, text: string): Promise<Meeting> =>
       ipcRenderer.invoke('meetings:import', title, dateIso, text),

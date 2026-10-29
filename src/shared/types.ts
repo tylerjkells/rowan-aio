@@ -235,6 +235,15 @@ export interface CalendarEvent {
   attendees: string[]
 }
 
+/** what Participants → From calendar invite found for a meeting */
+export interface InviteLookup {
+  names: string[]
+  /** where the names came from: the calendar feed or the invitation email; null when none were found */
+  from: 'calendar' | 'email' | null
+  /** the calendar event at the meeting's time, when there is one */
+  eventTitle: string | null
+}
+
 /** pre-meeting brief: where a meeting series left off last time */
 export interface EventBrief {
   meetingId: string

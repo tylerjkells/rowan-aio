@@ -126,6 +126,7 @@ import {
 } from './clickup'
 import {
   ensureMailDirs,
+  inviteesFromMail,
   mailStatus,
   readMailTriage,
   readFiledDrafts,
@@ -150,6 +151,7 @@ import {
   getTodayEvents,
   getEventsBetween,
   findLiveEvent,
+  inviteesOf,
   clearCalendarCache
 } from './calendar'
 import {
@@ -227,11 +229,13 @@ import type {
   AutoEndReason,
   BrandData,
   BulkSelection,
+  CalendarEvent,
   ClickupPushInput,
   DailyRecap,
   DashboardInput,
   DirectoryImportRow,
   EnergySample,
+  InviteLookup,
   LinkEntry,
   MailDraftInput,
   MailLevel,
@@ -690,7 +694,8 @@ function registerIpc(): void {
         if (event) {
           // a name typed while recording wins over the event's
           if (!hasUserTitle(meeting)) meeting.title = event.title
-          if (event.attendees.length > 0) meeting.attendees = event.attendees
+          const invited = await inviteesOf(event)
+          if (invited.names.length > 0) meeting.attendees = invited.names
           writeMeeting(meeting)
         }
       } catch {
@@ -994,17 +999,21 @@ function registerIpc(): void {
     return m
   })
 
-  // attendees of the calendar event this meeting was recorded during, if the
-  // subscribed calendar still carries the event
-  ipcMain.handle('meetings:attendeesFromCalendar', async (_e, id: string): Promise<string[] | null> => {
+  // who was invited to the calendar event this meeting was recorded during:
+  // the calendar's list, else the invitation email's; with no event at that
+  // time, an invitation titled like the meeting still counts
+  ipcMain.handle('meetings:attendeesFromCalendar', async (_e, id: string): Promise<InviteLookup | null> => {
     const m = readMeeting(id)
     if (!m) return null
+    let event: CalendarEvent | null = null
     try {
-      const event = await findLiveEvent(m.createdAt)
-      return event && event.attendees.length > 0 ? event.attendees : null
+      event = await findLiveEvent(m.createdAt)
     } catch {
-      return null
+      // calendar unreachable: the invitation email may still say
     }
+    if (event) return { ...(await inviteesOf(event)), eventTitle: event.title }
+    const names = await inviteesFromMail(m.title, m.createdAt).catch(() => [])
+    return { names, from: names.length > 0 ? 'email' : null, eventTitle: null }
   })
 
   ipcMain.handle('meetings:identifySpeakers', async (_e, id: string): Promise<Meeting | null> => {
