@@ -1,9 +1,10 @@
 /**
- * MeetingScribe MCP server: exposes the local meeting library to MCP clients
- * (Claude Desktop and friends) as read-only tools, so Claude can answer
- * questions about meetings, build reports from them, or push tasks to other
- * connected tools (e.g. ClickUp) — with the data never leaving the machine
- * except in the conversations the user chooses to have.
+ * MeetingScribe MCP server: exposes the local meeting library, and the
+ * tickets and status update kept beside it, to MCP clients (Claude Desktop
+ * and friends) as read-only tools, so Claude can answer questions about
+ * them, build reports from them, or push tasks to other connected tools
+ * (e.g. ClickUp) — with the data never leaving the machine except in the
+ * conversations the user chooses to have.
  *
  * Runs standalone via the MeetingScribe executable in Node mode
  * (ELECTRON_RUN_AS_NODE=1). No Electron APIs here — plain fs against the
@@ -14,6 +15,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { readFileSync, readdirSync, existsSync } from 'fs'
 import { join } from 'path'
+import type { StatusUpdateData, TeamTicket, Ticket, TicketNote } from '../shared/types'
+import { statusUpdateDigest, teamDigest, ticketsDigest } from '../shared/workDigest'
 
 interface Segment {
   from: number
@@ -363,6 +366,83 @@ server.registerTool(
       // brand guide not initialized yet
     }
     return { content: [{ type: 'text', text: JSON.stringify(brand, null, 2) }] }
+  }
+)
+
+/** one of the app's data files, or null when it hasn't written it yet */
+function readData<T>(name: string): T | null {
+  try {
+    return JSON.parse(readFileSync(join(dataDir!, name), 'utf-8')) as T
+  } catch {
+    return null
+  }
+}
+
+const text = (t: string): { content: { type: 'text'; text: string }[] } => ({ content: [{ type: 'text', text: t }] })
+
+server.registerTool(
+  'get_my_tickets',
+  {
+    description:
+      "The user's ServiceNow incidents (assigned to them), as of their last Update tickets in Rowan AIO, not live: " +
+      'counts by plan and state, every open ticket with its caller, state, the user’s plan (Now/Next/Later/Waiting), ' +
+      'next step, notes and reply flags, then recently closed tickets.',
+    inputSchema: {}
+  },
+  async () => {
+    const raw = readData<{
+      tickets?: Record<string, Ticket>
+      notes?: Record<string, TicketNote>
+      me?: string | null
+      syncedAt?: string | null
+    }>('tickets.json')
+    const out = raw
+      ? ticketsDigest({
+          tickets: Object.values(raw.tickets ?? {}),
+          notes: raw.notes ?? {},
+          me: raw.me ?? null,
+          syncedAt: raw.syncedAt ?? null
+        })
+      : ''
+    return text(out || 'No tickets yet: they come in with Update tickets in Rowan AIO’s Tickets tab.')
+  }
+)
+
+server.registerTool(
+  'get_team_tickets',
+  {
+    description:
+      'Every incident assigned to the RO Operations group, as of the last service report update in Rowan AIO, not live: ' +
+      'the open queue by person and state, tickets opened and resolved by week and by month with who resolved them and ' +
+      'the median days to resolve, the open tickets one by one, and the last 60 days of resolved tickets.',
+    inputSchema: {}
+  },
+  async () => {
+    const raw = readData<{ tickets?: Record<string, TeamTicket>; syncedAt?: string | null; coverageStart?: string | null }>(
+      'team-tickets.json'
+    )
+    const out = raw
+      ? teamDigest({
+          tickets: Object.values(raw.tickets ?? {}),
+          syncedAt: raw.syncedAt ?? null,
+          coverageStart: raw.coverageStart ?? null
+        })
+      : ''
+    return text(out || 'No team data yet: it comes in with Update on the service report in Rowan AIO’s Tickets tab.')
+  }
+)
+
+server.registerTool(
+  'get_status_update',
+  {
+    description:
+      'The RO Ops monthly status update email being drafted in Rowan AIO: completed work (new dashboards and updates), ' +
+      'in-progress items with their status and target, new requests, the spotlight, and which past months are saved.',
+    inputSchema: {}
+  },
+  async () => {
+    const raw = readData<Partial<StatusUpdateData>>('status-update.json')
+    return text((raw && statusUpdateDigest(raw)) || 'No status update yet.')
   }
 )
 
