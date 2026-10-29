@@ -6,6 +6,15 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.40.0': [
+    'Edit the status update right in the email. Click any name or note in the preview, the month, the intro or the spotlight, and type; the editor keeps up as you go. Enter finishes a one-line field and Escape puts it back.',
+    'A tidier status update editor. Completed, In Progress and New Requests fold away (and stay folded), each item is its own card edged in its status color, and area, section, requested by, target, moving and deleting sit behind the ⋯ on each card. The settings are a row of pills, the check list shows three at a time, and the count tiles jump to their section.',
+    'Name the reports your way. Point at a report in the Tickets rail and click the pencil; the new name shows in the report itself too.',
+    'The service report snapshot now breaks the period down just like the full report: last week by day, a month by week, the year by month.',
+    'Tableau dashboards show just the dashboard, without Tableau’s menus around it, and keep its toolbar for downloads. Full site brings Tableau’s pages back for that dashboard when you need them.',
+    'Ask knows your tickets. It can answer from your ServiceNow tickets, the team’s queue and numbers, and the status update, as of your last update. So can Claude Desktop through the Claude app connection.',
+    'Meetings know who was invited again. Outlook’s calendar link stopped listing invitees, so Rowan now reads them from the invitation email your mail flow files: participants fill in when a recording ends, the live transcript spells their names, and From calendar invite works.'
+  ],
   '0.39.0': [
     'The RO Ops monthly status update is now in Tickets, under Reports: Status update. List what was completed (with new dashboards and their links), what\'s in progress with its status, and the new requests, grouped by area, with an optional spotlight and picture. The email shows beside the editor exactly as it will paste, a check lists anything to fix before sending, and Copy for Outlook copies it ready to paste. Start next month saves the month under Past issues and clears the completed items. Already using the RO Ops Status Builder? Import from a file brings its items over.',
     'The Tickets rail groups its reports under one Reports heading: Service report, Status update, Agenda summary and Monthly recap. Agenda summary and Monthly recap moved up from the bottom of the rail.'
