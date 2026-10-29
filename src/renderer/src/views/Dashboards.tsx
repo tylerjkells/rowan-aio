@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { DashboardEntry, LinkEntry } from '../../../shared/types'
-import { tableauEmbed } from '../tableau'
+import { addressFromEmbedCode, tableauEmbed, tableauName } from '../tableau'
 
 // must match DASHBOARD_PARTITION in main/dashboards.ts (main enforces it)
 const PARTITION = 'persist:dashboards'
@@ -638,6 +638,9 @@ function DashboardDialog({
   const [folder, setFolder] = useState(dashboard?.folder ?? '')
   const [links, setLinks] = useState<LinkEntry[]>([])
   const [error, setError] = useState<string | null>(null)
+  // the name the dialog filled in itself, so a new address can replace it
+  const [autoName, setAutoName] = useState<string | null>(null)
+  const [fromCode, setFromCode] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [signedOut, setSignedOut] = useState(false)
   // moves and sign-outs apply immediately; a cancel still hands back the list
@@ -656,6 +659,21 @@ function DashboardDialog({
       )
     }
   }, [dashboard])
+
+  /** a typed or pasted address; Tableau embed code turns into the address inside it */
+  function changeAddress(raw: string): void {
+    const inCode = addressFromEmbedCode(raw)
+    const next = inCode ?? raw
+    setUrl(next)
+    setFromCode(inCode !== null)
+    setError(inCode === null && /<[a-z]/i.test(raw) ? 'No dashboard address in that code.' : null)
+    // a Tableau view names itself, unless a name is already typed
+    if (!name.trim() || name === autoName) {
+      const auto = tableauName(next) ?? ''
+      setName(auto)
+      setAutoName(auto)
+    }
+  }
 
   async function save(e: React.FormEvent): Promise<void> {
     e.preventDefault()
@@ -714,7 +732,9 @@ function DashboardDialog({
                 const l = links.find((x) => x.id === e.target.value)
                 if (!l) return
                 setName(l.name)
+                setAutoName(null)
                 setUrl(l.url)
+                setFromCode(false)
               }}
             >
               <option value="">Pick a link…</option>
@@ -731,21 +751,29 @@ function DashboardDialog({
           <input
             className="text-input"
             value={url}
-            onChange={(e) => {
-              setUrl(e.target.value)
-              setError(null)
+            onChange={(e) => changeAddress(e.target.value)}
+            onPaste={(e) => {
+              // a one-line field drops embed code's line breaks, so read the paste whole
+              const text = e.clipboardData.getData('text/plain')
+              if (!/<[a-z]/i.test(text)) return
+              e.preventDefault()
+              changeAddress(text)
             }}
-            placeholder="https://app.powerbi.com/…"
+            placeholder="Paste a link, or Tableau’s embed code"
             autoFocus
             required
           />
+          {fromCode && <span className="field-note ok">Took the dashboard’s address from the embed code.</span>}
         </label>
         <label className="pd-field">
           <span>Name</span>
           <input
             className="text-input"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value)
+              setAutoName(null)
+            }}
             placeholder="Shown in the sidebar"
           />
         </label>
