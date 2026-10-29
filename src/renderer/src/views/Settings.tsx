@@ -3,6 +3,7 @@ import { MailGuideDialog } from '../MailGuide'
 import { VersionHistory } from '../WhatsNew'
 import { sanitizeSignatureHtml } from '../../../shared/signature'
 import { NAV_TABS } from '../../../shared/tabs'
+import { CLAUDE_FALLBACK, CLAUDE_FAMILIES, type ClaudeFamily, type ClaudeLineup } from '../../../shared/claudeModels'
 import type {
   AppSettings,
   AppTheme,
@@ -48,19 +49,13 @@ const WHISPER_MODELS: { id: WhisperModel; title: string; desc: string }[] = [
   }
 ]
 
-const CLAUDE_MODELS = [
-  {
-    id: 'claude-haiku-4-5',
-    title: 'Claude Haiku 4.5',
-    desc: 'Recommended default: good summaries for pennies. On long meetings small details can slip — upgrade those from the Regenerate menu.'
-  },
-  {
-    id: 'claude-sonnet-5',
-    title: 'Claude Sonnet 5',
-    desc: 'Far more reliable on details, at roughly 4x the cost. Worth it when every meeting matters.'
-  },
-  { id: 'claude-opus-4-8', title: 'Claude Opus 4.8', desc: 'Highest quality, highest cost.' }
-]
+/** what each family is for; which version that is comes from the Models API */
+const CLAUDE_FAMILY_DESC: Record<ClaudeFamily, string> = {
+  haiku:
+    'Recommended default: good summaries for pennies. On long meetings small details can slip — upgrade those from the Regenerate menu.',
+  sonnet: 'Far more reliable on details, at a higher cost. Worth it when every meeting matters.',
+  opus: 'Highest quality, highest cost.'
+}
 
 function formatUsd(v: number): string {
   if (v > 0 && v < 0.005) return 'under $0.01'
@@ -605,9 +600,12 @@ export function SettingsView({
   const [connectingCal, setConnectingCal] = useState(false)
   const [storage, setStorage] = useState<{ count: number; totalBytes: number; audioBytes: number } | null>(null)
   const [usage, setUsage] = useState<UsageSummary | null>(null)
+  // the newest Claude model in each family, so the choices name current versions
+  const [lineup, setLineup] = useState<ClaudeLineup>(CLAUDE_FALLBACK)
 
   useEffect(() => {
     window.scribe.usage.get().then(setUsage)
+    window.scribe.ai.claudeModels().then(setLineup)
   }, [])
   const [version, setVersion] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -970,19 +968,23 @@ export function SettingsView({
             Default model · {settings.aiProvider === 'openai' ? 'ChatGPT' : 'Claude'}
           </div>
           {settings.aiProvider === 'claude' ? (
-            <div className="opt-list" role="radiogroup" aria-label="Default summary model">
-              {CLAUDE_MODELS.map((m) => (
-                <OptRow
-                  key={m.id}
-                  title={m.title}
-                  desc={m.desc}
-                  selected={settings.claudeModel === m.id}
-                  onSelect={async () =>
-                    onChange(await window.scribe.settings.update({ claudeModel: m.id }))
-                  }
-                />
-              ))}
-            </div>
+            <>
+              <div className="opt-list" role="radiogroup" aria-label="Default summary model">
+                {CLAUDE_FAMILIES.map((f) => (
+                  <OptRow
+                    key={f}
+                    title={lineup[f].name}
+                    desc={CLAUDE_FAMILY_DESC[f]}
+                    selected={settings.claudeModel === f}
+                    onSelect={async () => onChange(await window.scribe.settings.update({ claudeModel: f }))}
+                  />
+                ))}
+              </div>
+              <p className="opt-desc">
+                Always the newest of each: Rowan checks with Anthropic once a day and moves to a new
+                Haiku, Sonnet or Opus as soon as it&apos;s released.
+              </p>
+            </>
           ) : (
             <>
               <div className="opt-list" role="radiogroup" aria-label="Default summary model">

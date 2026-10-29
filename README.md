@@ -64,7 +64,9 @@ module of several.)
   directory, links, brand colors, your ClickUp tasks, your ServiceNow tickets
   and the team's queue (as of the last update), and the status update.
 - **Choose your AI** — Claude or ChatGPT power summaries and Ask; both keys
-  storable, per-provider model picks.
+  storable, per-provider model picks. A Claude pick is a family (Haiku, Sonnet
+  or Opus) that always runs on its newest model, checked daily with
+  Anthropic's Models API.
 - **Six themes** — including Notion and iOS looks that restyle components,
   not just colors.
 - **Your tabs** — Settings → Tabs switches any sidebar tab off (Today and

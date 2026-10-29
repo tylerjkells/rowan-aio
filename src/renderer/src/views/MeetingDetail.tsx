@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Meeting, VoiceMeta } from '../../../shared/types'
 import { TAG_COLORS } from '../../../shared/tags'
+import { CLAUDE_FALLBACK, CLAUDE_FAMILIES, type ClaudeLineup } from '../../../shared/claudeModels'
 import {
   BackIcon,
   ChevronIcon,
@@ -1726,17 +1727,14 @@ function NotesEditor({
   )
 }
 
-const REGEN_MODELS: Record<'claude' | 'openai', { id: string; label: string }[]> = {
-  claude: [
-    { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-    { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
-    { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' }
-  ],
-  openai: [
-    { id: 'gpt-5.1', label: 'GPT-5.1' },
-    { id: 'gpt-5.1-mini', label: 'GPT-5.1 mini' }
-  ]
-}
+const OPENAI_REGEN_MODELS: { id: string; label: string }[] = [
+  { id: 'gpt-5.1', label: 'GPT-5.1' },
+  { id: 'gpt-5.1-mini', label: 'GPT-5.1 mini' }
+]
+
+/** the Claude choices are the newest Haiku, Sonnet and Opus */
+const claudeRegenModels = (lineup: ClaudeLineup): { id: string; label: string }[] =>
+  CLAUDE_FAMILIES.map((f) => ({ id: lineup[f].id, label: lineup[f].name }))
 
 /**
  * Split button: the main half regenerates with the default model from
@@ -1754,7 +1752,12 @@ function RegenerateButton({
   provider: 'claude' | 'openai'
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const [lineup, setLineup] = useState<ClaudeLineup>(CLAUDE_FALLBACK)
   const wrapRef = useRef<HTMLSpanElement>(null)
+
+  useEffect(() => {
+    if (provider === 'claude') window.scribe.ai.claudeModels().then(setLineup)
+  }, [provider])
 
   useEffect(() => {
     if (!open) return
@@ -1787,7 +1790,7 @@ function RegenerateButton({
       </button>
       {open && (
         <div className="split-menu" role="menu">
-          {REGEN_MODELS[provider].map((m) => (
+          {(provider === 'claude' ? claudeRegenModels(lineup) : OPENAI_REGEN_MODELS).map((m) => (
             <button
               key={m.id}
               className="split-menu-item"

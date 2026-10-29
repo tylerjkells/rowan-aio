@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { aiChat, type AiSystemBlock } from './ai'
 import { recordUsage } from './usage'
+import { resolveClaudeModel } from './claudeModels'
 import type { MeetingSummary, TranscriptSegment } from '../shared/types'
 
 const SUMMARY_SCHEMA = {
@@ -406,12 +407,15 @@ export async function askAboutMeeting(
 export async function testApiKey(key: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const client = new Anthropic({ apiKey: key.trim() })
+    // the cheapest current model; any reply at all proves the key
+    const model = resolveClaudeModel('haiku')
     const response = await client.messages.create({
-      model: 'claude-haiku-4-5',
-      max_tokens: 8,
+      model,
+      max_tokens: 64,
+      output_config: { effort: 'low' },
       messages: [{ role: 'user', content: 'Reply with OK' }]
     })
-    recordUsage('claude-haiku-4-5', response.usage)
+    recordUsage(model, response.usage)
     return { ok: true }
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {

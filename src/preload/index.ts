@@ -69,6 +69,7 @@ import type {
   WeeklyDigest,
   WhisperModel
 } from '../shared/types'
+import type { ClaudeLineup } from '../shared/claudeModels'
 
 export interface LiveUpdate {
   id: string
@@ -120,6 +121,10 @@ const api = {
   },
   usage: {
     get: (): Promise<UsageSummary> => ipcRenderer.invoke('usage:get')
+  },
+  ai: {
+    /** the newest Claude model in each family (Haiku, Sonnet, Opus) */
+    claudeModels: (): Promise<ClaudeLineup> => ipcRenderer.invoke('ai:claudeModels')
   },
   engine: {
     status: (): Promise<EngineStatus> => ipcRenderer.invoke('engine:status'),

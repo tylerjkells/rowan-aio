@@ -1,3 +1,5 @@
+import type { ClaudeFamily } from './claudeModels'
+
 export type RecordingMode = 'in-person' | 'virtual' | 'imported'
 
 export type MeetingStage =
@@ -820,7 +822,8 @@ export interface AppSettings {
   whisperModel: WhisperModel
   /** which AI service powers summaries, Ask, and speaker identification */
   aiProvider: 'claude' | 'openai'
-  claudeModel: string
+  /** a Claude family; requests run on its newest model (shared/claudeModels.ts) */
+  claudeModel: ClaudeFamily
   openaiModel: string
   autoSummarize: boolean
   /** sort new mail into priority / normal / low as it arrives, with a handoff */
