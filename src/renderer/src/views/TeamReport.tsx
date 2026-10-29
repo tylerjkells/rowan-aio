@@ -740,26 +740,9 @@ function attentionOf(t: TeamTicket, now: number): string[] {
 
 // ---- snapshot -------------------------------------------------------------------
 // The meeting view: one light sheet sized for a document page, copied as an
-// image and pasted into the weekly notes. The period sits at the end of a
-// short run of the periods before it, so a quiet week still has a story.
-
-/** the periods leading up to this one and ending with it: 8 weeks, 6 months, or the year's 12 */
-function trendOf(key: PeriodKey, p: Period): (Range & { label: string })[] {
-  if (key === 'year') return bucketsOf(p)
-  if (key === 'week') {
-    return Array.from({ length: 8 }, (_, i) => {
-      const start = addDays(p.start, (i - 7) * 7)
-      return { start, end: addDays(start, 7), label: fmt(start, { month: 'short', day: 'numeric' }) }
-    })
-  }
-  return Array.from({ length: 6 }, (_, i) => {
-    const start = addMonths(p.start, i - 5)
-    const month = start.toLocaleDateString(undefined, { month: 'short' })
-    return i < 5
-      ? { start, end: addMonths(p.start, i - 4), label: month }
-      : { start, end: p.end, label: key === 'mtd' ? `${month} so far` : month }
-  })
-}
+// image and pasted into the weekly notes. It is the full report in brief:
+// its charts break the period down the same way (a week by day, a month by
+// week, the year by month) and its numbers are the same.
 
 const span = (a: Date, b: Date, o: Intl.DateTimeFormatOptions): string =>
   new Intl.DateTimeFormat(undefined, o).formatRange(a, b)
@@ -794,17 +777,15 @@ function headlineOf(key: PeriodKey, p: Period, opened: number, resolved: number,
   return `${out} The open queue ${move}.`
 }
 
-/** opened and resolved per period; with stress, the latest pair at full strength and labelled, the rest for context */
-function TrendColumns({
+/** opened and resolved in each part of the period, each bar labelled when there's room */
+function SnapColumns({
   buckets,
   opened,
-  resolved,
-  stress
+  resolved
 }: {
   buckets: { label: string }[]
   opened: number[]
   resolved: number[]
-  stress: boolean
 }): React.JSX.Element {
   const W = 400
   const H = 170
@@ -821,11 +802,18 @@ function TrendColumns({
   const w = Math.min(16, (band - 10) / 2)
   const pair = w * 2 + 2
   const y = (v: number): number => T + ih - (v / top) * ih
-  const last = buckets.length - 1
+  // a week's days or a month's weeks; twelve months are too tight to label
+  const labelled = buckets.length <= 8
   const ticks: number[] = []
   for (let v = 0; v <= top; v += step) ticks.push(v)
+  const cap = (v: number, cx: number): React.JSX.Element | null =>
+    labelled && v > 0 ? (
+      <text className="tkr-cap" x={cx} y={y(v) - 5} textAnchor="middle">
+        {v}
+      </text>
+    ) : null
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Tickets opened and resolved in each period">
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Tickets opened and resolved in each part of the period">
       {ticks.map((v) => (
         <g key={v}>
           <line className="tkr-gridline" x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
@@ -836,30 +824,17 @@ function TrendColumns({
       ))}
       {buckets.map((b, i) => {
         const x0 = L + i * band + (band - pair) / 2
-        const now = stress && i === last
-        const past = stress && !now
         return (
           <g key={i}>
             <title>{`${b.label}: ${opened[i]} opened, ${resolved[i]} resolved`}</title>
+            <path className="tkr-col tkr-opened" d={columnPath(x0, y(opened[i]), w, T + ih - y(opened[i]))} />
             <path
-              className={`tkr-col tkr-opened ${past ? 'past' : ''}`}
-              d={columnPath(x0, y(opened[i]), w, T + ih - y(opened[i]))}
-            />
-            <path
-              className={`tkr-col tkr-closed ${past ? 'past' : ''}`}
+              className="tkr-col tkr-closed"
               d={columnPath(x0 + w + 2, y(resolved[i]), w, T + ih - y(resolved[i]))}
             />
-            {now && (
-              <>
-                <text className="tkr-cap strong" x={x0 + w / 2} y={y(opened[i]) - 5} textAnchor="middle">
-                  {opened[i]}
-                </text>
-                <text className="tkr-cap strong" x={x0 + w * 1.5 + 2} y={y(resolved[i]) - 5} textAnchor="middle">
-                  {resolved[i]}
-                </text>
-              </>
-            )}
-            <text className={`tkr-axis ${now ? 'now' : ''}`} x={L + i * band + band / 2} y={H - 6} textAnchor="middle">
+            {cap(opened[i], x0 + w / 2)}
+            {cap(resolved[i], x0 + w * 1.5 + 2)}
+            <text className="tkr-axis" x={L + i * band + band / 2} y={H - 6} textAnchor="middle">
               {b.label}
             </text>
           </g>
@@ -870,8 +845,8 @@ function TrendColumns({
   )
 }
 
-/** the open queue at the end of each period: where it started and where it is, labelled */
-function TrendLine({ points }: { points: { label: string; value: number }[] }): React.JSX.Element {
+/** the open queue at the end of each part of the period: where it started and where it ended, labelled */
+function SnapLine({ points }: { points: { label: string; value: number }[] }): React.JSX.Element {
   const W = 236
   const H = 170
   const L = 26
@@ -892,7 +867,7 @@ function TrendLine({ points }: { points: { label: string; value: number }[] }): 
   const area = n ? `${line}L${x(n - 1)},${T + ih}L${x(0)},${T + ih}Z` : ''
   const last = n - 1
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Open tickets at the end of each period">
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Open tickets at the end of each part of the period">
       {ticks.map((v) => (
         <g key={v}>
           <line className="tkr-gridline" x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
@@ -1111,10 +1086,6 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
       .map((t) => ({ t, age: ageOf(t), idle: (now - Date.parse(t.updatedAt)) / 864e5, why: attentionOf(t, now) }))
       .sort((a, b) => b.age - a.age)
 
-    // the snapshot's run of periods, leaving out any from before the history starts
-    const historyFrom = coverageStart ? Date.parse(coverageStart) : null
-    const trend = trendOf(period, p).filter((b) => historyFrom === null || historyFrom <= b.start.getTime())
-
     return {
       ctx,
       cur,
@@ -1125,14 +1096,6 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
       openedSeries: buckets.map((b) => all.filter((t) => inRange(at(t.openedAt), b)).length),
       closedSeries: buckets.map((b) => all.filter((t) => isDone(t) && inRange(at(doneAt(t)), b)).length),
       queueSeries: buckets.map((b) => ({ label: b.label, value: openAt(all, Math.min(b.end.getTime(), now)) })),
-      trend,
-      trendOpened: trend.map((b) => all.filter((t) => inRange(at(t.openedAt), b)).length),
-      trendResolved: trend.map((b) => all.filter((t) => isDone(t) && inRange(at(doneAt(t)), b)).length),
-      trendQueue: [
-        ...trend.map((b) => ({ label: b.label, value: openAt(all, Math.min(b.end.getTime(), now)) })),
-        // a finished period's line runs on to today, so it ends where the Open now tile is
-        ...(p.end.getTime() < now ? [{ label: 'Now', value: open.length }] : [])
-      ],
       team,
       byRequester: top.map(([label, value]) => ({ label, value })),
       topShare: rq.length ? top.reduce((a, [, v]) => a + v, 0) / rq.length : null,
@@ -1152,7 +1115,7 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
       hasReplies: tickets.some((t) => t.firstReplyAt !== undefined),
       hasResolved: tickets.some((t) => t.resolvedAt !== undefined)
     }
-  }, [tickets, p, filters, period, coverageStart])
+  }, [tickets, p, filters, period])
 
   /** change vs an earlier figure, coloured by whether that direction is good */
   function delta(
@@ -1578,12 +1541,11 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
   const resolvedBy = report.team
     .filter((r) => r.resolved > 0 && (!filters.person || r.label === filters.person))
     .map((r) => ({ label: r.label, value: r.resolved }))
-  const trendWord = period === 'week' ? 'week' : 'month'
   // the tiles are narrow: name the comparison briefly
   const snapVs =
     period === 'mtd'
       ? `vs ${span(p.prev.start, addDays(p.prev.end, -1), { month: 'short', day: 'numeric' })}`
-      : `vs prior ${period === 'year' ? 'year' : trendWord}`
+      : `vs prior ${period === 'year' ? 'year' : period}`
   const snapshot = (
     <div className="tks-wrap">
       {!presenting && (
@@ -1662,7 +1624,7 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
           </div>
         </section>
 
-        <div className="tks-row tks-trend">
+        <div className="tks-row tks-charts">
           <section>
             <div className="tks-sec-head">
               <h4>Opened vs resolved</h4>
@@ -1675,25 +1637,13 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
                 </span>
               </span>
             </div>
-            <p className="tks-sub">
-              {period === 'year'
-                ? 'Each month of the last 12'
-                : `The last ${report.trend.length} ${trendWord}s, this ${trendWord} in full color`}
-            </p>
-            <TrendColumns
-              buckets={report.trend}
-              opened={report.trendOpened}
-              resolved={report.trendResolved}
-              stress={period !== 'year'}
-            />
+            <p className="tks-sub">{bucketWord}. Resolved bars taller than opened means the queue is shrinking.</p>
+            <SnapColumns buckets={report.buckets} opened={report.openedSeries} resolved={report.closedSeries} />
           </section>
           <section>
             <h4>Open queue</h4>
-            <p className="tks-sub">
-              Open at the end of each {trendWord}
-              {report.trendQueue.at(-1)?.label === 'Now' ? ', and now' : ''}
-            </p>
-            <TrendLine points={report.trendQueue} />
+            <p className="tks-sub">Tickets open at the end of each {endWord}.</p>
+            <SnapLine points={report.queueSeries} />
           </section>
         </div>
 

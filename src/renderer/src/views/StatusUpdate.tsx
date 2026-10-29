@@ -650,17 +650,13 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
   const shownHtml = frozen ?? html
   const previewHtml = useMemo(() => ({ __html: shownHtml }), [shownHtml])
 
-  // the active item, lit up in the preview and kept in view there while it's edited in the editor
+  // the item being worked on in the editor stays in view in the preview
   useEffect(() => {
-    const box = previewRef.current
-    if (!box) return
-    box.querySelectorAll('.su-hl').forEach((n) => n.classList.remove('su-hl'))
-    if (!active) return
-    const row = box.querySelector(`[data-su-row="${CSS.escape(active.id)}"]`)
-    if (!row) return
-    row.classList.add('su-hl')
-    if (active.from === 'editor') row.scrollIntoView({ block: 'nearest' })
-  }, [active, html, frozen, viewing, pane, narrow])
+    if (active?.from !== 'editor') return
+    previewRef.current
+      ?.querySelector(`[data-su-row="${CSS.escape(active.id)}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [active, html])
 
   // and edited in the preview: its card in the editor comes into view
   useEffect(() => {

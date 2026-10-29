@@ -9246,7 +9246,7 @@ button.tkr-hbar:focus-visible {
   gap: 24px;
   margin-top: 18px;
 }
-.tks-trend {
+.tks-charts {
   grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
 }
 .tks-split {
@@ -9280,8 +9280,12 @@ button.tkr-hbar:focus-visible {
   display: block;
   overflow: visible;
 }
-.tks .tkr-col.past {
-  opacity: 0.4;
+/* numbers on the charts keep clear of the bars and the line beneath them */
+.tks .tkr-cap {
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 .tks .tkr-axis.now {
   fill: var(--ink);
@@ -10195,10 +10199,6 @@ button.tkr-hbar:focus-visible {
 .su-email.editable [data-su-edit]:focus {
   outline: 2px solid #0067a0;
   outline-offset: 2px;
-}
-/* the item you're working on in the editor */
-.su-email tr.su-hl > td {
-  background-color: #fff6d6;
 }
 
 .su-toast {
