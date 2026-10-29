@@ -891,7 +891,12 @@ export interface AppSettings {
   mailSignatureText: string
   /** sidebar tabs the user switched off (see shared/tabs.ts) */
   hiddenTabs: NavTab[]
+  /** your own names for the Tickets reports; one left out keeps its default */
+  reportNames: Partial<Record<ReportKey, string>>
 }
+
+/** the reports in the Tickets rail */
+export type ReportKey = 'service' | 'status' | 'agenda' | 'recap'
 
 /** sidebar tabs that can be hidden; Today and Settings always show */
 export type NavTab =

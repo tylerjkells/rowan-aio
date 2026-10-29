@@ -537,7 +537,7 @@ async function shrinkImage(file: File): Promise<StatusImage> {
 
 // ---- the view -------------------------------------------------------------------
 
-export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Element {
+export function StatusUpdate({ title, onBack }: { title: string; onBack: () => void }): React.JSX.Element {
   const [data, setData] = useState<StatusUpdateData | null>(null)
   const [viewing, setViewing] = useState<string | null>(null)
   const [pane, setPane] = useState<'edit' | 'preview'>(() =>
@@ -1110,13 +1110,16 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
 
   // ---- render ----
 
-  const month = data?.meta.month.trim() || 'Monthly'
+  const month = data?.meta.month.trim() ?? ''
   const toolbar = (
     <div className="cuc-toolbar tkr-toolbar">
       <button className="btn btn-ghost tkr-back" onClick={onBack}>
         ‹ My tickets
       </button>
-      <h2 className="cuc-title">{month} status update</h2>
+      <h2 className="cuc-title">
+        {title}
+        {month && <span className="cuc-title-n">{month}</span>}
+      </h2>
       {narrow && data && (
         <div className="mode-toggle view-toggle tkr-periods" role="radiogroup" aria-label="View">
           <button

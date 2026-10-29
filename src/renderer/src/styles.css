@@ -8520,6 +8520,39 @@ dialog.confirm p.tk-hint,
   outline: none;
   border-color: var(--accent);
 }
+/* a report in the rail: a pencil on hover renames it, in place */
+.tk-report {
+  position: relative;
+}
+.tk-report-rename {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--ink-faint);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+.tk-report:hover .tk-report-rename,
+.tk-report-rename:focus-visible {
+  opacity: 1;
+}
+.tk-report-rename:hover {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+.tk-report:hover .cuc-rail-n {
+  visibility: hidden;
+}
+.tk-report-input {
+  padding: 4px var(--s3);
+  font-size: 13.5px;
+}
 /* your topic on a ticket row: a quiet label, not a flag */
 .tk-topic {
   display: inline-block;

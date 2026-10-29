@@ -915,7 +915,14 @@ function SnapLine({ points }: { points: { label: string; value: number }[] }): R
 
 // ---- the view -------------------------------------------------------------------
 
-export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Element {
+export function TeamReport({
+  title,
+  onBack
+}: {
+  /** your name for the report, if you renamed it */
+  title?: string
+  onBack: () => void
+}): React.JSX.Element {
   const [desk, setDesk] = useState<TeamDesk | null>(null)
   const [period, setPeriod] = useState<PeriodKey>(
     () => (localStorage.getItem('teamPeriod') as PeriodKey | null) ?? 'month'
@@ -1145,7 +1152,7 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
           ‹ My tickets
         </button>
       )}
-      <h2 className="cuc-title">RO Operations service report</h2>
+      <h2 className="cuc-title">{title || 'RO Operations service report'}</h2>
       <div className="mode-toggle view-toggle tkr-periods" role="radiogroup" aria-label="Period">
         {PERIODS.map((x) => (
           <button
@@ -1564,7 +1571,7 @@ export function TeamReport({ onBack }: { onBack: () => void }): React.JSX.Elemen
       <div className="tks" ref={snapRef}>
         <header className="tks-head">
           <div>
-            <p className="tks-eyebrow">RO Operations · Service report</p>
+            <p className="tks-eyebrow">RO Operations · {title || 'Service report'}</p>
             <h3 className="tks-title">{snapshotTitle(period, p)}</h3>
           </div>
           {desk.syncedAt && (
