@@ -44,7 +44,8 @@ module of several.)
   Present mode keeps the filters. Nothing is written back to ServiceNow. A
   Status update view builds the team's monthly RO Ops status email
   (completed, in progress and new requests, by area, with an optional
-  spotlight) beside a live preview, flags anything to check before sending,
+  spotlight) beside a live preview whose text can be edited in place, flags
+  anything to check before sending,
   copies it formatted for Outlook, and saves each month under Past issues
   when you start the next one.
 - **Action items** — every follow-up from every meeting in one place: dated
@@ -60,7 +61,8 @@ module of several.)
   in-place editing), reusable dashboard images that copy straight to the
   clipboard for Tableau, and stored templates you can save fresh copies of.
 - **Ask everywhere** — the floating assistant answers across meetings, the
-  directory, links, brand colors, and your ClickUp tasks.
+  directory, links, brand colors, your ClickUp tasks, your ServiceNow tickets
+  and the team's queue (as of the last update), and the status update.
 - **Choose your AI** — Claude or ChatGPT power summaries and Ask; both keys
   storable, per-provider model picks.
 - **Six themes** — including Notion and iOS looks that restyle components,
@@ -73,7 +75,7 @@ module of several.)
 - **Record** in-person meetings (your mic) or virtual meetings (your mic **plus** system audio — whatever comes through your speakers/headset from Webex, Teams, Zoom, anything).
 - **Transcribe** on your own machine with [whisper.cpp](https://github.com/ggml-org/whisper.cpp). Audio never leaves your PC. $0, forever.
 - **Summarize** with the Claude API (pay-per-use — typically 1–5 cents per meeting with Haiku): TL;DR, key points, decisions, action items with owners/due dates, and open questions. Meetings are auto-titled from their content.
-- **Claude app connection** — one click in Settings links your library to Claude Desktop through a local, read-only MCP server. Claude can then answer questions about your meetings, build reports and spreadsheets from them, or create tasks in tools you've connected to Claude (like ClickUp).
+- **Claude app connection** — one click in Settings links your library to Claude Desktop through a local, read-only MCP server. Claude can then answer questions about your meetings, your tickets, the team's queue and the status update, build reports and spreadsheets from them, or create tasks in tools you've connected to Claude (like ClickUp).
 - **Ask anything** — a floating assistant on every page. On a meeting page it answers from that meeting's transcript; anywhere else it answers across your whole library ("What did we decide about X?", "What has David committed to?") with citations that jump to the exact transcript moment.
 - **Action items rollup** — every follow-up across all meetings in one checklist, with done-tracking.
 - **People** — a page per colleague: every meeting together, everything they own, and everything you owe them, assembled automatically from owners, attendees, and named speakers.

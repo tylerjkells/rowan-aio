@@ -66,13 +66,18 @@ function AttendeesDialog({
     setNote(null)
     const found = await window.scribe.meetings.attendeesFromCalendar(meeting.id)
     setPulling(false)
-    if (!found) {
-      setNote('No calendar event with attendees matches this meeting’s time.')
+    if (!found || found.names.length === 0) {
+      setNote(
+        found?.eventTitle
+          ? `“${found.eventTitle}” is on your calendar at this time, but Outlook’s calendar link doesn’t say who’s invited, and no invitation email for it is in your mail folder.`
+          : 'No calendar event or invitation email matches this meeting’s time.'
+      )
       return
     }
-    const fresh = found.filter((n) => !has(n))
+    const fresh = found.names.filter((n) => !has(n))
     setNames([...names, ...fresh])
-    setNote(fresh.length > 0 ? `Added ${fresh.length} from the invite.` : 'Already all listed.')
+    const source = found.from === 'email' ? 'the invitation email' : 'the invite'
+    setNote(fresh.length > 0 ? `Added ${fresh.length} from ${source}.` : 'Already all listed.')
   }
 
   async function save(): Promise<void> {

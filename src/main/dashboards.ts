@@ -60,11 +60,12 @@ export function saveDashboard(entry: DashboardInput): DashboardEntry[] {
         name,
         url,
         folder: entry.folder === undefined ? list[i].folder : folder,
-        pinned: entry.pinned ?? list[i].pinned
+        pinned: entry.pinned ?? list[i].pinned,
+        full: entry.full ?? list[i].full
       }
     }
   } else {
-    list.push({ id: randomUUID(), name, url, folder, pinned: entry.pinned })
+    list.push({ id: randomUUID(), name, url, folder, pinned: entry.pinned, full: entry.full })
   }
   write(list)
   return list

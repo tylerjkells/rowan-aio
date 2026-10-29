@@ -6,6 +6,10 @@ import { listMeetings, readMeeting } from './store'
 import { listPeople } from './people'
 import { listLinks } from './links'
 import { getBrand } from './brand'
+import { readDesk } from './tickets'
+import { readTeamDesk } from './team'
+import { getStatusUpdate } from './statusUpdate'
+import { statusUpdateDigest, teamDigest, ticketsDigest } from '../shared/workDigest'
 import { transcriptToText } from './summarize'
 import type { AskSource, LibraryQA, Meeting } from '../shared/types'
 
@@ -209,7 +213,8 @@ function recentHistoryMessages(): { role: 'user' | 'assistant'; content: string 
 
 /**
  * Everything the app knows outside of meetings — the org directory, saved
- * links, brand colors, and the last-refreshed ClickUp task snapshot — as one
+ * links, brand colors, the last-refreshed ClickUp task snapshot, your
+ * ServiceNow tickets and the team's, and the monthly status update — as one
  * compact context block. Each source degrades to absent on any failure.
  */
 function workspaceContext(): string {
@@ -271,6 +276,32 @@ function workspaceContext(): string {
   } catch {
     // ClickUp not connected or never refreshed
   }
+  try {
+    const text = ticketsDigest(readDesk())
+    if (text) {
+      parts.push(
+        `<my_tickets note="ServiceNow incidents assigned to the user, from their last update in the Tickets tab; plans, next steps and notes are the user's own">\n${text}\n</my_tickets>`
+      )
+    }
+  } catch {
+    // no tickets brought in yet
+  }
+  try {
+    const text = teamDigest(readTeamDesk())
+    if (text) {
+      parts.push(
+        `<team_tickets note="every incident assigned to the RO Operations group, from the user's last update of the service report">\n${text}\n</team_tickets>`
+      )
+    }
+  } catch {
+    // no team data yet
+  }
+  try {
+    const text = statusUpdateDigest(getStatusUpdate())
+    if (text) parts.push(`<status_update>\n${text}\n</status_update>`)
+  } catch {
+    // no status update yet
+  }
   return parts.join('\n\n')
 }
 
@@ -330,12 +361,13 @@ export async function askLibrary(question: string, model: string): Promise<Libra
     schema: ANSWER_SCHEMA as unknown as Record<string, unknown>,
     schemaName: 'library_answer',
     system:
-      'You answer questions across a personal work hub for the person using it: their meeting library plus their workspace data (org directory, saved links, brand colors, open ClickUp tasks). ' +
+      'You answer questions across a personal work hub for the person using it: their meeting library plus their workspace data (org directory, saved links, brand colors, open ClickUp tasks, their ServiceNow tickets, the RO Operations team\'s ticket queue, and the monthly RO Ops status update). ' +
       'Ground every answer in the material below; when it does not contain the answer, say so plainly instead of guessing. ' +
+      'Ticket data is a copy from the user\'s last update, not live: when answering about tickets, mention the as-of time, and count from the lists and summary lines given rather than estimating. ' +
       'Meeting transcripts are automatic speech recognition output and may contain errors. ' +
       'In transcripts, speaker labels mark audio sources: the first-named label (often "Me") is the person asking you questions now; the other label is everyone else on that call. ' +
       'Answer concisely in plain prose. Cite the meetings that support meeting-based parts of the answer with inline markers like [1], and list each cited meeting in sources with its id. ' +
-      'Answers drawn from workspace data (a phone number, a link, a color, a task) need no citations — leave sources empty when nothing came from a meeting. ' +
+      'Answers drawn from workspace data (a phone number, a link, a color, a task, a ticket) need no citations — leave sources empty when nothing came from a meeting. ' +
       'When several meetings touch the topic over time, prefer the most recent position and note how it evolved.\n\n' +
       `<catalog>\n${catalog || '(no meetings yet)'}\n</catalog>` +
       (workspace ? `\n\n${workspace}` : '') +

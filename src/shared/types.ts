@@ -235,6 +235,15 @@ export interface CalendarEvent {
   attendees: string[]
 }
 
+/** what Participants → From calendar invite found for a meeting */
+export interface InviteLookup {
+  names: string[]
+  /** where the names came from: the calendar feed or the invitation email; null when none were found */
+  from: 'calendar' | 'email' | null
+  /** the calendar event at the meeting's time, when there is one */
+  eventTitle: string | null
+}
+
 /** pre-meeting brief: where a meeting series left off last time */
 export interface EventBrief {
   meetingId: string
@@ -454,6 +463,8 @@ export interface DashboardEntry {
   folder?: string
   /** also listed under Pinned at the top of the sidebar */
   pinned?: boolean
+  /** a Tableau view shown with Tableau's own site around it, not just the dashboard */
+  full?: boolean
 }
 
 /** a dashboard to add (no id) or update; folder and pinned left out keep what it had */
@@ -891,7 +902,12 @@ export interface AppSettings {
   mailSignatureText: string
   /** sidebar tabs the user switched off (see shared/tabs.ts) */
   hiddenTabs: NavTab[]
+  /** your own names for the Tickets reports; one left out keeps its default */
+  reportNames: Partial<Record<ReportKey, string>>
 }
+
+/** the reports in the Tickets rail */
+export type ReportKey = 'service' | 'status' | 'agenda' | 'recap'
 
 /** sidebar tabs that can be hidden; Today and Settings always show */
 export type NavTab =

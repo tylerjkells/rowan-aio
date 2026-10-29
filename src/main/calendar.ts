@@ -1,5 +1,6 @@
 import ical, { type VEvent } from 'node-ical'
 import { getCalendarUrl, getSettings } from './settings'
+import { inviteesFromMail } from './mail'
 import type { CalendarEvent } from '../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -214,4 +215,19 @@ export async function findLiveEvent(startedAtIso: string): Promise<CalendarEvent
     }
   }
   return best
+}
+
+/**
+ * Who's invited to an event: the calendar's own list when it has one,
+ * otherwise the invitation email's. Outlook's published calendar link
+ * stopped carrying invite lists in 2026 (at most the organizer is left), so
+ * for most meetings the names come from the email the inbox flow filed.
+ */
+export async function inviteesOf(
+  event: CalendarEvent
+): Promise<{ names: string[]; from: 'calendar' | 'email' | null }> {
+  if (event.attendees.length > 1) return { names: event.attendees, from: 'calendar' }
+  const mailed = await inviteesFromMail(event.title, event.start).catch(() => [])
+  const names = [...new Set([...event.attendees, ...mailed])]
+  return { names, from: mailed.length > 0 ? 'email' : names.length > 0 ? 'calendar' : null }
 }

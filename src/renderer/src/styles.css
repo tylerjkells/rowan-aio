@@ -8520,6 +8520,39 @@ dialog.confirm p.tk-hint,
   outline: none;
   border-color: var(--accent);
 }
+/* a report in the rail: a pencil on hover renames it, in place */
+.tk-report {
+  position: relative;
+}
+.tk-report-rename {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--ink-faint);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+.tk-report:hover .tk-report-rename,
+.tk-report-rename:focus-visible {
+  opacity: 1;
+}
+.tk-report-rename:hover {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+.tk-report:hover .cuc-rail-n {
+  visibility: hidden;
+}
+.tk-report-input {
+  padding: 4px var(--s3);
+  font-size: 13.5px;
+}
 /* your topic on a ticket row: a quiet label, not a flag */
 .tk-topic {
   display: inline-block;
@@ -9246,7 +9279,7 @@ button.tkr-hbar:focus-visible {
   gap: 24px;
   margin-top: 18px;
 }
-.tks-trend {
+.tks-charts {
   grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
 }
 .tks-split {
@@ -9280,8 +9313,12 @@ button.tkr-hbar:focus-visible {
   display: block;
   overflow: visible;
 }
-.tks .tkr-col.past {
-  opacity: 0.4;
+/* numbers on the charts keep clear of the bars and the line beneath them */
+.tks .tkr-cap {
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 .tks .tkr-axis.now {
   fill: var(--ink);
@@ -9320,7 +9357,8 @@ button.tkr-hbar:focus-visible {
    The monthly email builder: an editor and the email as it pastes into
    Outlook, side by side when there's room. The email keeps the Rowan
    colors in every theme; status chips use their light tint in light themes
-   and a dark one in dark themes. */
+   and a dark one in dark themes. Each item is its own card, edged in its
+   status color, with the rarely changed fields folded into its details. */
 .su-work {
   flex: 1;
   min-height: 0;
@@ -9408,7 +9446,7 @@ button.tkr-hbar:focus-visible {
 }
 
 .su-checks {
-  margin-bottom: var(--s4);
+  margin-bottom: var(--s3);
   padding: 10px 14px;
   border: 1px solid var(--line-soft);
   border-left: 4px solid var(--warn);
@@ -9444,23 +9482,33 @@ button.tkr-hbar:focus-visible {
   color: var(--ink);
   text-decoration-color: var(--accent);
 }
+.su-checks-more {
+  margin-top: 4px;
+  font-size: 12.5px;
+}
 
+/* the counts double as a way to jump to their section */
 .su-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--s2);
-  margin-bottom: var(--s4);
+  margin-bottom: var(--s3);
 }
 .su-stat {
-  padding: 10px 14px;
+  padding: 8px 12px;
   border: 1px solid var(--line-soft);
   border-radius: var(--r-ctl);
   background: var(--bg-raised);
+  text-align: left;
+  transition: border-color var(--t-fast) var(--ease-out);
+}
+.su-stat:hover {
+  border-color: var(--line-strong);
 }
 .su-stat b {
   display: block;
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 650;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
@@ -9473,34 +9521,56 @@ button.tkr-hbar:focus-visible {
   color: var(--ink-faint);
 }
 
-/* the collapsible settings panels */
+/* settings: a row of pills, one panel open beneath */
+.su-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--s3);
+}
+.su-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
+}
+.su-pill:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.su-pill.active {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--ink);
+}
+.su-pill-n {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
 .su-panel {
-  margin-bottom: var(--s2);
+  margin-bottom: var(--s4);
   border: 1px solid var(--line-soft);
   border-radius: var(--r-ctl);
   background: var(--bg-raised);
 }
-.su-panel summary {
+.su-panel-head {
   display: flex;
-  justify-content: space-between;
-  gap: var(--s3);
-  padding: 9px 14px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 10px 10px 6px 14px;
   font-size: 13.5px;
-  font-weight: 600;
-  list-style: none;
-  cursor: pointer;
-}
-.su-panel summary::-webkit-details-marker {
-  display: none;
-}
-.su-panel summary::after {
-  content: 'Show';
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--ink-faint);
-}
-.su-panel[open] summary::after {
-  content: 'Hide';
 }
 .su-grid {
   display: grid;
@@ -9563,8 +9633,12 @@ button.tkr-hbar:focus-visible {
 }
 .su-img-prev {
   display: block;
+  align-self: flex-start;
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 200px;
+  object-fit: contain;
   margin-top: 6px;
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -9678,39 +9752,64 @@ button.tkr-hbar:focus-visible {
   text-transform: none;
 }
 
-/* sections and their items */
+/* sections: a heading that folds, then the item cards */
+.su-items-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: var(--s4) 0 0;
+  padding: 0 2px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.su-items-bar .link-btn {
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
 .su-section {
-  margin-top: var(--s4);
-  overflow: hidden;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-card);
-  background: var(--bg-raised);
-}
-.su-section.is-hidden {
-  border-style: dashed;
-}
-.su-section.is-hidden .su-row,
-.su-section.is-hidden .su-sub,
-.su-section.is-hidden .su-area,
-.su-section.is-hidden .su-empty {
-  opacity: 0.55;
-}
-.su-section.is-hidden .su-row:focus-within {
-  opacity: 1;
+  margin-top: var(--s2);
+  border-top: 1px solid var(--line-soft);
 }
 .su-section-head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 10px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--line-soft);
+  gap: 6px 10px;
+  padding: 10px 0 8px;
 }
 .su-section-head h3 {
   margin: 0;
   font-family: var(--font-display);
   font-size: 17px;
   font-weight: 650;
+}
+.su-fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: -4px;
+  padding: 2px 6px 2px 4px;
+  border-radius: 6px;
+  font: inherit;
+}
+.su-fold:hover {
+  background: var(--bg-raised);
+}
+.su-chev {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  color: var(--ink-faint);
+  font-size: 16px;
+  transform: rotate(90deg);
+  transition: transform var(--t-fast) var(--ease-out);
+}
+.su-section.shut .su-chev {
+  transform: rotate(0deg);
 }
 .su-section-head .btn {
   padding: 4px var(--s3);
@@ -9724,9 +9823,18 @@ button.tkr-hbar:focus-visible {
   border-radius: 999px;
   background: var(--accent-tint);
   color: var(--ink-soft);
+  font-family: var(--font-ui);
   font-size: 11.5px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+}
+.su-flagged {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--warn) 16%, transparent);
+  color: var(--warn);
+  font-size: 11.5px;
+  font-weight: 650;
 }
 .su-hidden-tag {
   padding: 1px 7px;
@@ -9738,19 +9846,26 @@ button.tkr-hbar:focus-visible {
   text-transform: uppercase;
   color: var(--ink-faint);
 }
+.su-section.is-hidden .su-section-body {
+  opacity: 0.55;
+}
+.su-section.is-hidden .su-row:focus-within {
+  opacity: 1;
+}
+.su-section-body {
+  padding-bottom: var(--s3);
+}
 .su-sub {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px 8px;
-  border-bottom: 1px solid var(--line-soft);
-  font-size: 14px;
+  margin: 6px 0 2px;
+  font-size: 13.5px;
   font-weight: 650;
+  color: var(--ink-soft);
 }
 .su-area {
-  padding: 5px 14px;
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--bg);
+  margin: 10px 0 6px;
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.1em;
@@ -9759,24 +9874,50 @@ button.tkr-hbar:focus-visible {
 }
 .su-empty {
   margin: 0;
-  padding: 14px;
+  padding: 8px 0 10px;
   font-size: 13px;
   color: var(--ink-faint);
 }
+
+/* one card per item */
 .su-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 14px 8px;
-  border-bottom: 1px solid var(--line-soft);
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--line-soft);
+  border-left: 4px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out);
 }
-.su-row:last-child {
-  border-bottom: 0;
+.su-row:hover {
+  border-color: var(--line);
+  border-left-color: var(--line-strong);
+}
+.su-row.has-chip,
+.su-row.has-chip:hover {
+  border-left-color: var(--c-dfg);
+}
+:root[data-theme='paper'] .su-row.has-chip,
+:root[data-theme='notion'] .su-row.has-chip,
+:root[data-theme='ios'] .su-row.has-chip {
+  border-left-color: var(--c-fg);
+}
+.su-row:focus-within,
+.su-row.linked {
+  border-top-color: var(--accent);
+  border-right-color: var(--accent);
+  border-bottom-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 .su-row-main {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 .su-name,
@@ -9793,14 +9934,15 @@ button.tkr-hbar:focus-visible {
   flex: 1 1 auto;
   min-width: 0;
   margin-left: -7px;
-  padding: 4px 6px;
+  padding: 3px 6px;
   font-size: 14.5px;
   font-weight: 650;
 }
 .su-note {
   width: calc(100% + 7px);
   margin-left: -7px;
-  padding: 4px 6px;
+  padding: 3px 6px;
+  color: var(--ink-soft);
   font-size: 13.5px;
   line-height: 1.45;
 }
@@ -9837,6 +9979,7 @@ button.tkr-hbar:focus-visible {
   outline: none;
   border-color: var(--line-strong);
   background: var(--bg);
+  color: var(--ink);
 }
 .su-name:focus-visible,
 .su-note:focus-visible,
@@ -9867,6 +10010,61 @@ button.tkr-hbar:focus-visible {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-faint);
+}
+/* Mark done shows on the card you're pointing at or working in */
+.su-done {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border: 1px solid var(--ok);
+  border-radius: 6px;
+  color: var(--ok);
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+.su-row:hover .su-done,
+.su-row:focus-within .su-done {
+  opacity: 1;
+}
+.su-done:hover {
+  background: var(--ok);
+  color: var(--bg);
+}
+.su-more {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--ink-faint);
+  font-size: 16px;
+  line-height: 1;
+}
+.su-more:hover,
+.su-more[aria-expanded='true'] {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+.su-summary {
+  align-self: flex-start;
+  padding: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+  text-align: left;
+}
+.su-summary:hover {
+  color: var(--ink-soft);
+  text-decoration: underline;
+}
+.su-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
 }
 .su-extra {
   display: flex;
@@ -9940,24 +10138,12 @@ button.tkr-hbar:focus-visible {
   background: var(--accent);
   color: var(--on-accent);
 }
-.su-done {
-  padding: 2px 8px;
-  border: 1px solid var(--ok);
-  border-radius: 6px;
-  color: var(--ok);
-  font-size: 12px;
-  font-weight: 600;
-}
-.su-done:hover {
-  background: var(--ok);
-  color: var(--bg);
-}
 
 /* past issues, import and export */
 .su-issues {
   display: flex;
   flex-direction: column;
-  padding: 4px 14px 14px;
+  padding: 0 14px 10px;
 }
 .su-issues .su-empty {
   padding: 6px 0;
@@ -9985,7 +10171,7 @@ button.tkr-hbar:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 4px 14px 14px;
+  padding: 0 14px 14px;
 }
 .su-data-actions {
   display: flex;
@@ -10031,6 +10217,21 @@ button.tkr-hbar:focus-visible {
   border-radius: var(--r-ctl);
   background: #f4eee2;
   color: #000;
+}
+/* text that can be edited in place: a hint on hover, a frame while editing.
+   Fixed colors, since the email is light in every theme. */
+.su-email.editable [data-su-edit] {
+  white-space: pre-wrap;
+  border-radius: 2px;
+  cursor: text;
+}
+.su-email.editable [data-su-edit]:hover {
+  outline: 1px dashed rgb(0 103 160 / 0.55);
+  outline-offset: 2px;
+}
+.su-email.editable [data-su-edit]:focus {
+  outline: 2px solid #0067a0;
+  outline-offset: 2px;
 }
 
 .su-toast {
@@ -10354,7 +10555,8 @@ button.tkr-hbar:focus-visible {
 .dash-icon:disabled {
   opacity: 0.35;
 }
-.dash-edit {
+.dash-edit,
+.dash-mode {
   padding: 6px 12px;
 }
 .dash-body {

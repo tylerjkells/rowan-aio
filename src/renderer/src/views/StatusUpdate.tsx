@@ -75,6 +75,15 @@ const MONTHS = [
 
 type PanelKey = 'meta' | 'spot' | 'statuses' | 'issues' | 'data'
 
+/** the settings that open under the pills above the items */
+const PANELS: { key: PanelKey; label: string; hint: string }[] = [
+  { key: 'meta', label: 'Email details', hint: 'Month, intro, request mailbox and office hours' },
+  { key: 'spot', label: 'Spotlight', hint: 'An optional featured dashboard or tip' },
+  { key: 'statuses', label: 'Statuses', hint: 'Add, rename and recolor the In Progress statuses' },
+  { key: 'issues', label: 'Past issues', hint: 'Each month as it was sent' },
+  { key: 'data', label: 'Import / export', hint: 'Move everything to or from a file' }
+]
+
 // ---- chip colors ------------------------------------------------------------
 
 interface Chip {
@@ -201,25 +210,37 @@ function countsOf(d: StatusUpdateData): { completed: number; progress: number; h
 
 const isHidden = (d: StatusUpdateData, key: StatusSection): boolean => d.meta.hidden.includes(key)
 
-function checksOf(d: StatusUpdateData): { text: string; focus: string; panel?: PanelKey }[] {
-  const out: { text: string; focus: string; panel?: PanelKey }[] = []
+/** one thing to fix before sending, and the field that fixes it */
+interface Check {
+  text: string
+  focus: string
+  panel?: PanelKey
+  /** the item it's about, so its section can open */
+  item?: string
+  section?: StatusSection
+}
+
+function checksOf(d: StatusUpdateData): Check[] {
+  const out: Check[] = []
   if (!d.meta.month.trim()) out.push({ text: 'The month and year is blank', focus: 'su-m-month', panel: 'meta' })
   for (const sec of SECTIONS) {
     if (isHidden(d, sec.key)) continue
     for (const it of sectionItems(d.items, sec.key)) {
       const nm = it.name.trim()
+      const at = { item: it.id, section: sec.key }
       if (!nm) {
-        out.push({ text: `An item in ${sec.label} has no name`, focus: `su-${it.id}-name` })
+        out.push({ text: `An item in ${sec.label} has no name`, focus: `su-${it.id}-name`, ...at })
         continue
       }
-      if (!it.note.trim()) out.push({ text: `${nm}: ${sec.noteLabel.toLowerCase()} is empty`, focus: `su-${it.id}-note` })
+      if (!it.note.trim())
+        out.push({ text: `${nm}: ${sec.noteLabel.toLowerCase()} is empty`, focus: `su-${it.id}-note`, ...at })
       if (sec.key === 'completed' && it.launched) {
         if (!(it.link || '').trim())
-          out.push({ text: `${nm}: new dashboard has no link (shows Link coming soon)`, focus: `su-${it.id}-link` })
+          out.push({ text: `${nm}: new dashboard has no link (shows Link coming soon)`, focus: `su-${it.id}-link`, ...at })
         else if (!isUrl(it.link))
-          out.push({ text: `${nm}: dashboard link doesn’t look like a web address`, focus: `su-${it.id}-link` })
+          out.push({ text: `${nm}: dashboard link doesn’t look like a web address`, focus: `su-${it.id}-link`, ...at })
       }
-      if (isStale(it)) out.push({ text: `${nm}: notes unchanged since last month`, focus: `su-${it.id}-note` })
+      if (isStale(it)) out.push({ text: `${nm}: notes unchanged since last month`, focus: `su-${it.id}-note`, ...at })
     }
   }
   const m = d.meta
@@ -269,6 +290,8 @@ interface TextOpts {
   serif?: boolean
   spacing?: string
   lh?: string
+  /** extra attributes on the text's span (the preview's edit markers) */
+  attrs?: string
 }
 
 function t(text: string, o: TextOpts): string {
@@ -276,8 +299,16 @@ function t(text: string, o: TextOpts): string {
   const face = o.serif ? 'Georgia' : 'Arial'
   const style = `font-family:${fam};font-size:${o.size};color:${o.color};${o.bold ? 'font-weight:bold;' : 'font-weight:normal;'}${o.spacing ? `letter-spacing:${o.spacing};` : ''}line-height:${o.lh || '1.4'};`
   const inner = o.bold ? `<b>${text}</b>` : text
-  return `<font face="${face}" color="${o.color}"><span style="${style}">${inner}</span></font>`
+  return `<font face="${face}" color="${o.color}"><span style="${style}"${o.attrs ?? ''}>${inner}</span></font>`
 }
+
+/**
+ * Text that can be edited in place in the preview: "item:<id>:name",
+ * "meta:intro", …. Only the preview carries these; the copied email never does.
+ */
+const editAttr = (ed: boolean, key: string): string =>
+  ed ? ` data-su-edit="${esc(key)}" contenteditable="plaintext-only"` : ''
+const rowAttr = (ed: boolean, id: string): string => (ed ? ` data-su-row="${esc(id)}"` : '')
 
 const br = (s: string | undefined): string => esc(s).replace(/\n/g, '<br>')
 const up = (s: string | undefined): string => esc(String(s || '').toUpperCase())
@@ -309,17 +340,17 @@ function spotImgHtml(d: StatusUpdateData, link: string): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding:10px 0 10px 0;">${inner}</td></tr></table>`
 }
 
-function spotlightHtml(d: StatusUpdateData): string {
+function spotlightHtml(d: StatusUpdateData, ed: boolean): string {
   if (!spotOn(d)) return ''
   const m = d.meta
   const link = m.spotLink.trim()
   return `<tr><td style="padding:20px 32px 0 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 <td width="5" bgcolor="#57150B" style="background-color:#57150B;width:5px;">&nbsp;</td>
-<td valign="top" bgcolor="#FFF6D6" style="background-color:#FFF6D6;padding:16px 18px;">${t('SPOTLIGHT', { size: '8.5pt', color: '#88431E', bold: true, spacing: '1px' })}${m.spotTitle.trim() ? '<br>' + t(esc(m.spotTitle.trim()), { size: '13pt', color: '#57150B', bold: true, serif: true, lh: '1.3' }) : ''}${spotImgHtml(d, link)}${m.spotBody.trim() ? (d.spotImg ? '' : '<br>') + t(br(m.spotBody.trim()), { size: '10pt', color: '#2B2B2B', lh: '1.5' }) : ''}${isUrl(link) ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:10px;">${btnLink(link, 'Take&nbsp;a&nbsp;look')}</td></tr></table>` : ''}</td>
+<td valign="top" bgcolor="#FFF6D6" style="background-color:#FFF6D6;padding:16px 18px;">${t('SPOTLIGHT', { size: '8.5pt', color: '#88431E', bold: true, spacing: '1px' })}${m.spotTitle.trim() ? '<br>' + t(esc(m.spotTitle.trim()), { size: '13pt', color: '#57150B', bold: true, serif: true, lh: '1.3', attrs: editAttr(ed, 'meta:spotTitle') }) : ''}${spotImgHtml(d, link)}${m.spotBody.trim() ? (d.spotImg ? '' : '<br>') + t(br(m.spotBody.trim()), { size: '10pt', color: '#2B2B2B', lh: '1.5', attrs: editAttr(ed, 'meta:spotBody') }) : ''}${isUrl(link) ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:10px;">${btnLink(link, 'Take&nbsp;a&nbsp;look')}</td></tr></table>` : ''}</td>
 </tr></table></td></tr>`
 }
 
-function emailRows(d: StatusUpdateData, list: StatusItem[], isProg: boolean): string {
+function emailRows(d: StatusUpdateData, list: StatusItem[], isProg: boolean, ed: boolean): string {
   const cols = isProg ? 3 : 2
   const groups = groupByArea(list)
   const showHeads = groups.some((g) => g.area)
@@ -330,25 +361,25 @@ function emailRows(d: StatusUpdateData, list: StatusItem[], isProg: boolean): st
     for (const it of g.items) {
       const hold = isHold(d, it)
       const st = chipColors(statusDef(d, it.status))
-      rows += `<tr>
-<td valign="top" style="${CELL}">${t(esc(it.name), { size: '10pt', color: hold ? '#75787B' : '#2B2B2B', bold: true })}${reqLine(it)}</td>
+      rows += `<tr${rowAttr(ed, it.id)}>
+<td valign="top" style="${CELL}">${t(esc(it.name), { size: '10pt', color: hold ? '#75787B' : '#2B2B2B', bold: true, attrs: editAttr(ed, `item:${it.id}:name`) })}${reqLine(it)}</td>
 ${isProg ? `<td valign="top" style="${CELL}">${chip(up(it.status || 'In Development').replace(/ /g, '&nbsp;'), st.bg, st.fg)}${(it.target || '').trim() ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:5px;">${t('Target: ' + esc(it.target!.trim()), { size: '8.5pt', color: '#57150B' })}</td></tr></table>` : ''}</td>` : ''}
-<td valign="top" style="${CELL}">${t(br(it.note), { size: '10pt', color: hold ? '#5A5C5E' : '#2B2B2B' })}</td>
+<td valign="top" style="${CELL}">${t(br(it.note), { size: '10pt', color: hold ? '#5A5C5E' : '#2B2B2B', attrs: editAttr(ed, `item:${it.id}:note`) })}</td>
 </tr>`
     }
   }
   return rows
 }
 
-function launchedTable(list: StatusItem[]): string {
+function launchedTable(list: StatusItem[], ed: boolean): string {
   let rows = ''
   for (const it of list) {
     const link = isUrl(it.link)
       ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr><td nowrap bgcolor="#57150B" style="background-color:#57150B;padding:6px 12px;"><a href="${esc(it.link!.trim())}" style="color:#FFFFFF;text-decoration:none;">${t('Open&nbsp;dashboard', { size: '9pt', color: '#FFFFFF', bold: true, lh: '1.2' })}</a></td></tr></table>`
       : t('Link&nbsp;coming&nbsp;soon', { size: '9pt', color: '#75787B' })
-    rows += `<tr>
-<td valign="top" style="${CELL}">${t(esc(it.name), { size: '10pt', color: '#2B2B2B', bold: true })}${it.area ? '<br>' + t(esc(it.area), { size: '8.5pt', color: '#75787B' }) : ''}${reqLine(it)}</td>
-<td valign="top" style="${CELL}">${t(br(it.note), { size: '10pt', color: '#2B2B2B' })}</td>
+    rows += `<tr${rowAttr(ed, it.id)}>
+<td valign="top" style="${CELL}">${t(esc(it.name), { size: '10pt', color: '#2B2B2B', bold: true, attrs: editAttr(ed, `item:${it.id}:name`) })}${it.area ? '<br>' + t(esc(it.area), { size: '8.5pt', color: '#75787B' }) : ''}${reqLine(it)}</td>
+<td valign="top" style="${CELL}">${t(br(it.note), { size: '10pt', color: '#2B2B2B', attrs: editAttr(ed, `item:${it.id}:note`) })}</td>
 <td valign="top" align="right" nowrap style="${CELL}">${link}</td>
 </tr>`
   }
@@ -356,7 +387,7 @@ function launchedTable(list: StatusItem[]): string {
 <tr>${th('Dashboard', 'width="30%"')}${th('What it covers')}${th('Link', 'width="150" align="right"')}</tr>${rows}</table></td></tr>`
 }
 
-function emailSection(d: StatusUpdateData, sec: Sec, symbol: string): string {
+function emailSection(d: StatusUpdateData, sec: Sec, symbol: string, ed: boolean): string {
   const list = sectionItems(d.items, sec.key).filter((i) => i.name.trim() || i.note.trim())
   if (!list.length) return ''
   const isProg = sec.key === 'progress'
@@ -365,7 +396,7 @@ function emailSection(d: StatusUpdateData, sec: Sec, symbol: string): string {
     ? th('Dashboard / Project', 'width="28%"') + th('Status', 'width="24%"') + th(sec.noteLabel)
     : th('Dashboard / Project', 'width="34%"') + th(sec.noteLabel)
   const table = (l: StatusItem[]): string => `<tr><td style="padding:4px 32px 0 32px;">${tableOpen}
-<tr>${head}</tr>${emailRows(d, l, isProg)}</table></td></tr>`
+<tr>${head}</tr>${emailRows(d, l, isProg, ed)}</table></td></tr>`
   if (sec.key !== 'completed') return title + table(list)
   const launched = list.filter((i) => i.launched)
   const rest = list.filter((i) => !i.launched)
@@ -373,7 +404,7 @@ function emailSection(d: StatusUpdateData, sec: Sec, symbol: string): string {
   return (
     title +
     subLabel('New Dashboards', 6) +
-    launchedTable(launched) +
+    launchedTable(launched, ed) +
     (rest.length ? subLabel('Updates and Enhancements', 22) + table(rest) : '')
   )
 }
@@ -386,7 +417,8 @@ function ohFmt(line: string): string {
   return m ? esc(m[1]) + '<br>' + keep(m[2]) : esc(raw).replace(/([0-9]) (AM|PM)/gi, '$1&nbsp;$2')
 }
 
-function buildEmail(d: StatusUpdateData): string {
+/** the email as it is copied; ed adds the preview's edit-in-place markers */
+function buildEmail(d: StatusUpdateData, ed = false): string {
   const m = d.meta
   const s = countsOf(d)
   const tileDefs: [number, string, string, string, string][] = []
@@ -407,8 +439,8 @@ function buildEmail(d: StatusUpdateData): string {
   return `<table role="presentation" width="680" cellpadding="0" cellspacing="0" border="0" align="center" bgcolor="#FFFFFF" style="width:680px;max-width:680px;background-color:#FFFFFF;border:1px solid #E2D6BF;margin:0 auto;">
 <tr><td bgcolor="#FFCC00" height="6" style="background-color:#FFCC00;height:6px;line-height:6px;font-size:6px;">&nbsp;</td></tr>
 ${band('24px 32px 2px 32px', t('ROWAN ONLINE OPERATIONAL EFFECTIVENESS TEAM', { size: '9pt', color: '#FFCC00', bold: true, spacing: '1.5px' }))}
-${band('4px 32px 22px 32px', `<h1 style="margin:0;padding:0;font-size:21pt;line-height:1.2;">${t(esc(m.month) + ' Status Update', { size: '21pt', color: '#FFFFFF', bold: true, serif: true, lh: '1.2' })}</h1>`)}
-${m.intro ? `<tr><td style="padding:24px 32px 8px 32px;">${t(br(m.intro), { size: '10.5pt', color: '#2B2B2B', lh: '1.5' })}</td></tr>` : ''}
+${band('4px 32px 22px 32px', `<h1 style="margin:0;padding:0;font-size:21pt;line-height:1.2;">${t(`<span${editAttr(ed, 'meta:month')}>${esc(m.month)}</span> Status Update`, { size: '21pt', color: '#FFFFFF', bold: true, serif: true, lh: '1.2' })}</h1>`)}
+${m.intro ? `<tr><td style="padding:24px 32px 8px 32px;">${t(br(m.intro), { size: '10.5pt', color: '#2B2B2B', lh: '1.5', attrs: editAttr(ed, 'meta:intro') })}</td></tr>` : ''}
 ${
   tileDefs.length
     ? `<tr><td style="padding:12px 32px 8px 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
@@ -416,10 +448,10 @@ ${tilesHtml}
 </tr></table></td></tr>`
     : ''
 }
-${spotlightHtml(d)}
-${isHidden(d, 'completed') ? '' : emailSection(d, SECTIONS[0], '&#10003;')}
-${isHidden(d, 'progress') ? '' : emailSection(d, SECTIONS[1], '&#9658;')}
-${isHidden(d, 'new') ? '' : emailSection(d, SECTIONS[2], '&#9733;')}
+${spotlightHtml(d, ed)}
+${isHidden(d, 'completed') ? '' : emailSection(d, SECTIONS[0], '&#10003;', ed)}
+${isHidden(d, 'progress') ? '' : emailSection(d, SECTIONS[1], '&#9658;', ed)}
+${isHidden(d, 'new') ? '' : emailSection(d, SECTIONS[2], '&#9733;', ed)}
 <tr><td style="padding:32px 32px 28px 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 <td width="5" bgcolor="#FFCC00" style="background-color:#FFCC00;width:5px;">&nbsp;</td>
 <td width="50%" valign="top" bgcolor="#FBF6EC" style="background-color:#FBF6EC;padding:16px 18px;">${t('Submit a Request', { size: '10.5pt', color: '#57150B', bold: true })}<br>${t(`Send all dashboard and reporting requests to <a href="mailto:${mailbox}" style="color:#57150B;"><b>${mailbox}</b></a>, including dashboard updates, discrepancies or issues, and one-time or recurring reports. This keeps requests captured, prioritized, and assigned.`, { size: '10pt', color: '#2B2B2B' })}</td>
@@ -505,7 +537,7 @@ async function shrinkImage(file: File): Promise<StatusImage> {
 
 // ---- the view -------------------------------------------------------------------
 
-export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Element {
+export function StatusUpdate({ title, onBack }: { title: string; onBack: () => void }): React.JSX.Element {
   const [data, setData] = useState<StatusUpdateData | null>(null)
   const [viewing, setViewing] = useState<string | null>(null)
   const [pane, setPane] = useState<'edit' | 'preview'>(() =>
@@ -527,19 +559,26 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
   const dirty = useRef(new Set<keyof StatusUpdateData>())
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const armTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const focusAfter = useRef<{ id: string; select?: boolean } | null>(null)
-  const metaRef = useRef<HTMLDetailsElement>(null)
-  const spotRef = useRef<HTMLDetailsElement>(null)
-  const statusesRef = useRef<HTMLDetailsElement>(null)
-  const issuesRef = useRef<HTMLDetailsElement>(null)
-  const dataPanelRef = useRef<HTMLDetailsElement>(null)
-  const panels: Record<PanelKey, React.RefObject<HTMLDetailsElement | null>> = {
-    meta: metaRef,
-    spot: spotRef,
-    statuses: statusesRef,
-    issues: issuesRef,
-    data: dataPanelRef
-  }
+  const focusAfter = useRef<{ id: string; select?: boolean; scrollOnly?: boolean } | null>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
+  /** the value a preview field had when editing started, for Escape */
+  const editStart = useRef<{ key: string; value: string } | null>(null)
+  // the one settings panel open under the pills, if any
+  const [panel, setPanel] = useState<PanelKey | null>(null)
+  const [collapsed, setCollapsed] = useState<Set<StatusSection>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem('statusUpdateCollapsed') ?? '[]'))
+    } catch {
+      return new Set()
+    }
+  })
+  // items with their details (area, section, requested by, …) showing
+  const [openItems, setOpenItems] = useState<Set<string>>(new Set())
+  // the item being worked on, in the editor or the preview, lit up in the other
+  const [active, setActive] = useState<{ id: string; from: 'editor' | 'preview' } | null>(null)
+  // the preview as it was when editing in it started; it holds still while you type
+  const [frozen, setFrozen] = useState<string | null>(null)
+  const [checksAll, setChecksAll] = useState(false)
 
   /** send what changed since the last save */
   function flush(): Promise<void> {
@@ -595,13 +634,35 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
     focusAfter.current = null
     const el = document.getElementById(f.id)
     if (!el) return
+    if (f.scrollOnly) {
+      el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      return
+    }
     el.scrollIntoView({ block: 'center' })
     el.focus({ preventScroll: true })
     if (f.select && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) el.select()
   })
 
-  const html = useMemo(() => (data ? buildEmail(data) : ''), [data])
+  const html = useMemo(() => (data ? buildEmail(data, true) : ''), [data])
   const checks = useMemo(() => (data ? checksOf(data) : []), [data])
+  // React replaces the inner HTML whenever this object is new, which would
+  // drop the cursor mid-edit, so it changes only when the markup does
+  const shownHtml = frozen ?? html
+  const previewHtml = useMemo(() => ({ __html: shownHtml }), [shownHtml])
+
+  // the item being worked on in the editor stays in view in the preview
+  useEffect(() => {
+    if (active?.from !== 'editor') return
+    previewRef.current
+      ?.querySelector(`[data-su-row="${CSS.escape(active.id)}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [active, html])
+
+  // and edited in the preview: its card in the editor comes into view
+  useEffect(() => {
+    if (active?.from !== 'preview') return
+    document.getElementById(`su-row-${active.id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [active])
 
   // ---- changes ----
 
@@ -641,9 +702,39 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
     return false
   }
 
-  function openPanel(key: PanelKey): void {
-    const p = panels[key].current
-    if (p) p.open = true
+  function setCollapse(key: StatusSection, shut: boolean): void {
+    setCollapsed((prev) => {
+      if (prev.has(key) === shut) return prev
+      const next = new Set(prev)
+      if (shut) next.add(key)
+      else next.delete(key)
+      localStorage.setItem('statusUpdateCollapsed', JSON.stringify([...next]))
+      return next
+    })
+  }
+
+  function toggleItem(id: string, open?: boolean): void {
+    setOpenItems((prev) => {
+      const show = open ?? !prev.has(id)
+      if (prev.has(id) === show) return prev
+      const next = new Set(prev)
+      if (show) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  /** open the item's section, so a field in it can take focus */
+  function reveal(id: string): void {
+    const it = cur().items.find((i) => i.id === id)
+    if (it) setCollapse(it.section, false)
+  }
+
+  function jumpTo(key: StatusSection): void {
+    setCollapse(key, false)
+    changePane('edit')
+    focusAfter.current = { id: `su-sec-${key}`, scrollOnly: true }
+    rerender()
   }
 
   function changePane(p: 'edit' | 'preview'): void {
@@ -662,6 +753,8 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
       order: maxOrder((i) => i.section === section) + 10
     }
     if (section === 'progress') it.status = firstStatus()
+    setCollapse(section, false)
+    toggleItem(id, true)
     focusAfter.current = { id: `su-${id}-name` }
     change({ items: [...cur().items, it] }, 0)
   }
@@ -694,6 +787,7 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
     if (!it) return
     const p: Partial<StatusItem> = { section, order: maxOrder((i) => i.section === section) + 10 }
     if (section === 'progress' && !it.status) p.status = firstStatus()
+    setCollapse(section, false)
     patchItem(id, p, 0)
     setToast(`Moved to ${secOf(section).label}.`)
   }
@@ -719,6 +813,7 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
     const it = cur().items.find((i) => i.id === id)
     if (!it) return
     const order = maxOrder((i) => i.section === 'completed' && !i.launched && i.area === it.area) + 10
+    setCollapse('completed', false)
     focusAfter.current = { id: `su-${id}-note`, select: true }
     patchItem(id, { section: 'completed', launched: false, order }, 0)
     setToast('Moved to Completed. Update the note with what was finished.')
@@ -740,7 +835,7 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
 
   function setItemStatus(id: string, value: string): void {
     if (value === '__new__') {
-      openPanel('statuses')
+      setPanel('statuses')
       focusAfter.current = { id: 'su-st-new' }
       rerender()
       return
@@ -943,15 +1038,88 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
     if (href) window.open(href, '_blank')
   }
 
+  // ---- editing in the preview ----
+  // Names, notes, the month, the intro and the spotlight's title and text can
+  // be edited right in the email. Each keystroke updates the editor too; the
+  // preview holds still until you click away, so the cursor stays put.
+
+  const editTarget = (e: React.SyntheticEvent): HTMLElement | null =>
+    (e.target as HTMLElement).closest<HTMLElement>('[data-su-edit]')
+  const singleLine = (key: string): boolean => /:(name|month|spotTitle)$/.test(key)
+
+  function fieldValue(key: string): string {
+    const [kind, a, b] = key.split(':')
+    if (kind === 'item') {
+      const it = cur().items.find((i) => i.id === a)
+      return it ? String(it[b as 'name' | 'note'] ?? '') : ''
+    }
+    return String(cur().meta[a as 'month' | 'intro' | 'spotTitle' | 'spotBody'] ?? '')
+  }
+
+  function previewEdit(key: string, value: string): void {
+    const [kind, a, b] = key.split(':')
+    if (kind === 'item') patchItem(a, { [b]: value } as Partial<StatusItem>)
+    else setMeta({ [a]: value } as Partial<StatusMeta>)
+  }
+
+  function previewFocus(e: React.FocusEvent): void {
+    const el = editTarget(e)
+    if (!el) return
+    const key = el.dataset.suEdit!
+    if (frozen === null) setFrozen(html)
+    editStart.current = { key, value: fieldValue(key) }
+    const [kind, id] = key.split(':')
+    if (kind === 'item') {
+      reveal(id)
+      setActive({ id, from: 'preview' })
+    }
+  }
+
+  function previewInput(e: React.FormEvent): void {
+    const el = editTarget(e)
+    if (!el) return
+    const key = el.dataset.suEdit!
+    let text = el.innerText.replace(/\u00a0/g, ' ').replace(/\n$/, '')
+    if (singleLine(key)) text = text.replace(/\n/g, ' ')
+    previewEdit(key, text)
+  }
+
+  function previewKey(e: React.KeyboardEvent): void {
+    const el = editTarget(e)
+    if (!el) return
+    if (e.key === 'Escape' && editStart.current) {
+      // put it back as it was
+      el.innerText = editStart.current.value
+      previewEdit(editStart.current.key, editStart.current.value)
+      el.blur()
+    } else if (e.key === 'Enter' && singleLine(el.dataset.suEdit!)) {
+      e.preventDefault()
+      el.blur()
+    }
+  }
+
+  function previewBlur(): void {
+    // moving straight to other text in the preview keeps it still
+    setTimeout(() => {
+      if (previewRef.current?.contains(document.activeElement)) return
+      editStart.current = null
+      setFrozen(null)
+      setActive((a) => (a?.from === 'preview' ? null : a))
+    }, 0)
+  }
+
   // ---- render ----
 
-  const month = data?.meta.month.trim() || 'Monthly'
+  const month = data?.meta.month.trim() ?? ''
   const toolbar = (
     <div className="cuc-toolbar tkr-toolbar">
       <button className="btn btn-ghost tkr-back" onClick={onBack}>
         ‹ My tickets
       </button>
-      <h2 className="cuc-title">{month} status update</h2>
+      <h2 className="cuc-title">
+        {title}
+        {month && <span className="cuc-title-n">{month}</span>}
+      </h2>
       {narrow && data && (
         <div className="mode-toggle view-toggle tkr-periods" role="radiogroup" aria-label="View">
           <button
@@ -1009,8 +1177,29 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
     if (it.status && !statusNames.includes(it.status)) statusNames.push(it.status)
     const areas = it.area && !AREAS.includes(it.area) ? [...AREAS, it.area] : AREAS
     const delArmed = armed === 'item:' + it.id
+    const open = openItems.has(it.id)
+    const linked = active?.id === it.id && active.from === 'preview'
+    const chipC = prog ? chipColors(statusDef(data, it.status)) : null
+    const summary = [
+      it.requestedBy?.trim() && `Requested by ${it.requestedBy.trim()}`,
+      prog && it.target?.trim() && `Target ${it.target.trim()}`
+    ]
+      .filter(Boolean)
+      .join(' · ')
     return (
-      <div key={it.id} className={`su-row ${isHold(data, it) ? 'hold' : ''}`}>
+      <div
+        key={it.id}
+        id={`su-row-${it.id}`}
+        className={`su-row ${prog ? 'has-chip' : ''} ${isHold(data, it) ? 'hold' : ''} ${open ? 'open' : ''} ${linked ? 'linked' : ''}`}
+        style={chipC ? chipVars(chipC) : undefined}
+        onFocus={() => {
+          if (active?.id !== it.id || active.from !== 'editor') setActive({ id: it.id, from: 'editor' })
+        }}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+            setActive((a) => (a?.id === it.id && a.from === 'editor' ? null : a))
+        }}
+      >
         <div className="su-row-main">
           <input
             id={`su-${it.id}-name`}
@@ -1026,10 +1215,14 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
             </span>
           )}
           {prog && (
+            <button className="su-done" onClick={() => markDone(it.id)} title="Move to Completed">
+              Mark done
+            </button>
+          )}
+          {prog && (
             <select
               id={`su-${it.id}-status`}
               className="su-status su-chip"
-              style={chipVars(chipColors(statusDef(data, it.status)))}
               value={it.status || firstStatus()}
               aria-label="Status"
               onChange={(e) => setItemStatus(it.id, e.target.value)}
@@ -1042,6 +1235,15 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
               <option value="__new__">+ New status…</option>
             </select>
           )}
+          <button
+            className="su-more"
+            aria-expanded={open}
+            aria-label={open ? 'Hide details' : 'Show details'}
+            title={open ? 'Hide details' : 'Details: area, section, requested by, move or delete'}
+            onClick={() => toggleItem(it.id)}
+          >
+            <span aria-hidden="true">⋯</span>
+          </button>
         </div>
         {sec.key === 'completed' && it.launched && (
           <div className="su-link-row">
@@ -1066,92 +1268,96 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
           aria-label={sec.noteLabel}
           onChange={(e) => patchItem(it.id, { note: e.target.value })}
         />
-        <div className="su-extra">
-          <label>
-            Requested by
-            <input
-              className="su-mini"
-              value={it.requestedBy ?? ''}
-              placeholder="Optional"
-              onChange={(e) => patchItem(it.id, { requestedBy: e.target.value })}
-            />
-          </label>
-          {prog && (
-            <label>
-              Target
-              <input
-                className="su-mini"
-                value={it.target ?? ''}
-                placeholder="Optional, e.g. Dec 2026"
-                onChange={(e) => patchItem(it.id, { target: e.target.value })}
-              />
-            </label>
-          )}
-        </div>
-        <div className="su-tools">
-          <label>
-            Area
-            <select className="cuc-select" value={it.area} onChange={(e) => changeArea(it.id, e.target.value)}>
-              <option value="">None</option>
-              {areas.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Section
-            <select
-              className="cuc-select"
-              value={sec.key}
-              onChange={(e) => changeSection(it.id, e.target.value as StatusSection)}
-            >
-              {SECTIONS.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {sec.key === 'completed' && (
-            <label className="su-check-lbl">
-              <input
-                type="checkbox"
-                checked={!!it.launched}
-                onChange={(e) => setLaunched(it.id, e.target.checked)}
-              />
-              New dashboard
-            </label>
-          )}
-          {prog && (
-            <button className="su-done" onClick={() => markDone(it.id)}>
-              Mark done
-            </button>
-          )}
-          <span className="su-grow" />
-          <button
-            id={`su-${it.id}-up`}
-            className="su-ic"
-            onClick={() => moveItem(it.id, -1)}
-            disabled={pos === 0}
-            aria-label="Move up"
-          >
-            ↑
+        {!open && summary && (
+          <button className="su-summary" onClick={() => toggleItem(it.id, true)}>
+            {summary}
           </button>
-          <button
-            id={`su-${it.id}-down`}
-            className="su-ic"
-            onClick={() => moveItem(it.id, 1)}
-            disabled={pos === len - 1}
-            aria-label="Move down"
-          >
-            ↓
-          </button>
-          <button className={`su-del ${delArmed ? 'armed' : ''}`} onClick={() => deleteItem(it.id)}>
-            {delArmed ? 'Confirm delete' : 'Delete'}
-          </button>
-        </div>
+        )}
+        {open && (
+          <div className="su-drawer">
+            <div className="su-extra">
+              <label>
+                Requested by
+                <input
+                  className="su-mini"
+                  value={it.requestedBy ?? ''}
+                  placeholder="Optional"
+                  onChange={(e) => patchItem(it.id, { requestedBy: e.target.value })}
+                />
+              </label>
+              {prog && (
+                <label>
+                  Target
+                  <input
+                    className="su-mini"
+                    value={it.target ?? ''}
+                    placeholder="Optional, e.g. Dec 2026"
+                    onChange={(e) => patchItem(it.id, { target: e.target.value })}
+                  />
+                </label>
+              )}
+            </div>
+            <div className="su-tools">
+              <label>
+                Area
+                <select className="cuc-select" value={it.area} onChange={(e) => changeArea(it.id, e.target.value)}>
+                  <option value="">None</option>
+                  {areas.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Section
+                <select
+                  className="cuc-select"
+                  value={sec.key}
+                  onChange={(e) => changeSection(it.id, e.target.value as StatusSection)}
+                >
+                  {SECTIONS.map((s) => (
+                    <option key={s.key} value={s.key}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {sec.key === 'completed' && (
+                <label className="su-check-lbl">
+                  <input
+                    type="checkbox"
+                    checked={!!it.launched}
+                    onChange={(e) => setLaunched(it.id, e.target.checked)}
+                  />
+                  New dashboard
+                </label>
+              )}
+              <span className="su-grow" />
+              <button
+                id={`su-${it.id}-up`}
+                className="su-ic"
+                onClick={() => moveItem(it.id, -1)}
+                disabled={pos === 0}
+                aria-label="Move up"
+              >
+                ↑
+              </button>
+              <button
+                id={`su-${it.id}-down`}
+                className="su-ic"
+                onClick={() => moveItem(it.id, 1)}
+                disabled={pos === len - 1}
+                aria-label="Move down"
+              >
+                ↓
+              </button>
+              <button className={`su-del ${delArmed ? 'armed' : ''}`} onClick={() => deleteItem(it.id)}>
+                {delArmed ? 'Confirm delete' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -1159,7 +1365,7 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
   const groups = (sec: Sec, list: StatusItem[]): React.JSX.Element[] => {
     const gs = groupByArea(list)
     return gs.map((g) => (
-      <div key={g.area || '-'}>
+      <div key={g.area || '-'} className="su-group">
         {(g.area || gs.length > 1) && <div className="su-area">{g.area || 'No area'}</div>}
         {g.items.map((it, n) => row(it, sec, n, g.items.length))}
       </div>
@@ -1167,8 +1373,7 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
   }
 
   const sectionBody = (sec: Sec, list: StatusItem[]): React.JSX.Element | React.JSX.Element[] => {
-    if (!list.length)
-      return <p className="su-empty">Nothing here yet. Use Add item to start this section.</p>
+    if (!list.length) return <p className="su-empty">Nothing here yet. Use Add item to start this section.</p>
     if (sec.key !== 'completed') return groups(sec, list)
     const launched = list.filter((i) => i.launched)
     const rest = list.filter((i) => !i.launched)
@@ -1180,7 +1385,9 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
         {launched.length ? (
           groups(sec, launched)
         ) : (
-          <p className="su-empty">No new dashboards yet. Tick “New dashboard” on a completed item to list it here with a link.</p>
+          <p className="su-empty">
+            No new dashboards yet. Tick “New dashboard” in a completed item’s details to list it here with a link.
+          </p>
         )}
         <div className="su-sub">
           Updates and enhancements <span className="su-count">{rest.length}</span>
@@ -1190,7 +1397,11 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
     )
   }
 
-  const metaInput = (key: 'month' | 'mailbox' | 'oh1' | 'oh2' | 'spotTitle' | 'spotLink', label: string, ph = ''): React.JSX.Element => (
+  const metaInput = (
+    key: 'month' | 'mailbox' | 'oh1' | 'oh2' | 'spotTitle' | 'spotLink',
+    label: string,
+    ph = ''
+  ): React.JSX.Element => (
     <label className="su-lbl">
       {label}
       <input
@@ -1203,13 +1414,255 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
     </label>
   )
 
+  const panelBody = (key: PanelKey): React.JSX.Element => {
+    if (key === 'meta')
+      return (
+        <div className="su-grid">
+          {metaInput('month', 'Month and year')}
+          {metaInput('mailbox', 'Request mailbox')}
+          <label className="su-lbl full">
+            Intro line
+            <textarea
+              id="su-m-intro"
+              className="text-input"
+              rows={2}
+              value={data.meta.intro}
+              onChange={(e) => setMeta({ intro: e.target.value })}
+            />
+          </label>
+          {metaInput('oh1', 'Office hours, first line')}
+          {metaInput('oh2', 'Office hours, second line')}
+        </div>
+      )
+    if (key === 'spot')
+      return (
+        <div className="su-grid">
+          <label className="su-check-lbl full">
+            <input
+              type="checkbox"
+              checked={data.meta.spotOn}
+              onChange={(e) => setMeta({ spotOn: e.target.checked }, 0)}
+            />
+            Include a spotlight in this month’s email
+          </label>
+          {metaInput('spotTitle', 'Title', 'e.g. Get more out of RO Student Details')}
+          {metaInput('spotLink', 'Link (optional)', 'https://…')}
+          <label className="su-lbl full">
+            Text
+            <textarea
+              id="su-m-spotBody"
+              className="text-input"
+              rows={3}
+              value={data.meta.spotBody}
+              placeholder="Two or three sentences: what it is, who it helps, and one tip for using it."
+              onChange={(e) => setMeta({ spotBody: e.target.value })}
+            />
+          </label>
+          <div className="su-lbl full">
+            Image (optional)
+            <div className="su-img-row">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                aria-label="Spotlight image"
+                onChange={pickImage}
+              />
+              {data.spotImg && (
+                <button
+                  className="btn"
+                  onClick={() => {
+                    change({ spotImg: null }, 0)
+                    setToast('Image removed.')
+                  }}
+                >
+                  Remove image
+                </button>
+              )}
+            </div>
+            {data.spotImg && <img className="su-img-prev" src={data.spotImg.data} alt="Spotlight image preview" />}
+            <span className="su-hint">
+              A screenshot of the dashboard works well. It’s resized automatically and shows above the title, linked
+              to the dashboard if you added a link.
+            </span>
+          </div>
+        </div>
+      )
+    if (key === 'statuses')
+      return (
+        <div className="su-st-panel">
+          <div className="su-st-list">
+            {data.statuses.map((st, n) => {
+              const used = usage(st.name)
+              const c = chipColors(st)
+              return (
+                <div key={n + st.name} className="su-st-row">
+                  <span className="su-chip su-swatch" style={chipVars(c)}>
+                    {st.name}
+                  </span>
+                  <input
+                    className="text-input"
+                    defaultValue={st.name}
+                    maxLength={40}
+                    aria-label="Status name"
+                    onBlur={(e) => renameStatus(n, e.currentTarget)}
+                    onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                  />
+                  <label className="su-color">
+                    Color
+                    <input
+                      type="color"
+                      value={c.base}
+                      list="su-brand-colors"
+                      aria-label={`Color for ${st.name}`}
+                      onChange={(e) => isHex(e.target.value) && setStatus(n, { color: e.target.value.toUpperCase() })}
+                    />
+                  </label>
+                  <label className="su-check-lbl small">
+                    <input
+                      type="checkbox"
+                      checked={holdFlag(st)}
+                      onChange={(e) => setStatus(n, { hold: e.target.checked }, 0)}
+                    />
+                    On Hold
+                  </label>
+                  {used ? (
+                    <span className="su-used">{used} in use</span>
+                  ) : (
+                    <button className="su-del" onClick={() => removeStatus(n)}>
+                      Remove
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div className="su-st-add">
+            <input
+              id="su-st-new"
+              className="text-input"
+              value={newName}
+              placeholder="New status name, like Blocked or QA Complete"
+              aria-label="New status name"
+              maxLength={40}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  addStatus()
+                }
+              }}
+            />
+            <label className="su-color">
+              Color
+              <input
+                type="color"
+                value={newColor}
+                list="su-brand-colors"
+                aria-label="New status color"
+                onChange={(e) => setNewColor(e.target.value)}
+              />
+            </label>
+            <span className="su-chip su-swatch" style={chipVars(chipColors({ color: newColor }))}>
+              {newName.trim() || 'Preview'}
+            </span>
+            <button className="btn" onClick={addStatus}>
+              Add status
+            </button>
+          </div>
+          <p className="su-hint">
+            Pick any color; the chip gets a light tint with dark text so it stays readable in the email. Renaming a
+            status updates every item that uses it. Tick On Hold for statuses that should count toward the On Hold
+            tile. A status can be removed once no item uses it.
+          </p>
+          <datalist id="su-brand-colors">
+            {BRAND_COLORS.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+        </div>
+      )
+    if (key === 'issues')
+      return (
+        <div className="su-issues">
+          {issues.length === 0 ? (
+            <p className="su-empty">No past issues yet. Start next month saves the current issue here.</p>
+          ) : (
+            issues.map((x) => {
+              const when = new Date(x.archivedAt)
+              const delArmed = armed === 'issue:' + x.id
+              return (
+                <div key={x.id} className="su-issue">
+                  <b>{x.month}</b>
+                  <span className="su-when">
+                    {Number.isNaN(when.getTime())
+                      ? ''
+                      : `Saved ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                    {viewing === x.id ? ' · showing in preview' : ''}
+                  </span>
+                  <span className="su-grow" />
+                  <button
+                    className="btn"
+                    onClick={() => {
+                      setViewing(x.id)
+                      changePane('preview')
+                    }}
+                  >
+                    View
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() =>
+                      copy(x.html, x.plain, `Copied ${x.month}. In Outlook, paste and choose Keep source formatting.`)
+                    }
+                  >
+                    Copy
+                  </button>
+                  <button className={`su-del ${delArmed ? 'armed' : ''}`} onClick={() => deleteIssue(x)}>
+                    {delArmed ? 'Confirm delete' : 'Delete'}
+                  </button>
+                </div>
+              )
+            })
+          )}
+        </div>
+      )
+    return (
+      <div className="su-data">
+        <p className="su-hint">
+          Everything here stays on this computer and is part of the library backup. Export saves it all to a file;
+          import replaces what’s here with a file exported from this app or from the RO Ops Status Builder.
+        </p>
+        <div className="su-data-actions">
+          <button className="btn" onClick={exportFile}>
+            Export to a file
+          </button>
+          <button className="btn" onClick={importFile}>
+            Import from a file
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const pillNote = (key: PanelKey): string =>
+    key === 'spot'
+      ? data.meta.spotOn
+        ? 'On'
+        : 'Off'
+      : key === 'statuses'
+        ? String(data.statuses.length)
+        : key === 'issues'
+          ? String(data.issues.length)
+          : ''
+
+  const shownChecks = checksAll ? checks : checks.slice(0, 3)
+  const allShut = SECTIONS.every((s) => collapsed.has(s.key))
+
   const editor = (
     <section className="su-edit" aria-label="Editor">
       {fresh && (
         <div className="su-callout">
-          <span>
-            Starting fresh. Add items below, or bring in an export from the RO Ops Status Builder.
-          </span>
+          <span>Starting fresh. Add items below, or bring in an export from the RO Ops Status Builder.</span>
           <button className="btn" onClick={importFile}>
             Import from a file
           </button>
@@ -1269,11 +1722,12 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
               {checks.length} {checks.length === 1 ? 'thing' : 'things'} to check before sending
             </b>
             <ul>
-              {checks.map((x) => (
+              {shownChecks.map((x) => (
                 <li key={x.focus + x.text}>
                   <button
                     onClick={() => {
-                      if (x.panel) openPanel(x.panel)
+                      if (x.panel) setPanel(x.panel)
+                      if (x.section) setCollapse(x.section, false)
                       changePane('edit')
                       focusAfter.current = { id: x.focus }
                       rerender()
@@ -1284,251 +1738,98 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
                 </li>
               ))}
             </ul>
+            {checks.length > 3 && (
+              <button className="link-btn su-checks-more" onClick={() => setChecksAll(!checksAll)}>
+                {checksAll ? 'Show fewer' : `Show ${checks.length - 3} more`}
+              </button>
+            )}
           </>
         )}
       </div>
       <div className="su-stats">
         {(
           [
-            ['Completed', counts.completed],
-            ['In Progress', counts.progress],
-            ['On Hold', counts.hold],
-            ['New Requests', counts.fresh]
+            ['Completed', counts.completed, 'completed'],
+            ['In Progress', counts.progress, 'progress'],
+            ['On Hold', counts.hold, 'progress'],
+            ['New Requests', counts.fresh, 'new']
           ] as const
-        ).map(([l, n]) => (
-          <div key={l} className="su-stat">
+        ).map(([l, n, key]) => (
+          <button key={l} className="su-stat" onClick={() => jumpTo(key)} title={`Go to ${secOf(key).label}`}>
             <b>{n}</b>
             <span>{l}</span>
-          </div>
+          </button>
         ))}
       </div>
 
-      <details className="su-panel" ref={metaRef}>
-        <summary>Newsletter details: month, intro, office hours</summary>
-        <div className="su-grid">
-          {metaInput('month', 'Month and year')}
-          {metaInput('mailbox', 'Request mailbox')}
-          <label className="su-lbl full">
-            Intro line
-            <textarea
-              id="su-m-intro"
-              className="text-input"
-              rows={2}
-              value={data.meta.intro}
-              onChange={(e) => setMeta({ intro: e.target.value })}
-            />
-          </label>
-          {metaInput('oh1', 'Office hours, first line')}
-          {metaInput('oh2', 'Office hours, second line')}
-        </div>
-      </details>
-
-      <details className="su-panel" ref={spotRef}>
-        <summary>Spotlight: optional featured dashboard or tip</summary>
-        <div className="su-grid">
-          <label className="su-check-lbl full">
-            <input type="checkbox" checked={data.meta.spotOn} onChange={(e) => setMeta({ spotOn: e.target.checked }, 0)} />
-            Include a spotlight in this month’s email
-          </label>
-          {metaInput('spotTitle', 'Title', 'e.g. Get more out of RO Student Details')}
-          {metaInput('spotLink', 'Link (optional)', 'https://…')}
-          <label className="su-lbl full">
-            Text
-            <textarea
-              id="su-m-spotBody"
-              className="text-input"
-              rows={3}
-              value={data.meta.spotBody}
-              placeholder="Two or three sentences: what it is, who it helps, and one tip for using it."
-              onChange={(e) => setMeta({ spotBody: e.target.value })}
-            />
-          </label>
-          <div className="su-lbl full">
-            Image (optional)
-            <div className="su-img-row">
-              <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" aria-label="Spotlight image" onChange={pickImage} />
-              {data.spotImg && (
-                <button
-                  className="btn"
-                  onClick={() => {
-                    change({ spotImg: null }, 0)
-                    setToast('Image removed.')
-                  }}
-                >
-                  Remove image
-                </button>
-              )}
-            </div>
-            {data.spotImg && <img className="su-img-prev" src={data.spotImg.data} alt="Spotlight image preview" />}
-            <span className="su-hint">
-              A screenshot of the dashboard works well. It’s resized automatically and shows above the title, linked to the
-              dashboard if you added a link.
-            </span>
-          </div>
-        </div>
-      </details>
-
-      <details className="su-panel" ref={statusesRef}>
-        <summary>Statuses: add, rename, recolor</summary>
-        <div className="su-st-panel">
-          <div className="su-st-list">
-            {data.statuses.map((st, n) => {
-              const used = usage(st.name)
-              const c = chipColors(st)
-              return (
-                <div key={n + st.name} className="su-st-row">
-                  <span className="su-chip su-swatch" style={chipVars(c)}>
-                    {st.name}
-                  </span>
-                  <input
-                    className="text-input"
-                    defaultValue={st.name}
-                    maxLength={40}
-                    aria-label="Status name"
-                    onBlur={(e) => renameStatus(n, e.currentTarget)}
-                    onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                  />
-                  <label className="su-color">
-                    Color
-                    <input
-                      type="color"
-                      value={c.base}
-                      list="su-brand-colors"
-                      aria-label={`Color for ${st.name}`}
-                      onChange={(e) => isHex(e.target.value) && setStatus(n, { color: e.target.value.toUpperCase() })}
-                    />
-                  </label>
-                  <label className="su-check-lbl small">
-                    <input type="checkbox" checked={holdFlag(st)} onChange={(e) => setStatus(n, { hold: e.target.checked }, 0)} />
-                    On Hold
-                  </label>
-                  {used ? (
-                    <span className="su-used">{used} in use</span>
-                  ) : (
-                    <button className="su-del" onClick={() => removeStatus(n)}>
-                      Remove
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-          <div className="su-st-add">
-            <input
-              id="su-st-new"
-              className="text-input"
-              value={newName}
-              placeholder="New status name, like Blocked or QA Complete"
-              aria-label="New status name"
-              maxLength={40}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  addStatus()
-                }
-              }}
-            />
-            <label className="su-color">
-              Color
-              <input
-                type="color"
-                value={newColor}
-                list="su-brand-colors"
-                aria-label="New status color"
-                onChange={(e) => setNewColor(e.target.value)}
-              />
-            </label>
-            <span className="su-chip su-swatch" style={chipVars(chipColors({ color: newColor }))}>
-              {newName.trim() || 'Preview'}
-            </span>
-            <button className="btn" onClick={addStatus}>
-              Add status
+      <div className="su-pills" role="group" aria-label="Email settings">
+        {PANELS.map((p) => {
+          const note = pillNote(p.key)
+          return (
+            <button
+              key={p.key}
+              className={`su-pill ${panel === p.key ? 'active' : ''}`}
+              aria-expanded={panel === p.key}
+              onClick={() => setPanel(panel === p.key ? null : p.key)}
+            >
+              {p.label}
+              {note && <span className="su-pill-n">{note}</span>}
+            </button>
+          )
+        })}
+      </div>
+      {panel && (
+        <div className="su-panel">
+          <div className="su-panel-head">
+            <b>{PANELS.find((p) => p.key === panel)!.label}</b>
+            <span className="su-hint">{PANELS.find((p) => p.key === panel)!.hint}</span>
+            <span className="su-grow" />
+            <button className="mailc-ic" onClick={() => setPanel(null)} aria-label="Close">
+              ×
             </button>
           </div>
-          <p className="su-hint">
-            Pick any color; the chip gets a light tint with dark text so it stays readable in the email. Renaming a status
-            updates every item that uses it. Tick On Hold for statuses that should count toward the On Hold tile. A status
-            can be removed once no item uses it.
-          </p>
-          <datalist id="su-brand-colors">
-            {BRAND_COLORS.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
+          {panelBody(panel)}
         </div>
-      </details>
+      )}
 
-      <details className="su-panel" ref={issuesRef}>
-        <summary>Past issues</summary>
-        <div className="su-issues">
-          {issues.length === 0 ? (
-            <p className="su-empty">No past issues yet. Start next month saves the current issue here.</p>
-          ) : (
-            issues.map((x) => {
-              const when = new Date(x.archivedAt)
-              const delArmed = armed === 'issue:' + x.id
-              return (
-                <div key={x.id} className="su-issue">
-                  <b>{x.month}</b>
-                  <span className="su-when">
-                    {Number.isNaN(when.getTime())
-                      ? ''
-                      : `Saved ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`}
-                    {viewing === x.id ? ' · showing in preview' : ''}
-                  </span>
-                  <span className="su-grow" />
-                  <button
-                    className="btn"
-                    onClick={() => {
-                      setViewing(x.id)
-                      changePane('preview')
-                    }}
-                  >
-                    View
-                  </button>
-                  <button
-                    className="btn"
-                    onClick={() => copy(x.html, x.plain, `Copied ${x.month}. In Outlook, paste and choose Keep source formatting.`)}
-                  >
-                    Copy
-                  </button>
-                  <button className={`su-del ${delArmed ? 'armed' : ''}`} onClick={() => deleteIssue(x)}>
-                    {delArmed ? 'Confirm delete' : 'Delete'}
-                  </button>
-                </div>
-              )
-            })
-          )}
-        </div>
-      </details>
-
-      <details className="su-panel" ref={dataPanelRef}>
-        <summary>Import or export</summary>
-        <div className="su-data">
-          <p className="su-hint">
-            Everything here stays on this computer and is part of the library backup. Export saves it all to a file; import
-            replaces what’s here with a file exported from this app or from the RO Ops Status Builder.
-          </p>
-          <div className="su-data-actions">
-            <button className="btn" onClick={exportFile}>
-              Export to a file
-            </button>
-            <button className="btn" onClick={importFile}>
-              Import from a file
-            </button>
-          </div>
-        </div>
-      </details>
-
+      <div className="su-items-bar">
+        <span>Items</span>
+        <button
+          className="link-btn"
+          onClick={() => {
+            for (const s of SECTIONS) setCollapse(s.key, !allShut)
+          }}
+        >
+          {allShut ? 'Expand all' : 'Collapse all'}
+        </button>
+      </div>
       {SECTIONS.map((sec) => {
         const list = sectionItems(data.items, sec.key)
         const hid = isHidden(data, sec.key)
+        const shut = collapsed.has(sec.key)
+        const flagged = checks.filter((c) => c.section === sec.key).length
         return (
-          <section key={sec.key} className={`su-section ${hid ? 'is-hidden' : ''}`} aria-labelledby={`su-h-${sec.key}`}>
+          <section
+            key={sec.key}
+            id={`su-sec-${sec.key}`}
+            className={`su-section ${hid ? 'is-hidden' : ''} ${shut ? 'shut' : ''}`}
+            aria-labelledby={`su-h-${sec.key}`}
+          >
             <div className="su-section-head">
-              <h3 id={`su-h-${sec.key}`}>{sec.label}</h3>
-              <span className="su-count">{list.length}</span>
+              <h3 id={`su-h-${sec.key}`}>
+                <button className="su-fold" aria-expanded={!shut} onClick={() => setCollapse(sec.key, !shut)}>
+                  <span className="su-chev" aria-hidden="true">
+                    ›
+                  </span>
+                  {sec.label}
+                  <span className="su-count">{list.length}</span>
+                </button>
+              </h3>
+              {flagged > 0 && (
+                <span className="su-flagged" title="Items here are on the list to check before sending">
+                  {flagged} to check
+                </span>
+              )}
               {hid && <span className="su-hidden-tag">Hidden from email</span>}
               <span className="su-grow" />
               <button className="btn btn-ghost su-vis" aria-pressed={hid} onClick={() => toggleHidden(sec.key)}>
@@ -1538,7 +1839,7 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
                 + Add item
               </button>
             </div>
-            {sectionBody(sec, list)}
+            {!shut && <div className="su-section-body">{sectionBody(sec, list)}</div>}
           </section>
         )
       })}
@@ -1555,7 +1856,11 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
               <button
                 className="btn"
                 onClick={() =>
-                  copy(issue.html, issue.plain, `Copied ${issue.month}. In Outlook, paste and choose Keep source formatting.`)
+                  copy(
+                    issue.html,
+                    issue.plain,
+                    `Copied ${issue.month}. In Outlook, paste and choose Keep source formatting.`
+                  )
                 }
               >
                 Copy this issue
@@ -1568,11 +1873,24 @@ export function StatusUpdate({ onBack }: { onBack: () => void }): React.JSX.Elem
         ) : (
           <>
             <h3>Email preview</h3>
-            <span>This is exactly what gets copied</span>
+            <span>Click any name or note to edit it here. This is exactly what gets copied.</span>
           </>
         )}
       </div>
-      <div className="su-email" onClick={previewClick} dangerouslySetInnerHTML={{ __html: issue ? issue.html : html }} />
+      {issue ? (
+        <div className="su-email" onClick={previewClick} dangerouslySetInnerHTML={{ __html: issue.html }} />
+      ) : (
+        <div
+          ref={previewRef}
+          className="su-email editable"
+          onClick={previewClick}
+          onFocus={previewFocus}
+          onBlur={previewBlur}
+          onInput={previewInput}
+          onKeyDown={previewKey}
+          dangerouslySetInnerHTML={previewHtml}
+        />
+      )}
     </section>
   )
 

@@ -9,6 +9,7 @@ import {
   writeFileSync,
   type FSWatcher
 } from 'fs'
+import { open, readdir, readFile } from 'fs/promises'
 import { join } from 'path'
 import { getMailFolder } from './settings'
 import { readDirectory } from './directory'
@@ -226,6 +227,176 @@ function parseMessage(raw: unknown, file: string): MailMessage | null {
 
 // files are written once and never edited, so a parse is worth keeping
 const parsed = new Map<string, MailMessage | null>()
+
+// ---- invitation emails -------------------------------------------------------
+// Outlook's published calendar link stopped saying who's invited, but the
+// invitation itself arrives as mail and the inbox flow files it like any
+// other: the organizer as sender, the invitees on To and Cc.
+
+const DAY_MS = 864e5
+/** replies to an invitation go to the organizer, so they say nothing about who's invited */
+const INVITE_RESPONSE = /^\s*(accepted|declined|tentative|tentatively accepted|canceled|cancelled|new time proposed)\s*:/i
+/** a word that marks a group mailbox rather than a person */
+const NOT_A_PERSON =
+  /^(rowan|online|operations|portfolio|team|office|room|conference|center|services?|support|group|dept|department|university|staff|all|calendar)$/i
+/** what a meeting invitation carries and an ordinary email usually doesn't */
+const MEETING_HINT =
+  /meetingMessageType|eventMessage|IPM\.Schedule\.Meeting|meetup-join|Join the meeting|Microsoft Teams meeting/i
+
+/** a subject as the calendar shows the meeting's title */
+function inviteKey(subject: string): string {
+  return subject
+    .replace(EXTERNAL_TAG, '')
+    .replace(/^\s*updated\s*:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+/** the flow names each file for the UTC time it saved it: yyyyMMddHHmmssfff */
+const stampOf = (ms: number): string => new Date(ms).toISOString().replace(/\D/g, '').slice(0, 17)
+
+const subjects = new Map<string, string>()
+
+/** a file's subject, from the head of the file where the flow writes it; remembered, since files never change */
+async function subjectOf(path: string): Promise<string> {
+  const known = subjects.get(path)
+  if (known !== undefined) return known
+  let subject = ''
+  try {
+    const fh = await open(path, 'r')
+    try {
+      const { buffer, bytesRead } = await fh.read(Buffer.alloc(8192), 0, 8192, 0)
+      const m = buffer
+        .subarray(0, bytesRead)
+        .toString('utf8')
+        .match(/"subject"\s*:\s*("(?:[^"\\]|\\.)*")/i)
+      subject = m
+        ? (JSON.parse(m[1]) as string)
+        : asText((JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>).subject)
+    } finally {
+      await fh.close()
+    }
+  } catch {
+    // unreadable: counts as no subject
+  }
+  subjects.set(path, subject)
+  return subject
+}
+
+/** an address list split on the commas between addresses, not the ones inside "Last, First" */
+function addressList(value: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  let quoted = false
+  let angle = false
+  for (const ch of value) {
+    if (ch === '"') quoted = !quoted
+    else if (ch === '<') angle = true
+    else if (ch === '>') angle = false
+    if (ch === ',' && !quoted && !angle) {
+      out.push(cur)
+      cur = ''
+    } else cur += ch
+  }
+  out.push(cur)
+  return out.map((s) => s.trim()).filter(Boolean)
+}
+
+/** address -> the display name the From, To and Cc headers give it */
+function headerNames(raw: unknown): Map<string, string> {
+  const names = new Map<string, string>()
+  if (!Array.isArray(raw)) return names
+  for (const h of raw) {
+    if (!h || typeof h !== 'object') continue
+    const entry = h as { name?: unknown; value?: unknown }
+    if (!/^(from|to|cc)$/i.test(String(entry.name ?? ''))) continue
+    for (const part of addressList(asText(entry.value))) {
+      const p = asPerson(part)
+      // skip encoded words (=?utf-8?…?=) rather than show them raw
+      if (p.name && p.address && !p.name.includes('=?')) names.set(p.address.toLowerCase(), p.name)
+    }
+  }
+  return names
+}
+
+/** a display name as a person's: "Burkhardt, Ronald C" -> "Ronald C Burkhardt"; rooms and group mailboxes give null */
+function personName(display: string | null | undefined): string | null {
+  const n = (display ?? '').trim()
+  if (!n || /\b(room|conference)\b/i.test(n)) return null
+  if (n.includes(',')) {
+    const [last, first] = n.split(',', 2).map((s) => s.trim())
+    return first && last ? `${first} ${last}` : null
+  }
+  const words = n.split(/\s+/)
+  return words.length >= 2 && !words.some((w) => NOT_A_PERSON.test(w)) ? n : null
+}
+
+/** the organizer and everyone on To and Cc, by the names People knows them by, else as the email shows them */
+function inviteesIn(o: Record<string, unknown>): string[] {
+  const shown = headerNames(o.internetMessageHeaders ?? o.InternetMessageHeaders)
+  const listOf = (v: unknown): unknown[] => (Array.isArray(v) ? v : typeof v === 'string' ? v.split(';') : [])
+  const people = [
+    o.from ?? o.From ?? o.sender,
+    ...listOf(o.toRecipients ?? o.to ?? o.To),
+    ...listOf(o.ccRecipients ?? o.cc ?? o.Cc)
+  ]
+  const out: string[] = []
+  for (const r of people) {
+    const p = asPerson(r)
+    const address = p.address.trim().toLowerCase()
+    const name = nameForAddress(address) ?? personName(p.name ?? shown.get(address))
+    if (name && !out.some((x) => x.toLowerCase() === name.toLowerCase())) out.push(name)
+  }
+  return out.slice(0, 20)
+}
+
+/**
+ * Who was invited to the meeting titled `title` at `startIso`, from its
+ * invitation email: the newest one in the inbox folder from the year before
+ * it. Empty when there's none, or no mail folder.
+ */
+export async function inviteesFromMail(title: string, startIso: string): Promise<string[]> {
+  const dir = mailInDir()
+  const want = inviteKey(title)
+  const start = Date.parse(startIso)
+  if (!dir || !want || !Number.isFinite(start)) return []
+  let names: string[]
+  try {
+    names = await readdir(dir)
+  } catch {
+    return []
+  }
+  const lo = stampOf(start - 365 * DAY_MS)
+  const hi = stampOf(start + 3600e3)
+  const files = names
+    .filter((n) => n.toLowerCase().endsWith('.json'))
+    // files named some other way can't be placed in time, so they're checked too
+    .filter((n) => !/^\d{17}/.test(n) || (n.slice(0, 17) >= lo && n.slice(0, 17) <= hi))
+    .sort()
+    .reverse()
+  // an invitation is often made from an email with the same subject, so the
+  // one that reads as a meeting wins over the newest
+  let newest: Record<string, unknown> | null = null
+  let matches = 0
+  for (const n of files) {
+    const path = join(dir, n)
+    const subject = await subjectOf(path)
+    if (!subject || INVITE_RESPONSE.test(subject) || inviteKey(subject) !== want) continue
+    let text: string
+    let o: Record<string, unknown>
+    try {
+      text = await readFile(path, 'utf8')
+      o = JSON.parse(text)
+    } catch {
+      continue
+    }
+    if (MEETING_HINT.test(text)) return inviteesIn(o)
+    newest ??= o
+    if (++matches >= 5) break
+  }
+  return newest ? inviteesIn(newest) : []
+}
 
 /** Everything the flow has dropped, newest first. */
 export function readMailbox(): MailMessage[] {

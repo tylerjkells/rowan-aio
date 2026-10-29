@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  ReportKey,
   Ticket,
   TicketDesk,
   TicketNote,
@@ -183,20 +184,62 @@ async function copyTicketLink(t: Ticket): Promise<void> {
 
 // ---- the view ----------------------------------------------------------------
 
-export function TicketsView({ yourName }: { yourName: string }): React.JSX.Element {
+const REPORTS: { key: ReportKey; name: string; hint: string; opens: boolean }[] = [
+  { key: 'service', name: 'Service report', hint: 'RO Operations service report: the whole group\'s ticket stats', opens: true },
+  {
+    key: 'status',
+    name: 'Status update',
+    hint: 'The RO Ops monthly status update email: completed, in progress and new requests',
+    opens: true
+  },
+  {
+    key: 'agenda',
+    name: 'Agenda summary',
+    hint: 'Your open tickets summed up for a meeting agenda, ready for Google Sheets',
+    opens: false
+  },
+  { key: 'recap', name: 'Monthly recap', hint: 'Tickets you closed in a month, ready to paste into your recap email', opens: false }
+]
+
+/** a report's name: yours if you renamed it, else its own */
+const nameOf = (names: Partial<Record<ReportKey, string>>, key: ReportKey): string =>
+  names[key]?.trim() || REPORTS.find((r) => r.key === key)!.name
+
+export function TicketsView({
+  yourName,
+  reportNames,
+  onRenameReport
+}: {
+  yourName: string
+  reportNames: Partial<Record<ReportKey, string>>
+  /** a blank name puts the default back */
+  onRenameReport: (key: ReportKey, name: string) => void
+}): React.JSX.Element {
   // your own tickets every time the tab opens; the reports are a click away
   const [mode, setMode] = useState<'mine' | 'team' | 'status'>('mine')
-  if (mode === 'team') return <TeamReport onBack={() => setMode('mine')} />
-  if (mode === 'status') return <StatusUpdate onBack={() => setMode('mine')} />
-  return <MyTickets yourName={yourName} onTeam={() => setMode('team')} onStatus={() => setMode('status')} />
+  if (mode === 'team') return <TeamReport title={reportNames.service?.trim()} onBack={() => setMode('mine')} />
+  if (mode === 'status') return <StatusUpdate title={nameOf(reportNames, 'status')} onBack={() => setMode('mine')} />
+  return (
+    <MyTickets
+      yourName={yourName}
+      names={reportNames}
+      onRename={onRenameReport}
+      onTeam={() => setMode('team')}
+      onStatus={() => setMode('status')}
+    />
+  )
 }
 
 function MyTickets({
   yourName,
+  names,
+  onRename,
   onTeam,
   onStatus
 }: {
   yourName: string
+  names: Partial<Record<ReportKey, string>>
+  onRename: (key: ReportKey, name: string) => void
   onTeam: () => void
   onStatus: () => void
 }): React.JSX.Element {
@@ -217,6 +260,8 @@ function MyTickets({
   const [updating, setUpdating] = useState(false)
   const [recapOpen, setRecapOpen] = useState(false)
   const [agendaOpen, setAgendaOpen] = useState(false)
+  // the report being renamed in the rail
+  const [renaming, setRenaming] = useState<ReportKey | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -391,10 +436,10 @@ function MyTickets({
               Update from ServiceNow
             </button>
             <button className="btn" onClick={onTeam}>
-              Team report
+              {nameOf(names, 'service')}
             </button>
             <button className="btn" onClick={onStatus}>
-              Status update
+              {nameOf(names, 'status')}
             </button>
           </div>
         </div>
@@ -429,36 +474,60 @@ function MyTickets({
         <span>Reports</span>
       </div>
       <nav className="cuc-rail-group" aria-label="Reports">
-        <button className="cuc-rail-item" onClick={onTeam} title="RO Operations service report: the whole group's ticket stats">
-          <span>Service report</span>
-          <span className="cuc-rail-n" aria-hidden="true">
-            ›
-          </span>
-        </button>
-        <button
-          className="cuc-rail-item"
-          onClick={onStatus}
-          title="The RO Ops monthly status update email: completed, in progress and new requests"
-        >
-          <span>Status update</span>
-          <span className="cuc-rail-n" aria-hidden="true">
-            ›
-          </span>
-        </button>
-        <button
-          className="cuc-rail-item"
-          onClick={() => setAgendaOpen(true)}
-          title="Your open tickets summed up for a meeting agenda, ready for Google Sheets"
-        >
-          <span>Agenda summary</span>
-        </button>
-        <button
-          className="cuc-rail-item"
-          onClick={() => setRecapOpen(true)}
-          title="Tickets you closed in a month, ready to paste into your recap email"
-        >
-          <span>Monthly recap</span>
-        </button>
+        {REPORTS.map((r) => {
+          const name = nameOf(names, r.key)
+          const open = { service: onTeam, status: onStatus, agenda: () => setAgendaOpen(true), recap: () => setRecapOpen(true) }[
+            r.key
+          ]
+          if (renaming === r.key) {
+            const done = (value: string | null): void => {
+              setRenaming(null)
+              // a blank name, or the default typed back in, clears yours
+              if (value !== null && value.trim() !== name) onRename(r.key, value.trim() === r.name ? '' : value)
+            }
+            return (
+              <input
+                key={r.key}
+                className="text-input tk-report-input"
+                defaultValue={name}
+                autoFocus
+                maxLength={60}
+                aria-label={`Name for ${name}`}
+                onFocus={(e) => e.currentTarget.select()}
+                onBlur={(e) => done(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur()
+                  else if (e.key === 'Escape') {
+                    e.preventDefault()
+                    done(null)
+                  }
+                }}
+              />
+            )
+          }
+          return (
+            <div key={r.key} className="tk-report">
+              <button className="cuc-rail-item" onClick={open} title={r.hint}>
+                <span>{name}</span>
+                {r.opens && (
+                  <span className="cuc-rail-n" aria-hidden="true">
+                    ›
+                  </span>
+                )}
+              </button>
+              <button
+                className="tk-report-rename"
+                onClick={() => setRenaming(r.key)}
+                title="Rename"
+                aria-label={`Rename ${name}`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+              </button>
+            </div>
+          )
+        })}
       </nav>
       <div className="cuc-rail-foot">
         <span>
@@ -742,8 +811,17 @@ function MyTickets({
         />
       )}
       {updateDialog}
-      {recapOpen && <RecapDialog tickets={tickets} onClose={() => setRecapOpen(false)} />}
-      {agendaOpen && <AgendaDialog tickets={tickets} notes={notes} onClose={() => setAgendaOpen(false)} />}
+      {recapOpen && (
+        <RecapDialog title={nameOf(names, 'recap')} tickets={tickets} onClose={() => setRecapOpen(false)} />
+      )}
+      {agendaOpen && (
+        <AgendaDialog
+          title={nameOf(names, 'agenda')}
+          tickets={tickets}
+          notes={notes}
+          onClose={() => setAgendaOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -1035,7 +1113,15 @@ const monthLabel = (key: string): string => {
   return new Date(+y, +m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 }
 
-function RecapDialog({ tickets, onClose }: { tickets: Ticket[]; onClose: () => void }): React.JSX.Element {
+function RecapDialog({
+  title,
+  tickets,
+  onClose
+}: {
+  title: string
+  tickets: Ticket[]
+  onClose: () => void
+}): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null)
   const thisMonth = monthKey(new Date())
   const months = useMemo(() => {
@@ -1108,7 +1194,7 @@ function RecapDialog({ tickets, onClose }: { tickets: Ticket[]; onClose: () => v
         if (e.target === ref.current) onClose()
       }}
     >
-      <h3>Monthly recap</h3>
+      <h3>{title}</h3>
       <p>Tickets closed in the month you pick, ready to paste into your recap email. Ticket numbers paste as links.</p>
       <div className="tk-recap-controls">
         <label className="cuc-groupby">
@@ -1347,10 +1433,12 @@ const agendaSheetsHtml = (text: string): string =>
     .join('<br style="mso-data-placement:same-cell">')}</td></tr></table>`
 
 function AgendaDialog({
+  title,
   tickets,
   notes,
   onClose
 }: {
+  title: string
   tickets: Ticket[]
   notes: Record<string, TicketNote>
   onClose: () => void
@@ -1397,7 +1485,7 @@ function AgendaDialog({
         if (e.target === ref.current) onClose()
       }}
     >
-      <h3>Agenda summary</h3>
+      <h3>{title}</h3>
       <p>
         Your open tickets summed up for a meeting agenda. Change the wording below if you like, then
         copy it.

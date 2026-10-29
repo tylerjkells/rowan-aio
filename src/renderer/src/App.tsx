@@ -420,7 +420,17 @@ export default function App(): React.JSX.Element {
               onOpenPerson={(person) => setView({ name: 'person', person })}
             />
           )}
-          {view.name === 'tickets' && <TicketsView yourName={settings?.yourName ?? ''} />}
+          {view.name === 'tickets' && (
+            <TicketsView
+              yourName={settings?.yourName ?? ''}
+              reportNames={settings?.reportNames ?? {}}
+              onRenameReport={(key, name) =>
+                window.scribe.settings
+                  .update({ reportNames: { ...settings?.reportNames, [key]: name } })
+                  .then(setSettings)
+              }
+            />
+          )}
           {view.name === 'toolbox' && <ToolboxView />}
           {view.name === 'import' && (
             <ImportView

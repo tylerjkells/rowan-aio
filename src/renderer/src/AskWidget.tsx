@@ -6,7 +6,9 @@ const EXAMPLES = [
   'What did we decide about…',
   'What is still open from my meetings this month?',
   'What is the email for…',
-  'Which of my ClickUp tasks are overdue?'
+  'Which of my ClickUp tasks are overdue?',
+  'Which of my open tickets are waiting on a reply from me?',
+  'How many tickets did the team resolve last week?'
 ]
 
 type AskMode = 'library' | 'meeting'
@@ -171,7 +173,7 @@ export function AskWidget({
                 <p className="today-quiet">
                   {inMeeting
                     ? 'Ask anything about this meeting — grounded in its transcript.'
-                    : 'Ask across your meetings, people, links, brand colors, and tasks — meeting answers come with cited sources.'}
+                    : 'Ask across your meetings, people, links, brand colors, tasks, tickets, and the status update — meeting answers come with cited sources.'}
                 </p>
                 {!inMeeting && (
                   <div className="ask-examples">

@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { sanitizeSignatureHtml, signatureToText } from '../shared/signature'
 import { isNavTab } from '../shared/tabs'
-import type { AppSettings, AppTheme, NavTab, WhisperModel } from '../shared/types'
+import type { AppSettings, AppTheme, NavTab, ReportKey, WhisperModel } from '../shared/types'
 
 interface StoredSettings {
   whisperModel: WhisperModel
@@ -56,6 +56,8 @@ interface StoredSettings {
   calendarIgnores: string[]
   /** sidebar tabs switched off */
   hiddenTabs: NavTab[]
+  /** the Tickets reports renamed */
+  reportNames: Partial<Record<ReportKey, string>>
   /** base64 of safeStorage-encrypted API key */
   apiKeyEncrypted: string | null
   /** base64 of safeStorage-encrypted iCal feed URL (the URL is a secret) */
@@ -108,6 +110,7 @@ const DEFAULTS: StoredSettings = {
   workdayEnd: '16:30',
   calendarIgnores: [],
   hiddenTabs: [],
+  reportNames: {},
   apiKeyEncrypted: null,
   calendarUrlEncrypted: null,
   clickupTokenEncrypted: null,
@@ -137,6 +140,19 @@ function load(): StoredSettings {
 function persist(): void {
   mkdirSync(app.getPath('userData'), { recursive: true })
   writeFileSync(settingsPath(), JSON.stringify(cache, null, 2))
+}
+
+const REPORT_KEYS: ReportKey[] = ['service', 'status', 'agenda', 'recap']
+
+/** known reports only, each name trimmed; a blank one goes back to its default */
+function cleanReportNames(raw: unknown): Partial<Record<ReportKey, string>> {
+  const out: Partial<Record<ReportKey, string>> = {}
+  if (!raw || typeof raw !== 'object') return out
+  for (const k of REPORT_KEYS) {
+    const v = (raw as Record<string, unknown>)[k]
+    if (typeof v === 'string' && v.trim()) out[k] = v.trim().slice(0, 60)
+  }
+  return out
 }
 
 export function getSettings(): AppSettings {
@@ -183,6 +199,7 @@ export function getSettings(): AppSettings {
     workdayEnd: validTime(s.workdayEnd, DEFAULTS.workdayEnd),
     calendarIgnores: s.calendarIgnores ?? [],
     hiddenTabs: (s.hiddenTabs ?? []).filter(isNavTab),
+    reportNames: cleanReportNames(s.reportNames),
     hasApiKey: !!s.apiKeyEncrypted,
     hasOpenaiKey: !!s.openaiKeyEncrypted,
     aiReady: s.aiProvider === 'openai' ? !!s.openaiKeyEncrypted : !!s.apiKeyEncrypted,
@@ -247,6 +264,7 @@ export function updateSettings(
       | 'workdayStart'
       | 'workdayEnd'
       | 'hiddenTabs'
+      | 'reportNames'
     >
   >
 ): AppSettings {
@@ -338,6 +356,7 @@ export function updateSettings(
       .slice(0, 100)
   }
   if (Array.isArray(patch.hiddenTabs)) s.hiddenTabs = [...new Set(patch.hiddenTabs.filter(isNavTab))]
+  if (patch.reportNames && typeof patch.reportNames === 'object') s.reportNames = cleanReportNames(patch.reportNames)
   if (typeof patch.yourName === 'string') s.yourName = patch.yourName.trim()
   persist()
   return getSettings()
