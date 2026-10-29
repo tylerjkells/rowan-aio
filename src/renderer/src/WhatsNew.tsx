@@ -6,6 +6,10 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.41.0': [
+    'Always the newest Claude. Pick Haiku, Sonnet or Opus in Settings and Rowan runs on the newest of that family: it checks with Anthropic once a day and moves to a new release on its own. Today that’s Claude Haiku 5.5, Sonnet 5.5 and Opus 5.5, and a model you picked before moves up to the newest of its family. The Regenerate menu offers the same three.',
+    'AI cost estimates in Settings now use each model’s own price. Claude Haiku 5.5 costs about a tenth of what Haiku 4.5 did, so each summary adds far less than before.'
+  ],
   '0.40.0': [
     'Edit the status update right in the email. Click any name or note in the preview, the month, the intro or the spotlight, and type; the editor keeps up as you go. Enter finishes a one-line field and Escape puts it back.',
     'A tidier status update editor. Completed, In Progress and New Requests fold away (and stay folded), each item is its own card edged in its status color, and area, section, requested by, target, moving and deleting sit behind the ⋯ on each card. The settings are a row of pills, the check list shows three at a time, and the count tiles jump to their section.',
