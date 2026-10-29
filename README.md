@@ -44,7 +44,8 @@ module of several.)
   Present mode keeps the filters. Nothing is written back to ServiceNow. A
   Status update view builds the team's monthly RO Ops status email
   (completed, in progress and new requests, by area, with an optional
-  spotlight) beside a live preview, flags anything to check before sending,
+  spotlight) beside a live preview whose text can be edited in place, flags
+  anything to check before sending,
   copies it formatted for Outlook, and saves each month under Past issues
   when you start the next one.
 - **Action items** — every follow-up from every meeting in one place: dated
