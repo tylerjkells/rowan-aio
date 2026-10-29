@@ -10555,7 +10555,8 @@ button.tkr-hbar:focus-visible {
 .dash-icon:disabled {
   opacity: 0.35;
 }
-.dash-edit {
+.dash-edit,
+.dash-mode {
   padding: 6px 12px;
 }
 .dash-body {

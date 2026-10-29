@@ -454,6 +454,8 @@ export interface DashboardEntry {
   folder?: string
   /** also listed under Pinned at the top of the sidebar */
   pinned?: boolean
+  /** a Tableau view shown with Tableau's own site around it, not just the dashboard */
+  full?: boolean
 }
 
 /** a dashboard to add (no id) or update; folder and pinned left out keep what it had */

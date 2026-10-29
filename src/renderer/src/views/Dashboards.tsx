@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { DashboardEntry, LinkEntry } from '../../../shared/types'
+import { tableauEmbed } from '../tableau'
 
 // must match DASHBOARD_PARTITION in main/dashboards.ts (main enforces it)
 const PARTITION = 'persist:dashboards'
@@ -8,6 +9,9 @@ const FOLDED_KEY = 'dashboardsFolded'
 const RAIL_KEY = 'dashboardsRail'
 /** dashboards kept loaded at once, most recent first; an older one reloads when reopened */
 const KEEP_LOADED = 5
+
+/** what a dashboard loads: a Tableau view on its own unless you asked for the full site */
+const srcOf = (d: DashboardEntry): string => (!d.full && tableauEmbed(d.url)) || d.url
 
 interface FrameState {
   loading: boolean
@@ -104,7 +108,9 @@ const STAR = <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4
  * persistent session, so a sign-in sticks across restarts. A sidebar files
  * them in folders, with Pinned on top and a search (Ctrl+K, even from inside
  * a dashboard). The shell keeps this view mounted once opened, and the last
- * few dashboards visited stay loaded, so switching back is instant.
+ * few dashboards visited stay loaded, so switching back is instant. A Tableau
+ * view loads in its embed mode, just the dashboard, unless it's switched to
+ * the full site.
  */
 export function DashboardsView(): React.JSX.Element {
   const [list, setList] = useState<DashboardEntry[] | null>(null)
@@ -214,6 +220,9 @@ export function DashboardsView(): React.JSX.Element {
 
   const view = active ? views.current.get(active.id) : undefined
   const state = active ? frames[active.id] : undefined
+  // a Tableau view can show on its own or with the site around it
+  const embeddable = !!active && tableauEmbed(active.url) !== null
+  const embedded = embeddable && !active?.full
   const showRail = list.length > 0 && (!railHidden || peek)
 
   const row = (d: DashboardEntry, opts: { sub?: string; lit?: boolean } = {}): React.JSX.Element => (
@@ -379,15 +388,17 @@ export function DashboardsView(): React.JSX.Element {
               <span className="dash-title-name">{active.name}</span>
             </button>
             <div className="dash-tools">
-              <button
-                className="dash-icon"
-                onClick={() => view?.goBack()}
-                disabled={!state?.canBack}
-                title="Back"
-                aria-label="Back"
-              >
-                {icon(<path d="M15 18l-6-6 6-6" />)}
-              </button>
+              {(!embedded || state?.canBack) && (
+                <button
+                  className="dash-icon"
+                  onClick={() => view?.goBack()}
+                  disabled={!state?.canBack}
+                  title="Back"
+                  aria-label="Back"
+                >
+                  {icon(<path d="M15 18l-6-6 6-6" />)}
+                </button>
+              )}
               <button
                 className="dash-icon"
                 onClick={() => {
@@ -404,22 +415,40 @@ export function DashboardsView(): React.JSX.Element {
                   </>
                 )}
               </button>
-              <button
-                className="dash-icon"
-                onClick={() => {
-                  frameState(active.id, { error: undefined })
-                  view?.loadURL(active.url).catch(() => {})
-                }}
-                title="Back to the dashboard's own address"
-                aria-label="Home"
-              >
-                {icon(
-                  <>
-                    <path d="M3 11l9-8 9 8" />
-                    <path d="M5 10v10h14V10" />
-                  </>
-                )}
-              </button>
+              {!embedded && (
+                <button
+                  className="dash-icon"
+                  onClick={() => {
+                    frameState(active.id, { error: undefined })
+                    view?.loadURL(srcOf(active)).catch(() => {})
+                  }}
+                  title="Back to the dashboard's own address"
+                  aria-label="Home"
+                >
+                  {icon(
+                    <>
+                      <path d="M3 11l9-8 9 8" />
+                      <path d="M5 10v10h14V10" />
+                    </>
+                  )}
+                </button>
+              )}
+              {embeddable && (
+                <button
+                  className="btn btn-ghost dash-mode"
+                  onClick={async () => {
+                    frameState(active.id, { error: undefined })
+                    applyList(await window.scribe.dashboards.save({ ...active, full: !active.full }))
+                  }}
+                  title={
+                    embedded
+                      ? 'Show Tableau’s own pages around it, to browse other views, subscribe or sign in'
+                      : 'Show just the dashboard, without Tableau’s menus'
+                  }
+                >
+                  {embedded ? 'Full site' : 'Just the dashboard'}
+                </button>
+              )}
               <button
                 className="dash-icon"
                 onClick={() => window.scribe.dashboards.openExternal(active.url)}
@@ -446,9 +475,10 @@ export function DashboardsView(): React.JSX.Element {
             <div className="empty-state">
               <h2>Keep your dashboards here</h2>
               <p>
-                Add a dashboard&apos;s address (Power BI, Tableau, Grafana, ClickUp, anything on the
-                web) and it opens right inside Rowan. Sign in once; it remembers you. File them in
-                folders as the list grows, and press Ctrl+K to jump to one by name.
+                Add a dashboard&apos;s address (Tableau, Power BI, Grafana, ClickUp, anything on the
+                web) and it opens right inside Rowan. A Tableau view shows on its own, without
+                Tableau&apos;s menus around it. Sign in once; it remembers you. File them in folders
+                as the list grows, and press Ctrl+K to jump to one by name.
               </p>
               <button className="btn btn-primary" onClick={() => setEditing('new')}>
                 Add a dashboard
@@ -480,7 +510,7 @@ export function DashboardsView(): React.JSX.Element {
                     className="btn btn-primary"
                     onClick={() => {
                       frameState(active.id, { error: undefined })
-                      view?.loadURL(active.url).catch(() => {})
+                      view?.loadURL(srcOf(active)).catch(() => {})
                     }}
                   >
                     Try again
@@ -583,7 +613,7 @@ function DashboardFrame({
           as a string; its presence is what lets sign-in popups open */}
       <webview
         ref={ref}
-        src={dashboard.url}
+        src={srcOf(dashboard)}
         partition={PARTITION}
         allowpopups={'true' as unknown as boolean}
       />
