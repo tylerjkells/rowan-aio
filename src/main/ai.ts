@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getApiKey, getOpenaiKey, getSettings } from './settings'
 import { recordUsage } from './usage'
+import { resolveClaudeModel } from './claudeModels'
 
 // ---------------------------------------------------------------------------
 // Provider layer: every AI feature in the app speaks one request shape
@@ -27,8 +28,9 @@ export interface AiSystemBlock {
 }
 
 export interface AiRequest {
-  /** defaults to the active provider's configured model */
+  /** defaults to the active provider's configured model; a Claude family runs on its newest model */
   model?: string
+  /** room for the answer itself; Claude's thinking gets its own room on top */
   maxTokens: number
   system: string | AiSystemBlock[]
   messages: AiMessage[]
@@ -42,10 +44,19 @@ export interface AiResult {
   stop: 'ok' | 'refusal' | 'max_tokens'
 }
 
+/** the model id requests run on right now: for Claude, the newest in the chosen family */
 export function activeAiModel(): string {
   const s = getSettings()
-  return s.aiProvider === 'openai' ? s.openaiModel : s.claudeModel
+  return s.aiProvider === 'openai' ? s.openaiModel : resolveClaudeModel(s.claudeModel)
 }
+
+/**
+ * Current Claude models think before they answer, and thinking counts toward
+ * max_tokens, so a cap sized for a short answer could be spent before the
+ * answer starts. This much room goes on top of what each caller asks for;
+ * only tokens actually generated are billed.
+ */
+const THINKING_ROOM = 16000
 
 export function aiProviderName(): string {
   return getSettings().aiProvider === 'openai' ? 'ChatGPT' : 'Claude'
@@ -67,7 +78,7 @@ async function claudeChat(req: AiRequest): Promise<AiResult> {
     throw new Error('No Claude API key set. Add one in Settings to enable AI features.')
   }
   const client = new Anthropic({ apiKey })
-  const model = req.model ?? getSettings().claudeModel
+  const model = resolveClaudeModel(req.model ?? getSettings().claudeModel)
   // stream and collect: large max_tokens trips the SDK's "streaming required
   // for long operations" guard on plain create()
   const system: string | Anthropic.TextBlockParam[] =
@@ -81,7 +92,7 @@ async function claudeChat(req: AiRequest): Promise<AiResult> {
   const response = await client.messages
     .stream({
       model,
-      max_tokens: req.maxTokens,
+      max_tokens: req.maxTokens + THINKING_ROOM,
       system,
       ...(req.schema
         ? { output_config: { format: { type: 'json_schema' as const, schema: req.schema } } }

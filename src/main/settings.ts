@@ -3,11 +3,13 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { sanitizeSignatureHtml, signatureToText } from '../shared/signature'
 import { isNavTab } from '../shared/tabs'
+import { familyOf } from '../shared/claudeModels'
 import type { AppSettings, AppTheme, NavTab, ReportKey, WhisperModel } from '../shared/types'
 
 interface StoredSettings {
   whisperModel: WhisperModel
   aiProvider: 'claude' | 'openai'
+  /** a family ('haiku'); settings saved before families hold a version (claude-haiku-4-5) */
   claudeModel: string
   openaiModel: string
   autoSummarize: boolean
@@ -71,7 +73,7 @@ interface StoredSettings {
 const DEFAULTS: StoredSettings = {
   whisperModel: 'small.en',
   aiProvider: 'claude',
-  claudeModel: 'claude-haiku-4-5',
+  claudeModel: 'haiku',
   openaiModel: 'gpt-5.1',
   autoSummarize: true,
   mailAssistant: true,
@@ -160,7 +162,7 @@ export function getSettings(): AppSettings {
   return {
     whisperModel: s.whisperModel,
     aiProvider: s.aiProvider === 'openai' ? 'openai' : 'claude',
-    claudeModel: s.claudeModel,
+    claudeModel: familyOf(s.claudeModel) ?? 'haiku',
     openaiModel: s.openaiModel ?? 'gpt-5.1',
     autoSummarize: s.autoSummarize,
     mailAssistant: s.mailAssistant !== false,
@@ -271,7 +273,7 @@ export function updateSettings(
   const s = load()
   if (patch.whisperModel) s.whisperModel = patch.whisperModel
   if (patch.aiProvider === 'claude' || patch.aiProvider === 'openai') s.aiProvider = patch.aiProvider
-  if (patch.claudeModel) s.claudeModel = patch.claudeModel
+  if (patch.claudeModel) s.claudeModel = familyOf(patch.claudeModel) ?? s.claudeModel
   if (patch.openaiModel) s.openaiModel = patch.openaiModel.trim()
   if (typeof patch.autoSummarize === 'boolean') s.autoSummarize = patch.autoSummarize
   if (typeof patch.mailAssistant === 'boolean') s.mailAssistant = patch.mailAssistant

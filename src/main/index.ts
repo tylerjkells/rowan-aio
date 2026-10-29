@@ -205,6 +205,7 @@ import {
 } from './claudeConnect'
 import { engineStatus, setupEngine } from './whisper'
 import { activeAiModel, testOpenaiKey } from './ai'
+import { refreshClaudeLineup } from './claudeModels'
 import { processMeeting, runVoiceIdentification, summarizeMeeting } from './pipeline'
 import {
   appendVoicePcm,
@@ -500,6 +501,8 @@ app.whenReady().then(() => {
   startMailWatch()
   startMailAssist()
   startBriefWatch()
+  // the newest Claude model in each family, checked at most daily
+  refreshClaudeLineup().catch(() => {})
 
   // Repair pre-0.2.1 recordings whose webm lacks a duration header (seeking)
   patchLegacyAudioDurations().catch(() => 0)
@@ -597,6 +600,8 @@ function registerIpc(): void {
   ipcMain.handle('settings:setApiKey', (_e, key: string | null) => {
     const next = setApiKey(key)
     kickMailAssist()
+    // a new key may see different models
+    if (key) refreshClaudeLineup(true).catch(() => {})
     return next
   })
   ipcMain.handle('settings:testApiKey', (_e, key: string) => testApiKey(key))
@@ -607,6 +612,8 @@ function registerIpc(): void {
   })
   ipcMain.handle('settings:testOpenaiKey', (_e, key: string) => testOpenaiKey(key))
   ipcMain.handle('usage:get', () => getUsage())
+  // the newest Claude model in each family, checking the Models API if it's been a day
+  ipcMain.handle('ai:claudeModels', () => refreshClaudeLineup())
 
   // --- transcription engine ---
   ipcMain.handle('engine:status', () => engineStatus(getSettings().whisperModel))

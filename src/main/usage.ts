@@ -11,11 +11,27 @@ import type { MonthUsage, UsageSummary } from '../shared/types'
 // Figures are estimates from token counts, not invoices.
 // ---------------------------------------------------------------------------
 
-/** $ per million tokens by model family (list prices; cache write 1.25x input, read 0.1x) */
-const FAMILY_PRICES: [RegExp, { input: number; output: number }][] = [
-  [/haiku/i, { input: 1, output: 5 }],
-  [/opus/i, { input: 5, output: 25 }],
-  [/sonnet/i, { input: 3, output: 15 }]
+interface Price {
+  input: number
+  output: number
+  /** the rate card for prompts over 100K tokens, on models that have a second one */
+  long?: { input: number; output: number }
+}
+
+/**
+ * $ per million tokens, list prices (cache write 1.25x input, read 0.1x).
+ * The first match wins: older versions come before their family's catch-all,
+ * which carries the newest price known, so a model newer than this table is
+ * estimated at its family's latest rate.
+ */
+const PRICES: [RegExp, Price][] = [
+  [/fable|mythos/i, { input: 10, output: 50 }],
+  [/haiku-4/i, { input: 1, output: 5 }],
+  [/haiku/i, { input: 0.1, output: 0.5, long: { input: 0.5, output: 2.5 } }],
+  [/opus-4|opus-5(?:$|-\d{8})/i, { input: 5, output: 25 }],
+  [/opus/i, { input: 4, output: 20 }],
+  [/sonnet-4/i, { input: 3, output: 15 }],
+  [/sonnet/i, { input: 2, output: 10 }]
 ]
 
 /** the shape of the SDK's response.usage that pricing needs */
@@ -47,9 +63,11 @@ function monthKey(d: Date): string {
 /** Price one API response and add it to the current month. Never throws. */
 export function recordUsage(model: string, usage: TokenUsage): void {
   try {
-    const price = FAMILY_PRICES.find(([re]) => re.test(model))?.[1] ?? { input: 3, output: 15 }
+    const listed = PRICES.find(([re]) => re.test(model))?.[1] ?? { input: 3, output: 15 }
     const cacheWrite = usage.cache_creation_input_tokens ?? 0
     const cacheRead = usage.cache_read_input_tokens ?? 0
+    const prompt = usage.input_tokens + cacheWrite + cacheRead
+    const price = listed.long && prompt > 100_000 ? listed.long : listed
     const cost =
       (usage.input_tokens / 1e6) * price.input +
       (usage.output_tokens / 1e6) * price.output +
