@@ -31,6 +31,9 @@ import type {
   DashboardEntry,
   DashboardInput,
   LinkEntry,
+  PlanItem,
+  PlanItemInput,
+  PlanStatus,
   MailDraftInput,
   MailNewDraftInput,
   MailComposeDraftInput,
@@ -372,6 +375,18 @@ const api = {
     autoThumb: (id: string): Promise<{ links?: LinkEntry[]; error?: string }> =>
       ipcRenderer.invoke('links:autoThumb', id),
     clearThumb: (id: string): Promise<LinkEntry[]> => ipcRenderer.invoke('links:clearThumb', id)
+  },
+  planner: {
+    list: (): Promise<PlanItem[]> => ipcRenderer.invoke('planner:list'),
+    /** adds the item; returns the new list and the new item's id */
+    add: (input: PlanItemInput): Promise<{ items: PlanItem[]; id: string }> =>
+      ipcRenderer.invoke('planner:add', input),
+    update: (id: string, patch: Partial<PlanItem>): Promise<PlanItem[]> =>
+      ipcRenderer.invoke('planner:update', id, patch),
+    /** drop into a column, before another item there (null = at the end) */
+    move: (id: string, status: PlanStatus, beforeId: string | null): Promise<PlanItem[]> =>
+      ipcRenderer.invoke('planner:move', id, status, beforeId),
+    remove: (id: string): Promise<PlanItem[]> => ipcRenderer.invoke('planner:remove', id)
   },
   tickets: {
     get: (): Promise<TicketDesk> => ipcRenderer.invoke('tickets:get'),

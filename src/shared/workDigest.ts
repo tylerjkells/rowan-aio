@@ -1,8 +1,8 @@
-import type { StatusUpdateData, TeamTicket, Ticket, TicketNote } from './types'
+import type { PlanItem, StatusUpdateData, TeamTicket, Ticket, TicketNote } from './types'
 
 // ---------------------------------------------------------------------------
-// Work digests: your ServiceNow tickets, the team's queue and the monthly
-// status update as compact text for an AI to read. Ask (in the app) and the
+// Work digests: your ServiceNow tickets, the team's queue, the monthly
+// status update and your Planner as compact text for an AI to read. Ask (in the app) and the
 // MCP server (for Claude Desktop) both use these. Plain data in, text out,
 // and forgiving of missing fields: the MCP server reads the files raw.
 // The counting matches the service report: a ticket is done on the day it
@@ -134,6 +134,80 @@ export function ticketsDigest(d: DeskData, now = Date.now()): string {
     }
   }
   return lines.join('\n')
+}
+
+// ---- your planner (off-the-books work) ---------------------------------------------
+
+const PLAN_STATUS_ORDER = ['now', 'next', 'waiting', 'later'] as const
+const PLAN_STATUS_LABEL: Record<string, string> = {
+  now: 'Now',
+  next: 'Next',
+  waiting: 'Waiting',
+  later: 'Later',
+  done: 'Done'
+}
+
+/** open Planner items column by column with their steps and latest note, then what was finished lately */
+export function plannerDigest(items: Partial<PlanItem>[] | null | undefined, now = Date.now()): string {
+  const all = (items ?? []).filter((i) => i && i.title)
+  if (!all.length) return ''
+  const today = localDay(new Date(now))
+  const open = all.filter((i) => i.status !== 'done')
+  const done = all
+    .filter((i) => i.status === 'done')
+    .sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || ''))
+  const doneWithin = (days: number): Partial<PlanItem>[] =>
+    done.filter((i) => i.doneAt && now - Date.parse(i.doneAt) <= days * DAY)
+  const overdue = open.filter((i) => i.due && i.due < today)
+
+  const lines: string[] = [
+    "The user's own tracker for work that isn't in ClickUp or a ServiceNow ticket (ad-hoc asks, side projects). Kept in the app, so it is current.",
+    `Open: ${open.length}` +
+      (open.length ? ` (${counts(open.map((i) => PLAN_STATUS_LABEL[i.status ?? ''] ?? 'Next'))})` : '') +
+      (overdue.length ? `; overdue: ${overdue.length}` : '') +
+      `. Finished: ${doneWithin(7).length} in the last 7 days, ${doneWithin(30).length} in the last 30.`,
+    ''
+  ]
+
+  for (const status of PLAN_STATUS_ORDER) {
+    const col = open.filter((i) => i.status === status).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    if (!col.length) continue
+    lines.push(PLAN_STATUS_LABEL[status].toUpperCase())
+    for (const i of col) {
+      const steps = i.steps ?? []
+      const left = steps.filter((s) => !s.done)
+      const latest = (i.updates ?? []).slice(-1)[0]
+      const bits = [
+        oneLine(i.title),
+        i.project?.trim() ? `project ${i.project.trim()}` : '',
+        i.requester?.trim() ? `asked by ${i.requester.trim()}` : '',
+        i.due ? `due ${i.due}${i.due < today ? ' (OVERDUE)' : i.due === today ? ' (today)' : ''}` : '',
+        steps.length ? `steps ${steps.length - left.length}/${steps.length} done` : '',
+        left.length ? `next step: ${clip(oneLine(left[0].text), 160)}` : '',
+        i.createdAt ? `added ${day(i.createdAt)}` : '',
+        i.clickupUrl ? 'also sent to ClickUp' : '',
+        i.notes?.trim() ? `notes: ${clip(oneLine(i.notes), 300)}` : '',
+        latest ? `latest update ${day(latest.at)}: ${clip(oneLine(latest.text), 200)}` : ''
+      ]
+      lines.push('- ' + bits.filter(Boolean).join(' | '))
+    }
+    lines.push('')
+  }
+
+  const recent = doneWithin(90)
+  if (recent.length) {
+    lines.push('FINISHED IN THE LAST 90 DAYS (newest first)')
+    for (const i of recent.slice(0, 60)) {
+      const bits = [
+        oneLine(i.title ?? ''),
+        i.project?.trim() ? `project ${i.project.trim()}` : '',
+        i.requester?.trim() ? `asked by ${i.requester.trim()}` : '',
+        `done ${day(i.doneAt)}`
+      ]
+      lines.push('- ' + bits.filter(Boolean).join(' | '))
+    }
+  }
+  return lines.join('\n').trim()
 }
 
 // ---- the team -------------------------------------------------------------------

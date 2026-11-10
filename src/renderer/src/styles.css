@@ -11436,3 +11436,396 @@ button.tkr-hbar:focus-visible {
   align-items: baseline;
   gap: var(--s2);
 }
+
+/* ---------- Planner ----------
+   Off-the-books work. Built on the ClickUp client's rail, board, table and
+   panel (the cuc-* rules); these are only the parts it adds. */
+.pl-rail-note {
+  margin-top: auto;
+  padding-top: var(--s4);
+  line-height: 1.5;
+}
+.pl-layout {
+  margin-left: auto;
+}
+.pl-card {
+  position: relative;
+}
+.pl-card.done {
+  opacity: 0.72;
+}
+.pl-card.done .cuc-card-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--line-strong);
+  color: var(--ink-soft);
+}
+/* where a dragged card will land */
+.pl-card.pl-drop-before::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -6px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.pl-stepcount {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.pl-stepcount.all {
+  color: var(--ok);
+}
+.pl-cu-mark {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 16px;
+  color: var(--ink-faint);
+}
+
+/* list */
+.pl-table {
+  min-width: 640px;
+}
+.pl-table .cuc-thead,
+.pl-table .cuc-tr {
+  grid-template-columns: 34px minmax(0, 1fr) 104px 160px 88px 56px;
+}
+.pl-table .rollup-check {
+  margin-top: 0;
+}
+/* with the panel open the middle pane is narrow: who asked shrinks to a face */
+.cuc.pl.with-panel .pl-table .cuc-thead,
+.cuc.pl.with-panel .pl-table .cuc-tr {
+  grid-template-columns: 34px minmax(0, 1fr) 96px 24px 76px 40px;
+}
+.cuc.pl.with-panel .pl-who-name,
+.cuc.pl.with-panel .pl-th-who {
+  visibility: hidden;
+}
+.cuc.pl.with-panel .pl-who-name {
+  display: none;
+}
+.pl .cuc-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cuc.pl.with-panel .cuc-toolbar {
+  flex-wrap: nowrap;
+}
+.cuc.pl.with-panel .cuc-search-wrap {
+  flex: 1 1 0;
+  min-width: 80px;
+  max-width: 180px;
+}
+.cuc.pl.with-panel .pl-groupby > span {
+  display: none;
+}
+.pl-layout {
+  flex: none;
+}
+.pl-board .cuc-col {
+  flex: 1 0 236px;
+  max-width: 320px;
+}
+.pl-status-select {
+  padding: 2px var(--s2);
+  border-radius: 999px;
+  border-color: color-mix(in oklch, var(--pill) 45%, var(--line));
+  background: color-mix(in oklch, var(--pill) 12%, var(--bg-raised));
+  font-weight: 600;
+  cursor: pointer;
+}
+.pl-td-who {
+  gap: 6px;
+}
+.pl-who-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* panel */
+.pl-title-input,
+.pl-prop-input,
+.pl-step-text {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  transition:
+    background var(--t-fast) var(--ease-out),
+    border-color var(--t-fast) var(--ease-out);
+}
+.pl-title-input {
+  padding: 2px 4px;
+  margin: -2px -4px;
+  width: calc(100% + 8px);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.pl-prop-input {
+  padding: 3px 6px;
+  margin-left: -6px;
+  font-size: 13px;
+}
+.pl-step-text {
+  flex: 1;
+  padding: 3px 6px;
+  font-size: 13.5px;
+}
+.pl-title-input:hover,
+.pl-prop-input:hover,
+.pl-step-text:hover {
+  background: var(--bg-overlay);
+}
+.pl-title-input:focus,
+.pl-prop-input:focus,
+.pl-step-text:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg);
+}
+.pl-prop-input::placeholder,
+.pl-step-text::placeholder {
+  color: var(--ink-faint);
+}
+.pl-step-text.done {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--line-strong);
+}
+.pl-status-seg button.active {
+  background: color-mix(in oklch, var(--pill) 24%, var(--bg-overlay));
+}
+.pl-due-row {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pl-date {
+  width: 132px;
+  flex: none;
+}
+.pl-date.overdue {
+  color: var(--accent-strong);
+  font-weight: 650;
+}
+.pl-chip {
+  padding: 2px var(--s2);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.pl-chip:hover {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+.pl-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pl-sec > .card-subhead {
+  margin-top: 0;
+}
+.pl-step,
+.pl-link,
+.pl-update {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+.pl-step .rollup-check {
+  margin-top: 0;
+}
+.pl-x {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink-faint);
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+.pl-step:hover .pl-x,
+.pl-link:hover .pl-x,
+.pl-update:hover .pl-x,
+.pl-x:focus-visible {
+  opacity: 1;
+}
+.pl-x:hover {
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+.pl-add-input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px var(--s2);
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.pl-add-input::placeholder {
+  color: var(--ink-faint);
+}
+.pl-add-input:focus {
+  outline: none;
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--bg);
+}
+.pl-notes {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.pl-link a {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+}
+.pl-link .cuc-where {
+  flex: 1;
+}
+.pl-link-add {
+  display: flex;
+  gap: 6px;
+}
+.pl-link-label {
+  flex: 0 0 130px;
+}
+.pl-link-btn {
+  font-size: 12.5px;
+}
+.pl-update {
+  align-items: baseline;
+}
+.pl-update-when {
+  flex: none;
+  width: 58px;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.pl-update-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pl-welcome {
+  max-width: 60ch;
+  padding: var(--s6) var(--s5);
+}
+.pl-welcome h3 {
+  margin: 0 0 var(--s2);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+}
+.pl-welcome p {
+  margin: 0 0 var(--s4);
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+.today-plan-title {
+  padding: 0;
+  text-align: left;
+}
+.today-plan-title:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* status update: suggestions from the Planner */
+.su-plan {
+  margin-bottom: var(--s4);
+  padding: 8px 10px 10px 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+}
+.su-plan.shut {
+  padding-bottom: 8px;
+}
+.su-plan-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+.su-plan.shut .su-chev {
+  transform: rotate(0deg);
+}
+.su-plan-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+}
+.su-plan-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 7px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.su-plan-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13.5px;
+}
+.su-plan-body b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.su-plan-row .btn {
+  flex: none;
+  padding: 4px var(--s3);
+  font-size: 12.5px;
+}
+.su-plan-more {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 12px;
+}

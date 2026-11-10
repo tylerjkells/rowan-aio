@@ -22,6 +22,7 @@ import { PeopleView, PersonView } from './views/People'
 import { LinksView } from './views/Links'
 import { BrandView } from './views/Brand'
 import { ProjectsView } from './views/Projects'
+import { PlannerView } from './views/Planner'
 import { MailView } from './views/Mail'
 import { ToolboxView } from './views/Toolbox'
 import { SeriesView } from './views/Series'
@@ -40,6 +41,7 @@ import {
   LinkIcon,
   PaletteIcon,
   BoardIcon,
+  PlannerIcon,
   MailIcon,
   TicketIcon,
   GaugeIcon,
@@ -58,6 +60,7 @@ export type View =
   | { name: 'links' }
   | { name: 'brand' }
   | { name: 'projects' }
+  | { name: 'planner'; id?: string }
   | { name: 'mail' }
   | { name: 'tickets' }
   | { name: 'dashboards' }
@@ -179,7 +182,8 @@ export default function App(): React.JSX.Element {
   const shows = (tab: NavTab): boolean => !hiddenTabs.has(tab)
   const groupShows = (group: 'Meetings' | 'Workspace'): boolean =>
     NAV_TABS.some((t) => t.group === group && shows(t.id))
-  const flush = view.name === 'mail' || view.name === 'projects' || view.name === 'tickets'
+  const flush =
+    view.name === 'mail' || view.name === 'projects' || view.name === 'planner' || view.name === 'tickets'
 
   return (
     <div className="shell">
@@ -234,6 +238,14 @@ export default function App(): React.JSX.Element {
             onClick={() => setView({ name: 'projects' })}
           >
             <BoardIcon /> ClickUp
+          </button>
+        )}
+        {shows('planner') && (
+          <button
+            className={`nav-btn ${view.name === 'planner' ? 'active' : ''}`}
+            onClick={() => setView({ name: 'planner' })}
+          >
+            <PlannerIcon /> Planner
           </button>
         )}
         {shows('mail') && (
@@ -347,6 +359,7 @@ export default function App(): React.JSX.Element {
               onDigest={() => setDigestRequested(true)}
               onMail={() => setView({ name: 'mail' })}
               onProjects={() => setView({ name: 'projects' })}
+              onPlanner={(id) => setView({ name: 'planner', id })}
               onJoinRecord={(joinUrl) => {
                 // the click is a real gesture, so recording can start straight away
                 window.open(joinUrl, '_blank')
@@ -414,6 +427,7 @@ export default function App(): React.JSX.Element {
           {view.name === 'projects' && (
             <ProjectsView onSettings={() => setView({ name: 'settings' })} />
           )}
+          {view.name === 'planner' && <PlannerView openId={view.id} />}
           {view.name === 'mail' && (
             <MailView
               onSettings={() => setView({ name: 'settings' })}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  PlanItem,
   StatusDef,
   StatusImage,
   StatusIssue,
@@ -251,6 +252,80 @@ function checksOf(d: StatusUpdateData): Check[] {
       out.push({ text: 'Spotlight link doesn’t look like a web address', focus: 'su-m-spotLink', panel: 'spot' })
   }
   return out
+}
+
+// ---- suggestions from the Planner --------------------------------------------
+// Off-the-books work tracked in the Planner, offered for this month's update:
+// finished this month -> Completed, in Now or Waiting -> In Progress, added
+// this month and not started -> New Requests. Nothing goes in until you add it.
+
+const PLAN_SKIP_KEY = 'statusUpdatePlannerSkip'
+const PLAN_OPEN_KEY = 'statusUpdatePlannerOpen'
+
+interface PlanSuggestion {
+  plan: PlanItem
+  section: StatusSection
+  /** why it's suggested, e.g. "Finished Nov 3" */
+  reason: string
+  /** already in the update under another section: offered as a move */
+  existing?: StatusItem
+}
+
+/** [start, end) of the update's month ("November 2026"); the last month when it can't be read */
+function monthSpan(label: string): [number, number] {
+  const m = label.match(/([A-Za-z]+)[^0-9]*([0-9]{4})/)
+  const i = m ? MONTHS.findIndex((x) => x.toLowerCase().slice(0, 3) === m[1].toLowerCase().slice(0, 3)) : -1
+  if (!m || i < 0) {
+    const now = Date.now()
+    return [now - 31 * 864e5, now + 864e5]
+  }
+  const y = Number(m[2])
+  return [new Date(y, i, 1).getTime(), new Date(y, i + 1, 1).getTime()]
+}
+
+const shortDay = (iso: string): string =>
+  new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+function planSuggestions(plan: PlanItem[], d: StatusUpdateData, skipped: Set<string>): PlanSuggestion[] {
+  const [from, to] = monthSpan(d.meta.month)
+  const within = (iso: string): boolean => {
+    const t = Date.parse(iso)
+    return Number.isFinite(t) && t >= from && t < to
+  }
+  const key = (s: string): string => s.trim().toLowerCase()
+  const rank: Record<StatusSection, number> = { new: 0, progress: 1, completed: 2 }
+  const out: PlanSuggestion[] = []
+  for (const p of plan) {
+    if (!p.title.trim()) continue
+    const section: StatusSection | null =
+      p.status === 'done'
+        ? within(p.doneAt)
+          ? 'completed'
+          : null
+        : p.status === 'now' || p.status === 'waiting'
+          ? 'progress'
+          : within(p.createdAt)
+            ? 'new'
+            : null
+    if (!section || skipped.has(`${p.id}:${section}`)) continue
+    const existing = d.items.find((i) => i.plannerId === p.id || key(i.name) === key(p.title))
+    // already there, or further along than the Planner says: nothing to do
+    if (existing && rank[existing.section] >= rank[section]) continue
+    out.push({
+      plan: p,
+      section,
+      existing,
+      reason:
+        section === 'completed'
+          ? `Finished ${shortDay(p.doneAt)}`
+          : section === 'progress'
+            ? p.status === 'waiting'
+              ? 'Waiting on someone'
+              : 'In Now'
+            : `Added ${shortDay(p.createdAt)}`
+    })
+  }
+  return out.sort((a, b) => rank[b.section] - rank[a.section] || a.plan.title.localeCompare(b.plan.title))
 }
 
 function nextMonthLabel(cur: string): string {
@@ -579,6 +654,17 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
   // the preview as it was when editing in it started; it holds still while you type
   const [frozen, setFrozen] = useState<string | null>(null)
   const [checksAll, setChecksAll] = useState(false)
+  // the Planner, for suggestions; null until read (or when there's none)
+  const [plan, setPlan] = useState<PlanItem[] | null>(null)
+  const [planSkip, setPlanSkip] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(PLAN_SKIP_KEY) ?? '[]'))
+    } catch {
+      return new Set()
+    }
+  })
+  const [planOpen, setPlanOpen] = useState(() => localStorage.getItem(PLAN_OPEN_KEY) !== 'false')
+  const [planAll, setPlanAll] = useState(false)
 
   /** send what changed since the last save */
   function flush(): Promise<void> {
@@ -605,6 +691,10 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
       dataRef.current = d
       setData(d)
     })
+    window.scribe.planner
+      .list()
+      .then(setPlan)
+      .catch(() => setPlan(null))
     const onHide = (): void => void flush()
     window.addEventListener('beforeunload', onHide)
     return () => {
@@ -645,6 +735,10 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
 
   const html = useMemo(() => (data ? buildEmail(data, true) : ''), [data])
   const checks = useMemo(() => (data ? checksOf(data) : []), [data])
+  const suggestions = useMemo(
+    () => (data && plan ? planSuggestions(plan, data, planSkip) : []),
+    [data, plan, planSkip]
+  )
   // React replaces the inner HTML whenever this object is new, which would
   // drop the cursor mid-edit, so it changes only when the markup does
   const shownHtml = frozen ?? html
@@ -757,6 +851,59 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
     toggleItem(id, true)
     focusAfter.current = { id: `su-${id}-name` }
     change({ items: [...cur().items, it] }, 0)
+  }
+
+  /** put a Planner item into the update, then hand over to its note for the wording */
+  function addFromPlanner(sg: PlanSuggestion): void {
+    const p = sg.plan
+    const { section } = sg
+    if (sg.existing) {
+      if (!sg.existing.plannerId) patchItem(sg.existing.id, { plannerId: p.id }, 0)
+      changeSection(sg.existing.id, section)
+      toggleItem(sg.existing.id, true)
+      focusAfter.current = { id: `su-${sg.existing.id}-note`, select: true }
+      return
+    }
+    const id = newId()
+    const latest = p.updates[p.updates.length - 1]?.text.trim() ?? ''
+    const it: StatusItem = {
+      id,
+      section,
+      area: section === 'new' ? '' : 'Rowan Online',
+      name: p.title.trim(),
+      // the last progress note is a starting point for the wording, never the purpose of a request
+      note: section === 'new' ? '' : latest,
+      order: maxOrder((i) => i.section === section) + 10,
+      plannerId: p.id
+    }
+    if (p.requester.trim()) it.requestedBy = p.requester.trim()
+    if (p.links[0]?.url) it.link = p.links[0].url
+    if (section === 'progress') {
+      it.status = firstStatus()
+      if (p.due) {
+        it.target = new Date(`${p.due}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })
+      }
+    }
+    setCollapse(section, false)
+    toggleItem(id, true)
+    focusAfter.current = { id: `su-${id}-note`, select: true }
+    change({ items: [...cur().items, it] }, 0)
+    setToast(`Added “${it.name}” to ${secOf(section).label}. Check the area and write the ${secOf(section).noteLabel.toLowerCase()}.`)
+  }
+
+  function skipPlanner(sg: PlanSuggestion): void {
+    setPlanSkip((prev) => {
+      const next = new Set(prev).add(`${sg.plan.id}:${sg.section}`)
+      localStorage.setItem(PLAN_SKIP_KEY, JSON.stringify([...next]))
+      return next
+    })
+  }
+
+  function togglePlanOpen(): void {
+    setPlanOpen((o) => {
+      localStorage.setItem(PLAN_OPEN_KEY, String(!o))
+      return !o
+    })
   }
 
   function moveItem(id: string, dir: -1 | 1): void {
@@ -1789,6 +1936,60 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
             </button>
           </div>
           {panelBody(panel)}
+        </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <div className={`su-plan ${planOpen ? '' : 'shut'}`} aria-label="Suggestions from your Planner">
+          <div className="su-plan-head">
+            <button className="su-fold" aria-expanded={planOpen} onClick={togglePlanOpen}>
+              <span className="su-chev" aria-hidden="true">
+                ›
+              </span>
+              From your Planner
+              <span className="su-count">{suggestions.length}</span>
+            </button>
+            <span className="su-hint">Off-the-books work that may belong in this update. Nothing goes in until you add it.</span>
+          </div>
+          {planOpen && (
+            <div className="su-plan-list">
+              {(planAll ? suggestions : suggestions.slice(0, 5)).map((sg) => {
+                const sec = secOf(sg.section)
+                const meta = [
+                  sg.reason,
+                  sg.plan.requester.trim() && `for ${sg.plan.requester.trim()}`,
+                  sg.plan.project.trim(),
+                  sg.existing && `now under ${secOf(sg.existing.section).label}`
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+                return (
+                  <div className="su-plan-row" key={`${sg.plan.id}:${sg.section}`}>
+                    <div className="su-plan-body">
+                      <b>{sg.plan.title}</b>
+                      <span className="su-hint">{meta}</span>
+                    </div>
+                    <button className="btn" onClick={() => addFromPlanner(sg)}>
+                      {sg.existing ? `Move to ${sec.label}` : `Add to ${sec.label}`}
+                    </button>
+                    <button
+                      className="mailc-ic"
+                      onClick={() => skipPlanner(sg)}
+                      title="Not for the update: don’t suggest it again"
+                      aria-label={`Don’t suggest “${sg.plan.title}” again`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )
+              })}
+              {suggestions.length > 5 && (
+                <button className="link-btn su-plan-more" onClick={() => setPlanAll((a) => !a)}>
+                  {planAll ? 'Show fewer' : `Show all ${suggestions.length}`}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

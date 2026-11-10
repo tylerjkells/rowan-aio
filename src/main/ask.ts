@@ -9,7 +9,8 @@ import { getBrand } from './brand'
 import { readDesk } from './tickets'
 import { readTeamDesk } from './team'
 import { getStatusUpdate } from './statusUpdate'
-import { statusUpdateDigest, teamDigest, ticketsDigest } from '../shared/workDigest'
+import { listPlan } from './planner'
+import { plannerDigest, statusUpdateDigest, teamDigest, ticketsDigest } from '../shared/workDigest'
 import { transcriptToText } from './summarize'
 import type { AskSource, LibraryQA, Meeting } from '../shared/types'
 
@@ -214,7 +215,8 @@ function recentHistoryMessages(): { role: 'user' | 'assistant'; content: string 
 /**
  * Everything the app knows outside of meetings — the org directory, saved
  * links, brand colors, the last-refreshed ClickUp task snapshot, your
- * ServiceNow tickets and the team's, and the monthly status update — as one
+ * ServiceNow tickets and the team's, the monthly status update, and your
+ * Planner — as one
  * compact context block. Each source degrades to absent on any failure.
  */
 function workspaceContext(): string {
@@ -302,6 +304,16 @@ function workspaceContext(): string {
   } catch {
     // no status update yet
   }
+  try {
+    const text = plannerDigest(listPlan())
+    if (text) {
+      parts.push(
+        `<my_planner note="the user's own tracker for off-the-books work: asks and projects not in ClickUp or a ticket">\n${text}\n</my_planner>`
+      )
+    }
+  } catch {
+    // nothing planned yet
+  }
   return parts.join('\n\n')
 }
 
@@ -361,13 +373,13 @@ export async function askLibrary(question: string, model: string): Promise<Libra
     schema: ANSWER_SCHEMA as unknown as Record<string, unknown>,
     schemaName: 'library_answer',
     system:
-      'You answer questions across a personal work hub for the person using it: their meeting library plus their workspace data (org directory, saved links, brand colors, open ClickUp tasks, their ServiceNow tickets, the RO Operations team\'s ticket queue, and the monthly RO Ops status update). ' +
+      'You answer questions across a personal work hub for the person using it: their meeting library plus their workspace data (org directory, saved links, brand colors, open ClickUp tasks, their ServiceNow tickets, the RO Operations team\'s ticket queue, the monthly RO Ops status update, and their Planner of off-the-books work). ' +
       'Ground every answer in the material below; when it does not contain the answer, say so plainly instead of guessing. ' +
       'Ticket data is a copy from the user\'s last update, not live: when answering about tickets, mention the as-of time, and count from the lists and summary lines given rather than estimating. ' +
       'Meeting transcripts are automatic speech recognition output and may contain errors. ' +
       'In transcripts, speaker labels mark audio sources: the first-named label (often "Me") is the person asking you questions now; the other label is everyone else on that call. ' +
       'Answer concisely in plain prose. Cite the meetings that support meeting-based parts of the answer with inline markers like [1], and list each cited meeting in sources with its id. ' +
-      'Answers drawn from workspace data (a phone number, a link, a color, a task, a ticket) need no citations — leave sources empty when nothing came from a meeting. ' +
+      'Answers drawn from workspace data (a phone number, a link, a color, a task, a ticket, a Planner item) need no citations — leave sources empty when nothing came from a meeting. ' +
       'When several meetings touch the topic over time, prefer the most recent position and note how it evolved.\n\n' +
       `<catalog>\n${catalog || '(no meetings yet)'}\n</catalog>` +
       (workspace ? `\n\n${workspace}` : '') +
