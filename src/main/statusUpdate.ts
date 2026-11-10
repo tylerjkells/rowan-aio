@@ -84,7 +84,7 @@ function item(id: string, r: Record<string, unknown>): StatusItem {
   }
   if (typeof r.status === 'string') it.status = r.status
   if (typeof r.launched === 'boolean') it.launched = r.launched
-  for (const k of ['link', 'target', 'requestedBy', 'lastSentNote'] as const) {
+  for (const k of ['link', 'target', 'requestedBy', 'lastSentNote', 'plannerId'] as const) {
     if (typeof r[k] === 'string') it[k] = r[k] as string
   }
   return it

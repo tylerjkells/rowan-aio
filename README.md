@@ -56,7 +56,9 @@ module of several.)
   spotlight) beside a live preview whose text can be edited in place, flags
   anything to check before sending,
   copies it formatted for Outlook, and saves each month under Past issues
-  when you start the next one.
+  when you start the next one. Planner work is offered as suggestions (finished
+  this month for Completed, in Now or Waiting for In Progress, newly added for
+  New Requests): nothing goes in until you click Add, and × stops suggesting it.
 - **Action items** — every follow-up from every meeting in one place: dated
   items grouped by when, undated ones grouped by meeting, stale ones folded
   away for a bulk review. Done, dismissed, and snoozed are kept apart; select

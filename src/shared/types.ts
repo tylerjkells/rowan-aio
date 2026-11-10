@@ -675,6 +675,8 @@ export interface StatusItem {
   requestedBy?: string
   /** the note as it went out last month, to flag in-progress notes left unchanged */
   lastSentNote?: string
+  /** the Planner item it was added from, so it isn't suggested again */
+  plannerId?: string
 }
 
 /** an in-progress status: its chip color, and whether it counts as On Hold */

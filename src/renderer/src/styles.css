@@ -11770,3 +11770,62 @@ button.tkr-hbar:focus-visible {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* status update: suggestions from the Planner */
+.su-plan {
+  margin-bottom: var(--s4);
+  padding: 8px 10px 10px 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg-raised);
+}
+.su-plan.shut {
+  padding-bottom: 8px;
+}
+.su-plan-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+.su-plan.shut .su-chev {
+  transform: rotate(0deg);
+}
+.su-plan-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+}
+.su-plan-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 7px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.su-plan-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13.5px;
+}
+.su-plan-body b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.su-plan-row .btn {
+  flex: none;
+  padding: 4px var(--s3);
+  font-size: 12.5px;
+}
+.su-plan-more {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 12px;
+}
