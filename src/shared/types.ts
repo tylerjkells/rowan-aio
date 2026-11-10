@@ -472,6 +472,67 @@ export interface DashboardEntry {
 /** a dashboard to add (no id) or update; folder and pinned left out keep what it had */
 export type DashboardInput = Omit<DashboardEntry, 'id'> & { id?: string }
 
+/** where a piece of Planner work sits: the ticket plan buckets, plus done */
+export type PlanStatus = 'now' | 'next' | 'waiting' | 'later' | 'done'
+
+/** one checklist step inside a Planner item */
+export interface PlanStep {
+  id: string
+  text: string
+  done: boolean
+}
+
+/** a link kept on a Planner item (a dashboard, a Drive file, a query) */
+export interface PlanLink {
+  id: string
+  label: string
+  url: string
+}
+
+/** a dated progress note on a Planner item */
+export interface PlanUpdate {
+  id: string
+  /** ISO time */
+  at: string
+  text: string
+}
+
+/**
+ * Off-the-books work in the Planner: asks and projects that aren't in ClickUp
+ * or a ServiceNow ticket. Lives in userData/planner.json and is never synced
+ * anywhere (until you send one to ClickUp yourself).
+ */
+export interface PlanItem {
+  id: string
+  title: string
+  status: PlanStatus
+  /** who asked for it; '' = your own */
+  requester: string
+  /** your own grouping label, e.g. "Growth programs"; '' = none */
+  project: string
+  /** YYYY-MM-DD; '' = no due date */
+  due: string
+  notes: string
+  steps: PlanStep[]
+  links: PlanLink[]
+  /** oldest first */
+  updates: PlanUpdate[]
+  /** the ClickUp task it became, once sent there */
+  clickupUrl?: string
+  /** ISO times */
+  createdAt: string
+  updatedAt: string
+  /** ISO time it was finished; '' while open */
+  doneAt: string
+  /** position within its column, lowest first */
+  order: number
+}
+
+/** a Planner item to add: a title, and anything else you already know */
+export type PlanItemInput = Partial<Omit<PlanItem, 'id' | 'createdAt' | 'updatedAt' | 'doneAt' | 'order'>> & {
+  title: string
+}
+
 /** where a ticket sits in your own triage; '' = not triaged yet */
 export type TicketPlan = 'now' | 'next' | 'later' | 'waiting' | ''
 
@@ -918,6 +979,7 @@ export type NavTab =
   | 'actions'
   | 'people'
   | 'projects'
+  | 'planner'
   | 'mail'
   | 'tickets'
   | 'dashboards'

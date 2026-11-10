@@ -1,6 +1,6 @@
 /**
  * MeetingScribe MCP server: exposes the local meeting library, and the
- * tickets and status update kept beside it, to MCP clients (Claude Desktop
+ * tickets, status update and Planner kept beside it, to MCP clients (Claude Desktop
  * and friends) as read-only tools, so Claude can answer questions about
  * them, build reports from them, or push tasks to other connected tools
  * (e.g. ClickUp) — with the data never leaving the machine except in the
@@ -15,8 +15,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { readFileSync, readdirSync, existsSync } from 'fs'
 import { join } from 'path'
-import type { StatusUpdateData, TeamTicket, Ticket, TicketNote } from '../shared/types'
-import { statusUpdateDigest, teamDigest, ticketsDigest } from '../shared/workDigest'
+import type { PlanItem, StatusUpdateData, TeamTicket, Ticket, TicketNote } from '../shared/types'
+import { plannerDigest, statusUpdateDigest, teamDigest, ticketsDigest } from '../shared/workDigest'
 
 interface Segment {
   from: number
@@ -443,6 +443,22 @@ server.registerTool(
   async () => {
     const raw = readData<Partial<StatusUpdateData>>('status-update.json')
     return text((raw && statusUpdateDigest(raw)) || 'No status update yet.')
+  }
+)
+
+server.registerTool(
+  'get_my_planner',
+  {
+    description:
+      "The user's Planner in Rowan AIO: their own tracker for off-the-books work (ad-hoc data asks, dashboards and " +
+      'side projects that are not in ClickUp or a ServiceNow ticket). Current, not a snapshot: every open item by ' +
+      'column (Now, Next, Waiting, Later) with its project, who asked, due date, checklist progress and next step, ' +
+      'notes and latest progress update, then what was finished in the last 90 days.',
+    inputSchema: {}
+  },
+  async () => {
+    const raw = readData<{ items?: Partial<PlanItem>[] }>('planner.json')
+    return text(plannerDigest(raw?.items) || 'The Planner is empty: items are added in Rowan AIO’s Planner tab.')
   }
 )
 

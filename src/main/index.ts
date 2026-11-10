@@ -188,6 +188,7 @@ import {
   takePendingNav
 } from './system'
 import { runBackup, startAutoBackup } from './backup'
+import { addPlanItem, listPlan, movePlanItem, removePlanItem, updatePlanItem } from './planner'
 import {
   addPrepFiles,
   getPrepNotes,
@@ -238,6 +239,9 @@ import type {
   EnergySample,
   InviteLookup,
   LinkEntry,
+  PlanItem,
+  PlanItemInput,
+  PlanStatus,
   MailDraftInput,
   MailLevel,
   MailNewDraftInput,
@@ -1204,6 +1208,16 @@ function registerIpc(): void {
   ipcMain.handle('links:pickThumb', (_e, id: string) => pickLinkThumb(id))
   ipcMain.handle('links:autoThumb', (_e, id: string) => autoLinkThumb(id))
   ipcMain.handle('links:clearThumb', (_e, id: string) => clearLinkThumb(id))
+
+  ipcMain.handle('planner:list', () => listPlan())
+  ipcMain.handle('planner:add', (_e, input: PlanItemInput) => addPlanItem(input))
+  ipcMain.handle('planner:update', (_e, id: string, patch: Partial<PlanItem>) =>
+    updatePlanItem(id, patch)
+  )
+  ipcMain.handle('planner:move', (_e, id: string, status: PlanStatus, beforeId: string | null) =>
+    movePlanItem(id, status, beforeId)
+  )
+  ipcMain.handle('planner:remove', (_e, id: string) => removePlanItem(id))
 
   ipcMain.handle('tickets:get', () => readDesk())
   ipcMain.handle('tickets:apply', (_e, text: string) => applyTicketPaste(text))

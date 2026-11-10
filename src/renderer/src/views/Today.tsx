@@ -7,7 +7,8 @@ import type {
   PrepEntry,
   EventBrief,
   LinkEntry,
-  MeetingListItem
+  MeetingListItem,
+  PlanItem
 } from '../../../shared/types'
 import { ChevronIcon, formatDuration, formatWhen, isOverdue, MicIcon, StageBadge } from '../ui'
 import { ClickupCompleteDialog } from '../ClickupComplete'
@@ -163,6 +164,7 @@ export function TodayView({
   onDigest,
   onMail,
   onProjects,
+  onPlanner,
   onJoinRecord
 }: {
   meetings: MeetingListItem[]
@@ -175,6 +177,8 @@ export function TodayView({
   onDigest: () => void
   onMail: () => void
   onProjects: () => void
+  /** open the Planner, on one item when given */
+  onPlanner: (id?: string) => void
 }): React.JSX.Element {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [events, setEvents] = useState<CalendarEvent[]>([])
@@ -185,6 +189,7 @@ export function TodayView({
   const [pinnedLinks, setPinnedLinks] = useState<LinkEntry[]>([])
   const [cuDue, setCuDue] = useState<ClickupTask[] | null>(null)
   const [cuCompleting, setCuCompleting] = useState<ClickupTask | null>(null)
+  const [plan, setPlan] = useState<PlanItem[]>([])
   const [prep, setPrep] = useState<Record<string, PrepEntry>>({})
   const [prepFor, setPrepFor] = useState<CalendarEvent | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -197,6 +202,10 @@ export function TodayView({
     window.scribe.prep.all().then(setPrep)
     window.scribe.actions.list().then(setActions)
     window.scribe.links.list().then((ls) => setPinnedLinks(ls.filter((l) => l.pinned)))
+    window.scribe.planner
+      .list()
+      .then(setPlan)
+      .catch(() => {})
     // ClickUp tasks that need attention today fill in once fetched
     window.scribe.clickup.status().then((st) => {
       if (!st.connected) return
@@ -284,6 +293,30 @@ export function TodayView({
       await window.scribe.settings.update({ calendarIgnores: [...s.calendarIgnores, title] })
     }
     setEvents((prev) => prev.filter((e) => e.title.toLowerCase() !== title.toLowerCase()))
+  }
+
+  // Planner work for today: what's in Now, plus anything due today or overdue
+  const planToday = useMemo(() => {
+    const d = new Date()
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const due = (i: PlanItem): boolean => !!i.due && i.due <= iso
+    return plan
+      .filter((i) => i.status !== 'done' && (i.status === 'now' || due(i)))
+      .sort(
+        (a, b) =>
+          Number(due(b)) - Number(due(a)) ||
+          (due(a) && due(b) ? a.due.localeCompare(b.due) : 0) ||
+          a.order - b.order
+      )
+      .map((i) => ({ item: i, overdue: !!i.due && i.due < iso, dueToday: i.due === iso }))
+  }, [plan])
+
+  async function finishPlanItem(item: PlanItem): Promise<void> {
+    setPlan((prev) => prev.map((x) => (x.id === item.id ? { ...x, status: 'done' } : x)))
+    window.scribe.planner
+      .update(item.id, { status: 'done' })
+      .then(setPlan)
+      .catch(() => {})
   }
 
   async function toggleAction(item: ActionRollupItem): Promise<void> {
@@ -536,6 +569,56 @@ export function TodayView({
             </>
           )}
         </section>
+
+        {planToday.length > 0 && (
+          <section className="today-section">
+            <div className="card-subhead">On your plate</div>
+            <div className="rollup-list">
+              {planToday.slice(0, 6).map(({ item, overdue, dueToday }) => {
+                const stepsDone = item.steps.filter((x) => x.done).length
+                return (
+                  <div className="rollup-item" key={item.id}>
+                    <input
+                      type="checkbox"
+                      className="rollup-check"
+                      checked={false}
+                      onChange={() => finishPlanItem(item)}
+                      aria-label={`Mark "${item.title}" done`}
+                      title="Mark done in the Planner"
+                    />
+                    <div className="rollup-body">
+                      <button className="rollup-task today-plan-title" onClick={() => onPlanner(item.id)}>
+                        {item.title}
+                      </button>
+                      <span className="rollup-meta">
+                        {item.due && (overdue || dueToday) && (
+                          <span className={`action-due ${overdue ? 'overdue' : ''}`}>
+                            {dueToday
+                              ? 'Today'
+                              : new Date(`${item.due}T12:00:00`).toLocaleDateString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                          </span>
+                        )}
+                        {item.steps.length > 0 && (
+                          <span>
+                            {stepsDone}/{item.steps.length} steps
+                          </span>
+                        )}
+                        {item.requester && <span>for {item.requester}</span>}
+                        {item.project && <span>{item.project}</span>}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <button className="link-btn today-more" onClick={() => onPlanner()}>
+              {planToday.length > 6 ? `All ${planToday.length} in the Planner` : 'Open the Planner'}
+            </button>
+          </section>
+        )}
 
         {cuDue !== null && cuDue.length > 0 && (
           <section className="today-section">

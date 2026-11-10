@@ -474,6 +474,16 @@ export function BoardIcon(): React.JSX.Element {
   )
 }
 
+export function PlannerIcon(): React.JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 2.5h6v3H9z" />
+      <path d="m8.5 11 1.5 1.5 2.5-2.5M14.5 11.5H16M8.5 16.5h7" />
+    </svg>
+  )
+}
+
 export function LinkIcon(): React.JSX.Element {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

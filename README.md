@@ -20,12 +20,21 @@ module of several.)
   unread badge. Any list opens as a list or a status board (Everyone or Just
   me), with subtasks as their own cards or folded inside their parent. Meeting action items and emails push to real ClickUp tasks
   with assignee, due date, and the list's Requestor field mapped.
+- **Planner** — your own tracker for off-the-books work: the dashboard someone
+  asked for in passing, a one-off data pull, anything not in ClickUp or a
+  ServiceNow ticket. A Now / Next / Waiting / Later board (drag to move or
+  reorder, drop on Done to finish) or a list grouped by column, project or
+  requester; views for everything open, due this week and done, plus one per
+  project. Each item keeps who asked, a due date, a checklist of steps, notes,
+  links and a dated progress log. What's in Now or due shows on Today, an email
+  becomes an item in one click, and when the work becomes official, Send to
+  ClickUp hands it over with its notes and steps. Stays on this machine.
 - **Mail** — an inbox mirror fed by a Power Automate flow into a synced
   OneDrive folder (no mailbox credentials): threads grouped by conversation,
   automated mail and handled mail tucked away behind toggles (mark handled one
   at a time, by selection, or a whole day at once), full-text
   search, AI summaries and drafted replies that land in Outlook Drafts, one
-  click to a ClickUp task or a colleague's People page, and a warning when
+  click to a ClickUp task, a Planner item or a colleague's People page, and a warning when
   the flow goes quiet.
 - **Tickets** — your ServiceNow incidents, pasted in from the JSONv2 list
   (copy the page, click Apply from clipboard): triage into Now / Next / Later /
@@ -62,7 +71,8 @@ module of several.)
   clipboard for Tableau, and stored templates you can save fresh copies of.
 - **Ask everywhere** — the floating assistant answers across meetings, the
   directory, links, brand colors, your ClickUp tasks, your ServiceNow tickets
-  and the team's queue (as of the last update), and the status update.
+  and the team's queue (as of the last update), the status update, and your
+  Planner.
 - **Choose your AI** — Claude or ChatGPT power summaries and Ask; both keys
   storable, per-provider model picks. A Claude pick is a family (Haiku, Sonnet
   or Opus) that always runs on its newest model, checked daily with
@@ -77,7 +87,7 @@ module of several.)
 - **Record** in-person meetings (your mic) or virtual meetings (your mic **plus** system audio — whatever comes through your speakers/headset from Webex, Teams, Zoom, anything).
 - **Transcribe** on your own machine with [whisper.cpp](https://github.com/ggml-org/whisper.cpp). Audio never leaves your PC. $0, forever.
 - **Summarize** with the Claude API (pay-per-use — typically 1–5 cents per meeting with Haiku): TL;DR, key points, decisions, action items with owners/due dates, and open questions. Meetings are auto-titled from their content.
-- **Claude app connection** — one click in Settings links your library to Claude Desktop through a local, read-only MCP server. Claude can then answer questions about your meetings, your tickets, the team's queue and the status update, build reports and spreadsheets from them, or create tasks in tools you've connected to Claude (like ClickUp).
+- **Claude app connection** — one click in Settings links your library to Claude Desktop through a local, read-only MCP server. Claude can then answer questions about your meetings, your tickets, the team's queue, the status update and your Planner, build reports and spreadsheets from them, or create tasks in tools you've connected to Claude (like ClickUp).
 - **Ask anything** — a floating assistant on every page. On a meeting page it answers from that meeting's transcript; anywhere else it answers across your whole library ("What did we decide about X?", "What has David committed to?") with citations that jump to the exact transcript moment.
 - **Action items rollup** — every follow-up across all meetings in one checklist, with done-tracking.
 - **People** — a page per colleague: every meeting together, everything they own, and everything you owe them, assembled automatically from owners, attendees, and named speakers.
@@ -127,7 +137,7 @@ carry over):
 - `meetings\<id>\audio.webm` — compressed audio for playback
 - `engine\` — whisper.cpp binary and models
 - `directory.json`, `links.json`, `brand.json`, `link-thumbs\`, `toolbox\`,
-  `tickets.json`, `team-tickets.json` — the workspace modules
+  `tickets.json`, `team-tickets.json`, `planner.json` — the workspace modules
 - `clickup-activity.json` — the local ClickUp changelog snapshot
 
 Delete a meeting in the app (or delete its folder) and it's gone. There is no cloud copy.

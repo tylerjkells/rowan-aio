@@ -10,6 +10,7 @@ import type {
   PersonSummary
 } from '../../../shared/types'
 import { ClickupPushDialog } from '../ClickupPush'
+import { PlannerAddDialog } from '../PlannerAdd'
 import { MailGuideDialog } from '../MailGuide'
 import { MailCompose } from '../MailCompose'
 import { Avatar as UiAvatar } from '../ui'
@@ -219,6 +220,9 @@ export function MailView({
   const [selectedDraft, setSelectedDraft] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [taskFrom, setTaskFrom] = useState<MailMessage | null>(null)
+  const [planFrom, setPlanFrom] = useState<MailMessage | null>(null)
+  /** messages added to the Planner this session, so the button can say so */
+  const [planned, setPlanned] = useState<Set<string>>(new Set())
   const [summaries, setSummaries] = useState<Record<string, string>>({})
   const [summarizing, setSummarizing] = useState<string | null>(null)
   const [rowError, setRowError] = useState<string | null>(null)
@@ -1044,6 +1048,14 @@ export function MailView({
           <button className="btn btn-ghost mailc-read-tool" onClick={() => setTaskFrom(m)}>
             ClickUp task
           </button>
+          <button
+            className="btn btn-ghost mailc-read-tool"
+            onClick={() => setPlanFrom(m)}
+            disabled={planned.has(m.id)}
+            title="Track this ask in your Planner"
+          >
+            {planned.has(m.id) ? 'In Planner ✓' : 'Add to Planner'}
+          </button>
           {m.webLink && (
             <a className="btn btn-ghost mailc-read-tool" href={m.webLink} target="_blank" rel="noreferrer">
               Outlook ↗
@@ -1224,6 +1236,26 @@ export function MailView({
         />
       )}
       {guideOpen && <MailGuideDialog onClose={() => setGuideOpen(false)} />}
+      {planFrom && (
+        <PlannerAddDialog
+          heading="Add to Planner"
+          initial={{
+            title: planFrom.subject,
+            requester: planFrom.fromName ?? planFrom.from,
+            notes: `From email: ${planFrom.subject}\nSender: ${
+              planFrom.fromName ? `${planFrom.fromName} <${planFrom.from}>` : planFrom.from
+            }`,
+            links: planFrom.webLink
+              ? [{ id: crypto.randomUUID(), label: 'The email in Outlook', url: planFrom.webLink }]
+              : []
+          }}
+          onDone={() => {
+            setPlanned((prev) => new Set(prev).add(planFrom.id))
+            setPlanFrom(null)
+          }}
+          onClose={() => setPlanFrom(null)}
+        />
+      )}
       {taskFrom && (
         <ClickupPushDialog
           task={taskFrom.subject}

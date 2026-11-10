@@ -31,6 +31,7 @@ export async function runBackup(destZip: string, skipAudio: boolean): Promise<Ba
     'dashboards.json',
     'link-thumbs',
     'tickets.json',
+    'planner.json',
     'team-tickets.json',
     'status-update.json',
     'brand.json',
