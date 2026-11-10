@@ -6,6 +6,11 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.42.0': [
+    'A Planner for the work that isn’t in ClickUp or a ticket: the dashboard someone asked for in passing, a one-off data pull. It’s in the sidebar under ClickUp. Sort items into Now, Next, Waiting and Later on a board (drag to move them, drop on Done when finished) or see them as a list. Each one keeps who asked, a due date, a checklist of steps, notes, links and a running log of updates, and projects group related work.',
+    'Planner work shows up where you need it. Today lists what’s in Now and anything due, an email becomes a Planner item with Add to Planner, and Ask and Claude Desktop can see it. When something becomes official, Send to ClickUp hands it over with its notes and steps.',
+    'The status update suggests your Planner work: what you finished this month for Completed, what’s in Now or Waiting for In Progress, and what was newly asked for under New Requests. Nothing goes in until you click Add, which opens the item so you can write its line; × stops suggesting it.'
+  ],
   '0.41.0': [
     'Always the newest Claude. Pick Haiku, Sonnet or Opus in Settings and Rowan runs on the newest of that family: it checks with Anthropic once a day and moves to a new release on its own. Today that’s Claude Haiku 5.5, Sonnet 5.5 and Opus 5.5, and a model you picked before moves up to the newest of its family. The Regenerate menu offers the same three.',
     'AI cost estimates in Settings now use each model’s own price. Claude Haiku 5.5 costs about a tenth of what Haiku 4.5 did, so each summary adds far less than before.'
