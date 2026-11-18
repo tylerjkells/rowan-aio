@@ -13,7 +13,7 @@ function speakerOf(m: Meeting, s: string | undefined): string {
   return s
 }
 
-export function MeetingView({ id }: { id: string }): React.JSX.Element {
+export function MeetingView({ id, embedded = false }: { id: string; embedded?: boolean }): React.JSX.Element {
   const { hub, back, fail, tick } = useApp()
   const [meeting, setMeeting] = useState<Meeting | null>(() => peek(`meeting.${id}`))
   const [loaded, setLoaded] = useState(meeting !== null)
@@ -118,11 +118,13 @@ export function MeetingView({ id }: { id: string }): React.JSX.Element {
 
   return (
     <>
-      <nav className="navbar">
-        <button className="nav-back" onClick={() => back('/meetings')}>
-          <BackIcon size={22} /> Meetings
-        </button>
-      </nav>
+      {!embedded && (
+        <nav className="navbar">
+          <button className="nav-back" onClick={() => back('/meetings')}>
+            <BackIcon size={22} /> Meetings
+          </button>
+        </nav>
+      )}
       <Stale show={stale} />
       <Problem error={error} />
       {!meeting ? (

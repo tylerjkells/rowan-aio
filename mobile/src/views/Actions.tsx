@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useApp } from '../App'
 import { openActions, peek, setActionDone, type OpenAction } from '../data'
-import { Check, Problem, Stale, dueLabel } from '../ui'
+import { Check, Problem, Stale, dueLabel, localDay } from '../ui'
 
 function bucket(due: string | null): string {
   if (!due) return 'No date'
-  const today = new Date().toISOString().slice(0, 10)
-  const week = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10)
+  const today = localDay()
+  const week = localDay(7)
   if (due < today) return 'Overdue'
   if (due <= week) return 'This week'
   return 'Later'
@@ -104,7 +104,7 @@ export function ActionsView(): React.JSX.Element {
                       <Check done={isDone} />
                     </button>
                     <button className="row-main as-button" onClick={() => go(`/meeting/${encodeURIComponent(a.meetingId)}`)}>
-                      <span className="row-title">{a.item.task}</span>
+                      <span className="row-title clamp-3">{a.item.task}</span>
                       <span className="row-sub">{[dueLabel(a.due, a.item.due), a.item.owner, a.meetingTitle].filter(Boolean).join(' · ')}</span>
                     </button>
                   </div>

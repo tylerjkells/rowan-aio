@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { PlanItem, PlanStatus } from '../../../src/shared/types'
 import { useApp } from '../App'
 import { PLAN_STATUSES, addPlanItem, addPlanUpdate, loadPlanner, peek, setPlanStatus, togglePlanStep } from '../data'
-import { Check, ChevronIcon, Problem, Stale, dayLabel } from '../ui'
+import { Check, ChevronIcon, Problem, Stale, dayInSentence, dayLabel } from '../ui'
 
 export function PlannerView(): React.JSX.Element {
   const { hub, fail, tick } = useApp()
@@ -116,7 +116,7 @@ export function PlannerView(): React.JSX.Element {
                         item.project,
                         item.due && `due ${item.due}`,
                         item.steps.length > 0 && `${stepsDone}/${item.steps.length} steps`,
-                        item.status === 'done' && item.doneAt && `done ${dayLabel(item.doneAt).toLowerCase()}`
+                        item.status === 'done' && item.doneAt && `done ${dayInSentence(item.doneAt)}`
                       ]
                         .filter(Boolean)
                         .join(' · ')}

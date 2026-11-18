@@ -1,4 +1,20 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+
+/** follows a CSS media query, e.g. whether the screen is wide enough for two panes */
+export function useMedia(query: string): boolean {
+  const [on, setOn] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const update = (): void => setOn(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [query])
+  return on
+}
+
+/** wide enough to show a list and the item it opens side by side (unfolded, iPad, landscape) */
+export const WIDE = '(min-width: 760px)'
 
 // small shared pieces: icons, dates and durations, status lines
 
@@ -51,6 +67,62 @@ export const PlannerIcon = (p: IconProps): React.JSX.Element => (
   </Svg>
 )
 
+export const PeopleIcon = (p: IconProps): React.JSX.Element => (
+  <Svg {...p}>
+    <circle cx="9" cy="8.5" r="3.2" />
+    <path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5" />
+    <circle cx="16.8" cy="9.5" r="2.4" />
+    <path d="M15.8 14.2c2.4 0 4.2 1.6 4.7 4.3" />
+  </Svg>
+)
+
+export const TicketIcon = (p: IconProps): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5V10a2 2 0 0 0 0 4v2.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5V14a2 2 0 0 0 0-4Z" />
+    <path d="M14 6.5v11" strokeDasharray="1.6 2" />
+  </Svg>
+)
+
+export const LinkIcon = (p: IconProps): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+    <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+  </Svg>
+)
+
+export const GaugeIcon = (p: IconProps): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M4.5 17a8 8 0 1 1 15 0" />
+    <path d="m12 13 3.5-4" />
+    <circle cx="12" cy="13.5" r="1.2" fill="currentColor" stroke="none" />
+  </Svg>
+)
+
+export const ToolboxIcon = (p: IconProps): React.JSX.Element => (
+  <Svg {...p}>
+    <rect x="3.5" y="8" width="17" height="11" rx="2" />
+    <path d="M9 8V6.5A1.5 1.5 0 0 1 10.5 5h3A1.5 1.5 0 0 1 15 6.5V8M3.5 12.5h17" />
+  </Svg>
+)
+
+export const PaletteIcon = (p: IconProps): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.1-.9-1.5-.9-2.5 0-.9.7-1.6 1.7-1.6h2.1a3.8 3.8 0 0 0 3.8-3.8C20.5 6.8 16.7 3.5 12 3.5Z" />
+    <circle cx="7.8" cy="11" r="1" fill="currentColor" stroke="none" />
+    <circle cx="10.5" cy="7.5" r="1" fill="currentColor" stroke="none" />
+    <circle cx="15" cy="7.8" r="1" fill="currentColor" stroke="none" />
+  </Svg>
+)
+
+export const MoreIcon = (p: IconProps): React.JSX.Element => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <circle cx="8.3" cy="12" r="1" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+    <circle cx="15.7" cy="12" r="1" fill="currentColor" stroke="none" />
+  </Svg>
+)
+
 export const BackIcon = (p: IconProps): React.JSX.Element => (
   <Svg {...p}>
     <path d="m14.5 5-7 7 7 7" />
@@ -97,6 +169,13 @@ export function errorText(err: unknown): string {
 
 // ---- time -------------------------------------------------------------------
 
+/** YYYY-MM-DD on this phone's calendar, `days` from today (not UTC's) */
+export function localDay(days = 0): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
 }
@@ -113,6 +192,12 @@ export function dayLabel(iso: string): string {
     day: 'numeric',
     year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric'
   })
+}
+
+/** dayLabel inside a sentence: "today", "yesterday", but "Saturday" keeps its capital */
+export function dayInSentence(iso: string): string {
+  const d = dayLabel(iso)
+  return d === 'Today' || d === 'Yesterday' ? d.toLowerCase() : d
 }
 
 export function timeOf(iso: string): string {

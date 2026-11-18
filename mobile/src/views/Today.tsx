@@ -3,7 +3,7 @@ import type { PlanItem } from '../../../src/shared/types'
 import { useApp } from '../App'
 import { listMeetings, loadPlanner, openActions, peek, type MeetingRow, type OpenAction } from '../data'
 import { pending, type PendingRecording } from '../recorder'
-import { ChevronIcon, MicIcon, Problem, Stale, dayLabel, dueLabel, duration, stageNote, timeOf } from '../ui'
+import { ChevronIcon, MicIcon, Problem, Stale, dayLabel, dueLabel, duration, localDay, stageNote, timeOf } from '../ui'
 
 function greeting(name: string): string {
   const h = new Date().getHours()
@@ -39,9 +39,10 @@ export function TodayView(): React.JSX.Element {
     }
   }, [hub, tick, fail])
 
-  const todayIso = new Date().toISOString().slice(0, 10)
-  const weekAhead = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10)
-  const due = (actions ?? []).filter((a) => a.due && a.due <= weekAhead).slice(0, 5)
+  const todayIso = localDay()
+  const weekAhead = localDay(7)
+  // what's coming up this week; long-overdue items would crowd it out, so they get a count of their own
+  const due = (actions ?? []).filter((a) => a.due && a.due >= todayIso && a.due <= weekAhead).slice(0, 5)
   const overdue = (actions ?? []).filter((a) => a.due && a.due < todayIso).length
   const now = (plan ?? []).filter((p) => p.status === 'now').sort((a, b) => a.order - b.order)
   // phone recordings not yet back from the PC as a finished meeting
@@ -69,6 +70,9 @@ export function TodayView(): React.JSX.Element {
         </span>
       </button>
 
+      {/* one column on a phone; two side by side when the screen is wide */}
+      <div className="today-cols">
+      <div className="today-col">
       {unsent.length > 0 && (
         <section>
           <h2 className="section-title">Not sent yet</h2>
@@ -114,18 +118,23 @@ export function TodayView(): React.JSX.Element {
             </button>
           )}
         </div>
-        {overdue > 0 && <p className="note-warn">{overdue} overdue</p>}
+        {overdue > 0 && (
+          <button className="overdue-banner" onClick={() => go('/actions')}>
+            <span>{overdue} overdue</span>
+            <ChevronIcon size={16} />
+          </button>
+        )}
         {actions === null ? (
           <div className="group skeleton" />
         ) : due.length === 0 ? (
-          <p className="empty">Nothing due this week.</p>
+          <p className="empty">{overdue > 0 ? 'Nothing else due this week.' : 'Nothing due this week.'}</p>
         ) : (
           <div className="group">
             {due.map((a) => (
               <button key={`${a.meetingId}-${a.index}`} className="row" onClick={() => go(`/meeting/${encodeURIComponent(a.meetingId)}`)}>
                 <span className="row-main">
-                  <span className="row-title">{a.item.task}</span>
-                  <span className={`row-sub ${a.due && a.due < todayIso ? 'overdue' : ''}`}>
+                  <span className="row-title clamp-3">{a.item.task}</span>
+                  <span className="row-sub">
                     {[dueLabel(a.due, a.item.due), a.item.owner].filter(Boolean).join(' · ')}
                   </span>
                 </span>
@@ -135,6 +144,8 @@ export function TodayView(): React.JSX.Element {
         )}
       </section>
 
+      </div>
+      <div className="today-col">
       {now.length > 0 && (
         <section>
           <div className="section-head">
@@ -183,6 +194,8 @@ export function TodayView(): React.JSX.Element {
           </div>
         )}
       </section>
+      </div>
+      </div>
 
       <footer className="account">
         Signed in as {hub.email} ·{' '}

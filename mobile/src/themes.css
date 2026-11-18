@@ -201,3 +201,19 @@
 :root {
   color-scheme: dark;
 }
+
+/* overdue is always red, even in the blue and gold themes, where the accent
+   would make it read as a link */
+:root {
+  --danger: oklch(0.7 0.18 25);
+  --danger-tint: oklch(0.7 0.18 25 / 0.14);
+}
+:root[data-theme='paper'],
+:root[data-theme='notion'] {
+  --danger: oklch(0.55 0.2 27);
+  --danger-tint: oklch(0.55 0.2 27 / 0.1);
+}
+:root[data-theme='ios'] {
+  --danger: #ff3b30;
+  --danger-tint: rgba(255, 59, 48, 0.1);
+}

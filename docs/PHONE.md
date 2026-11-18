@@ -18,20 +18,43 @@ again the first time you open it from there.
 
 ## What it does
 
-- **Today:** your greeting, a big Record button, phone recordings waiting on
-  your PC, action items due this week, the Planner's Now column, recent
-  meetings.
+The tab bar holds Today, Meetings, Record and Action items; **More** has the
+rest. On a wide screen (an unfolded phone, an iPad, a phone in landscape) a
+sidebar lists every section instead, like the desktop, and Meetings, People and
+Tickets show the list beside the open item. Sections switched off in the
+desktop's Settings → Tabs are hidden here too.
+
+- **Today:** a big Record button, phone recordings waiting on your PC, what's
+  due this week (with a count of overdue items that opens Action items), the
+  Planner's Now column, recent meetings.
 - **Meetings:** search titles, summaries and notes; open one for the summary,
   action items (check them off), notes (edit them; they autosave), discussion
   topics, decisions, open questions and the transcript. Rename it by tapping
-  the title. "Play recording" plays the audio when the hub still has it
-  (recordings from the last N days; see Settings → Sync).
-- **Actions:** every open action item across your meetings, grouped overdue /
+  the title. "Play recording" plays the audio when the hub still has it.
+- **Action items:** every open one across your meetings, grouped overdue /
   this week / later / no date, with a Mine filter.
 - **Planner:** Now / Next / Waiting / Later / Done; add items, tick steps, add
   a progress note, move or finish an item.
+- **People:** the team directory; a person's page has Email, Call and Teams
+  buttons, who they report to and who reports to them, their open action items
+  and the meetings you had together.
+- **Tickets:** your ServiceNow incidents by plan (Now / Next / Waiting /
+  Later), with the desktop's "They replied", "No reply yet" and "Quiet 30+
+  days" flags; set a ticket's plan, next step and notes, read its history, open
+  it in ServiceNow.
+- **Links** and **Dashboards:** open in Safari, which keeps its own sign-ins.
+- **Toolbox:** read guides, view images, copy saved queries, open template files.
+- **Brand:** the palettes; tap a color to copy its hex code.
 - **Record:** see below.
 
+Mail and ClickUp stay on the PC: mail isn't synced (each PC reads its own
+OneDrive copy of the mailbox), and ClickUp needs the token kept on the PC; both
+have their own iPhone apps.
+
+It fits the screen it's on: short screens tighten up, a landscape phone drops
+the tab labels, and a wide screen (an unfolded phone, an iPad) shows Today in two
+columns and the meetings list beside the open meeting. It keeps clear of the
+notch, the home bar, and a status column down the side where a phone has one.
 It follows the theme you picked on your PC. The last things it loaded stay
 on the phone, so it still opens offline (with a note saying so); edits need a
 connection.
