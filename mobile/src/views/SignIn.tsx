@@ -1,10 +1,13 @@
 import { useState } from 'react'
+import { MIN_PASSWORD, looksLikeEmail } from '../../../src/shared/hub'
 import { Hub, hubConfig, setCustomHub } from '../api'
 import { errorText } from '../ui'
 
 export function SignIn({ note, onSignedIn }: { note: string | null; onSignedIn: (hub: Hub) => void }): React.JSX.Element {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(note)
   const [hubOpen, setHubOpen] = useState(() => hubConfig() === null)
@@ -21,7 +24,14 @@ export function SignIn({ note, onSignedIn }: { note: string | null; onSignedIn: 
         if (!/^https:\/\/\S+$/.test(hubUrl.trim()) || !hubKey.trim()) throw new Error('Enter the hub address (https://…) and its key.')
         setCustomHub({ url: hubUrl, key: hubKey })
       }
-      onSignedIn(await Hub.signIn(email, password))
+      if (creating) {
+        if (!looksLikeEmail(email)) throw new Error('Enter the email that was approved for you.')
+        if (password.length < MIN_PASSWORD) throw new Error(`Use at least ${MIN_PASSWORD} characters for your password.`)
+        if (password !== confirm) throw new Error('The two passwords don’t match.')
+        onSignedIn(await Hub.signUp(email, password))
+      } else {
+        onSignedIn(await Hub.signIn(email, password))
+      }
     } catch (err) {
       setError(errorText(err))
     } finally {
@@ -44,8 +54,20 @@ export function SignIn({ note, onSignedIn }: { note: string | null; onSignedIn: 
         </label>
         <label className="field">
           <span>Password</span>
-          <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input
+            type="password"
+            autoComplete={creating ? 'new-password' : 'current-password'}
+            placeholder={creating ? `${MIN_PASSWORD}+ characters` : undefined}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
         </label>
+        {creating && (
+          <label className="field">
+            <span>Confirm</span>
+            <input type="password" autoComplete="new-password" aria-label="Type the password again" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          </label>
+        )}
         {hubOpen && (
           <>
             <label className="field">
@@ -58,8 +80,8 @@ export function SignIn({ note, onSignedIn }: { note: string | null; onSignedIn: 
             </label>
           </>
         )}
-        <button className="btn-primary" type="submit" disabled={busy || !email.trim() || !password}>
-          {busy ? 'Signing in…' : 'Sign in'}
+        <button className="btn-primary" type="submit" disabled={busy || !email.trim() || !password || (creating && !confirm)}>
+          {creating ? (busy ? 'Creating…' : 'Create account') : busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
       {error && (
@@ -67,7 +89,21 @@ export function SignIn({ note, onSignedIn }: { note: string | null; onSignedIn: 
           {error}
         </p>
       )}
-      <p className="fine">Use the same account as Settings → Sync on your PC.</p>
+      <p className="fine">
+        {creating
+          ? 'Use the email the person who runs your Rowan hub approved, and choose your own password. Your PC signs in with the same one.'
+          : 'Use the same account as Settings → Sync on your PC.'}
+      </p>
+      <button
+        className="link"
+        onClick={() => {
+          setCreating((v) => !v)
+          setError(null)
+          setConfirm('')
+        }}
+      >
+        {creating ? 'I already have an account' : 'Create an account'}
+      </button>
       {!hubOpen && (
         <button className="link" onClick={() => setHubOpen(true)}>
           Use a different hub

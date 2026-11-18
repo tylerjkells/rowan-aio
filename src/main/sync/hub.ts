@@ -6,6 +6,8 @@
 // surface is three database functions, sign-in, and file storage.
 // ---------------------------------------------------------------------------
 
+import { CONFIRM_EMAIL_PROBLEM, signUpProblem, type SignupApproval } from '../../shared/hub'
+
 export interface HubConfig {
   url: string
   /** the project's publishable (anon) key: public by design, data is guarded by RLS */
@@ -166,6 +168,36 @@ export class SupabaseHub implements Hub {
     return hub
   }
 
+  /**
+   * Create an account with a password the person chooses. The hub only
+   * accepts an email an administrator approved (approved_signups migration).
+   */
+  static async signUp(
+    cfg: HubConfig,
+    email: string,
+    password: string,
+    onSession: (s: SavedSession) => void
+  ): Promise<SupabaseHub> {
+    const res = await call(`${trimUrl(cfg.url)}/auth/v1/signup`, {
+      method: 'POST',
+      headers: { apikey: cfg.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim(), password })
+    })
+    if (!res.ok) {
+      const msg = await readError(res)
+      const refused = res.status < 500 || /database error saving new user/i.test(msg)
+      throw new HubError(signUpProblem(res.status, msg, email), refused ? 'auth' : 'server', res.status)
+    }
+    const t = (await res.json()) as Partial<TokenResponse>
+    // with "Confirm email" on, the hub answers with the user and no session
+    if (!t.access_token || !t.refresh_token || !t.user?.id) throw new HubError(CONFIRM_EMAIL_PROBLEM, 'auth')
+    const session = { userId: t.user.id, email: t.user.email ?? email.trim(), refreshToken: t.refresh_token }
+    onSession(session)
+    const hub = new SupabaseHub(cfg, session, onSession)
+    hub.access = { token: t.access_token, expiresAt: Date.now() + (t.expires_in ?? 3600) * 1000 }
+    return hub
+  }
+
   get userId(): string {
     return this.session.userId
   }
@@ -285,6 +317,47 @@ export class SupabaseHub implements Hub {
 
   async changePassword(password: string): Promise<void> {
     await this.request('/auth/v1/user', { method: 'PUT', body: JSON.stringify({ password }) })
+  }
+
+  // ---- approvals (the hub's administrators only; row-level security enforces it)
+
+  /** whether this person may approve new accounts; false on a hub without approvals */
+  async isAdmin(): Promise<boolean> {
+    try {
+      const res = await this.request(
+        `/rest/v1/hub_admins?select=user_id&user_id=eq.${encodeURIComponent(this.userId)}`,
+        { method: 'GET' }
+      )
+      return ((await res.json()) as unknown[]).length > 0
+    } catch (err) {
+      if (err instanceof HubError && err.kind === 'missing') return false
+      throw err
+    }
+  }
+
+  async approvals(): Promise<SignupApproval[]> {
+    const res = await this.request(
+      '/rest/v1/signup_allowlist?select=email,added_at,used_at&order=added_at.desc',
+      { method: 'GET' }
+    )
+    const rows = (await res.json()) as { email: string; added_at: string; used_at: string | null }[]
+    return rows.map((r) => ({ email: r.email, addedAt: r.added_at, usedAt: r.used_at }))
+  }
+
+  /** approve an email; a 409 HubError means it's already on the list */
+  async approve(email: string): Promise<void> {
+    await this.request('/rest/v1/signup_allowlist', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ email: email.trim().toLowerCase() })
+    })
+  }
+
+  async withdraw(email: string): Promise<void> {
+    await this.request(`/rest/v1/signup_allowlist?email=eq.${encodeURIComponent(email)}`, {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' }
+    })
   }
 
   async signOut(): Promise<void> {

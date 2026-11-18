@@ -1098,6 +1098,41 @@ textarea::placeholder {
   margin: 6px 14px 14px;
 }
 
+.form .form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 14px 14px;
+}
+
+.form .form-actions .btn-primary {
+  width: auto;
+  flex: 0 1 220px;
+  margin: 0;
+}
+
+.account-note {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.account-note.ok {
+  color: var(--ok);
+}
+
+.account-note.bad {
+  color: var(--danger);
+}
+
+.signin .link {
+  display: block;
+  margin: 12px auto 0;
+  padding: 4px 8px;
+}
+
 .install {
   margin-top: 28px;
 }

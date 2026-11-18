@@ -2699,6 +2699,58 @@ select.text-input {
   padding-left: 0;
 }
 
+.sync-signin.creating {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.sync-signin.creating > :first-child {
+  grid-column: 1 / -1;
+}
+
+.sync-signin.creating > .btn {
+  justify-self: start;
+}
+
+.sync-approve-input {
+  flex: 1;
+  max-width: 320px;
+}
+
+.sync-approvals {
+  list-style: none;
+  margin: var(--s3) 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.sync-approvals li {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.sync-approval-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sync-approval-email {
+  color: var(--ink);
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-approval-main .opt-desc {
+  margin: 0;
+}
+
 .sync-url {
   font-family: var(--font-mono);
   font-size: 12.5px;

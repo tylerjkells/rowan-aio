@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { PHONE_APP_URL } from '../../../shared/hub'
+import { MIN_PASSWORD, PHONE_APP_URL, inviteText, looksLikeEmail, type SignupApproval } from '../../../shared/hub'
 import type { SyncStatus } from '../../../shared/types'
 
 /** the live sync status, kept current by the main process */
@@ -38,6 +38,128 @@ function ago(iso: string | null): string {
     : `on ${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}`
 }
 
+function plainError(err: unknown): string {
+  return err instanceof Error
+    ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+    : String(err)
+}
+
+function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
+
+/**
+ * For the hub's administrators: approve the email someone will create their
+ * account with. Each approval works once; the person picks their own password.
+ */
+function WhoCanJoin(): React.JSX.Element {
+  const [list, setList] = useState<SignupApproval[] | null>(null)
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<{ ok: boolean; msg: string } | null>(null)
+
+  useEffect(() => {
+    window.scribe.sync
+      .approvals()
+      .then(setList)
+      .catch((err) => setNote({ ok: false, msg: plainError(err) }))
+  }, [])
+
+  async function run(fn: () => Promise<SignupApproval[]>, done?: string): Promise<boolean> {
+    setBusy(true)
+    setNote(null)
+    try {
+      setList(await fn())
+      if (done) setNote({ ok: true, msg: done })
+      return true
+    } catch (err) {
+      setNote({ ok: false, msg: plainError(err) })
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function copyInvite(to: string): void {
+    navigator.clipboard
+      .writeText(inviteText(to))
+      .then(() => setNote({ ok: true, msg: `Instructions for ${to} copied. Paste them into an email or Teams.` }))
+  }
+
+  const waiting = (list ?? []).filter((a) => !a.usedAt)
+  const joined = (list ?? []).filter((a) => a.usedAt)
+
+  return (
+    <>
+      <div className="card-subhead sync-gap">Who can join</div>
+      <p className="opt-desc">
+        Approve someone&apos;s work email, then send them the instructions. They create their own
+        account and password in Rowan on their PC or phone; their data is private to them. Each
+        approval works once.
+      </p>
+      <form
+        className="field-row"
+        onSubmit={(e) => {
+          e.preventDefault()
+          const to = email.trim().toLowerCase()
+          void run(() => window.scribe.sync.approve(to)).then((ok) => {
+            if (!ok) return
+            setEmail('')
+            copyInvite(to)
+          })
+        }}
+      >
+        <input
+          className="text-input sync-approve-input"
+          type="email"
+          placeholder="name@rowan.edu"
+          aria-label="Email to approve"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <button className="btn" type="submit" disabled={busy || !looksLikeEmail(email)}>
+          Approve
+        </button>
+      </form>
+      {note && (
+        <p className={`field-note ${note.ok ? 'ok' : 'error'}`} role="status">
+          {note.msg}
+        </p>
+      )}
+      {list && list.length > 0 && (
+        <ul className="sync-approvals">
+          {waiting.map((a) => (
+            <li key={a.email}>
+              <span className="sync-approval-main">
+                <span className="sync-approval-email">{a.email}</span>
+                <span className="opt-desc">Approved {shortDate(a.addedAt)} · hasn&apos;t created an account yet</span>
+              </span>
+              <button className="btn btn-ghost" disabled={busy} onClick={() => copyInvite(a.email)}>
+                Copy instructions
+              </button>
+              <button
+                className="btn btn-ghost btn-danger"
+                disabled={busy}
+                onClick={() => void run(() => window.scribe.sync.withdraw(a.email), `Withdrew the approval for ${a.email}.`)}
+              >
+                Withdraw
+              </button>
+            </li>
+          ))}
+          {joined.map((a) => (
+            <li key={a.email}>
+              <span className="sync-approval-main">
+                <span className="sync-approval-email">{a.email}</span>
+                <span className="opt-desc">Joined {shortDate(a.usedAt as string)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
 function StateBadge({ status }: { status: SyncStatus }): React.JSX.Element {
   switch (status.state) {
     case 'syncing':
@@ -64,6 +186,8 @@ function StateBadge({ status }: { status: SyncStatus }): React.JSX.Element {
 export function SyncSettings({ status }: { status: SyncStatus | null }): React.JSX.Element | null {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<{ ok: boolean; msg: string } | null>(null)
   const [pwOpen, setPwOpen] = useState(false)
@@ -95,8 +219,7 @@ export function SyncSettings({ status }: { status: SyncStatus | null }): React.J
       await fn()
       if (done) setNote({ ok: true, msg: done })
     } catch (err) {
-      const msg = err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(err)
-      setNote({ ok: false, msg })
+      setNote({ ok: false, msg: plainError(err) })
     } finally {
       setBusy(false)
     }
@@ -192,12 +315,18 @@ export function SyncSettings({ status }: { status: SyncStatus | null }): React.J
           </p>
         )}
         <form
-          className="sync-signin"
+          className={`sync-signin ${creating ? 'creating' : ''}`}
           onSubmit={(e) => {
             e.preventDefault()
             act(async () => {
-              await window.scribe.sync.signIn(email, password)
+              if (creating) {
+                if (password !== confirm) throw new Error('The two passwords don’t match.')
+                await window.scribe.sync.signUp(email, password)
+              } else {
+                await window.scribe.sync.signIn(email, password)
+              }
               setPassword('')
+              setConfirm('')
             })
           }}
         >
@@ -213,14 +342,33 @@ export function SyncSettings({ status }: { status: SyncStatus | null }): React.J
           <input
             className="text-input"
             type="password"
-            autoComplete="current-password"
-            placeholder="Password"
-            aria-label="Sync account password"
+            autoComplete={creating ? 'new-password' : 'current-password'}
+            placeholder={creating ? `Choose a password (${MIN_PASSWORD}+ characters)` : 'Password'}
+            aria-label={creating ? 'Choose a sync password' : 'Sync account password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <button className="btn btn-primary" type="submit" disabled={busy || !email.trim() || !password}>
-            {busy ? 'Signing in…' : 'Sign in'}
+          {creating && (
+            <input
+              className="text-input"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Type it again"
+              aria-label="Confirm the sync password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+            />
+          )}
+          <button
+            className="btn btn-primary"
+            type="submit"
+            disabled={
+              busy ||
+              !email.trim() ||
+              (creating ? password.length < MIN_PASSWORD || !confirm : !password)
+            }
+          >
+            {creating ? (busy ? 'Creating…' : 'Create account') : busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
         {note && (
@@ -229,9 +377,32 @@ export function SyncSettings({ status }: { status: SyncStatus | null }): React.J
           </p>
         )}
         <p className="opt-desc sync-gap">
-          Accounts are set up by whoever runs your sync hub. The first time you sign in, this
-          PC&apos;s library uploads in the background; another PC signing in to the same account
-          then gets all of it.
+          {creating ? (
+            <>
+              Use the email the person who runs your sync hub approved for you, and choose your own
+              password. Already have an account?{' '}
+            </>
+          ) : (
+            <>
+              New to sync? Ask the person who runs your sync hub to approve your email, then{' '}
+            </>
+          )}
+          <button
+            type="button"
+            className="link-btn"
+            onClick={() => {
+              setCreating((v) => !v)
+              setNote(null)
+              setConfirm('')
+            }}
+          >
+            {creating ? 'Sign in' : 'create an account'}
+          </button>
+          .
+        </p>
+        <p className="opt-desc">
+          The first time you sign in, this PC&apos;s library uploads in the background; another PC
+          signing in to the same account then gets all of it.
         </p>
         {hubForm}
       </>
@@ -365,6 +536,7 @@ export function SyncSettings({ status }: { status: SyncStatus | null }): React.J
           {formatBytes(status.usage.fileBytes)} of recordings and files.
         </p>
       )}
+      {status.admin && <WhoCanJoin />}
       {status.customHub && hubForm}
     </>
   )

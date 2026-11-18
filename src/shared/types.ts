@@ -1235,6 +1235,8 @@ export interface SyncStatus {
   audioDays: number
   /** this person's share of the hub, when known */
   usage: { docBytes: number; fileBytes: number } | null
+  /** this person approves new accounts on the hub (Settings → Sync → Who can join) */
+  admin: boolean
 }
 
 /** sent to the window after a sync pass changed data on this PC */

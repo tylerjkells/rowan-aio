@@ -59,21 +59,47 @@ it into the app). Tests: `npm test`. Schema: `supabase/migrations/`.
 
 1. **Create a Supabase project** (e.g. `rowan-aio`, region East US). On the free
    plan an organization can have two active projects.
-2. **Create the schema**: run `supabase/migrations/20261118000000_sync_hub.sql`
-   in the project's SQL editor (or apply it with the Supabase MCP tools). It is
+2. **Create the schema**: run the files in `supabase/migrations/` in order in
+   the project's SQL editor (or apply them with the Supabase MCP tools). Each is
    safe to run again.
-3. **Close sign-ups**: Authentication → Sign In / Providers → turn off *Allow new
-   users to sign up*. Leave the Email provider on.
-4. **Build it in**: Project Settings → API Keys → copy the project URL and the
+3. **Sign-ups by approval only**: Authentication → Sign In / Providers → turn
+   **on** *Allow new users to sign up* and turn **off** *Confirm email* (the
+   built-in email can't reach people outside the Supabase organization). The
+   database refuses any new account whose email wasn't approved first, so this
+   doesn't open the hub to anyone else.
+4. **Make yourself the administrator**: create your account (see below, but
+   for the very first one approve your email in the SQL editor with
+   `insert into public.signup_allowlist (email) values ('you@example.com');`),
+   then
+   `insert into public.hub_admins (user_id) select id from auth.users where email = 'you@example.com';`
+5. **Build it in**: Project Settings → API Keys → copy the project URL and the
    publishable key into `src/shared/hub.ts`. The key is public by design; every
    row and file is guarded by row-level security. (Until then, Settings → Sync →
    *Use a different hub…* takes the same two values.)
 
 ## Adding a person
 
-Authentication → Users → **Add user → Create new user**: their email, a
-starting password, and tick **Auto Confirm User**. Send them the password; they
-sign in from Settings → Sync and can change it there.
+People create their own accounts and pick their own passwords, but only with an
+email an administrator approved first.
+
+1. In Rowan, Settings → Sync → **Who can join** (shown to the hub's
+   administrators): enter their email and **Approve**. Instructions to send them
+   are copied to the clipboard (**Copy instructions** copies them again).
+2. They open Settings → Sync on their PC, choose **create an account**, and
+   enter that email and a password of their own (8+ characters). Or they do the
+   same on the phone app's sign-in screen. Either way, the other device then
+   just signs in.
+3. The list shows when they joined. Each approval works once; **Withdraw**
+   takes back one that hasn't been used.
+
+How it's enforced: a trigger on `auth.users` (migration
+`20261118190000_approved_signups.sql`) refuses any new account whose email has
+no unused approval in `signup_allowlist`, and marks the approval used. It
+applies to every way of creating an account, including the dashboard's *Add
+user*, so approve an email before using that too. Approvals can only be read
+or changed by people in `hub_admins`, which is edited by hand in the SQL editor.
+Anyone who knows an approved email could claim it before its owner does, so
+send the instructions promptly; the list shows when it was used.
 
 - The first PC they sign in on uploads its library; any other PC that signs in
   to the same account gets all of it (and merges in whatever it already had).
@@ -81,6 +107,9 @@ sign in from Settings → Sync and can change it there.
   there as someone else is refused.
 - For test builds, use a separate account (e.g. `name+test@…`), since a test
   build has its own data folder.
+
+**Changing a password**: Settings → Sync → *Change password…* on a PC, or
+More → *Change password* on the phone.
 
 **Forgotten password.** Supabase's built-in email only reaches members of the
 Supabase organization, so reset it from the SQL editor:

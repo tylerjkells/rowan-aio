@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, safeStorage } from 'electron'
 import { mkdirSync, readFileSync, rmSync, watch, writeFileSync, type FSWatcher } from 'fs'
 import { join } from 'path'
-import { BUILT_IN_HUB } from '../../shared/hub'
+import { BUILT_IN_HUB, MIN_PASSWORD, looksLikeEmail, type SignupApproval } from '../../shared/hub'
 import type { SyncChangeEvent, SyncStatus } from '../../shared/types'
 import { applyPortableSettings, getSyncPrefs, readPortableSettings, setSyncPrefs } from '../settings'
 import { dropTicketsCache } from '../tickets'
@@ -36,6 +36,7 @@ let state: SyncStatus['state'] = 'off'
 let message: string | null = null
 let usage: SyncStatus['usage'] = null
 let usageAt = 0
+let admin = false
 let onSettingsSynced: () => void = () => {}
 
 /**
@@ -137,7 +138,8 @@ export function syncStatus(): SyncStatus {
     heldDeletes: engine?.heldCount ?? 0,
     tooLarge: engine?.tooLarge.size ?? 0,
     audioDays: prefs.audioDays,
-    usage: hub ? usage : null
+    usage: hub ? usage : null,
+    admin: hub ? admin : false
   }
 }
 
@@ -188,12 +190,14 @@ function deliverChanges(): void {
   broadcast('sync:changed', event)
 }
 
+/** the account's share of the hub, and whether it approves new accounts */
 async function refreshUsage(): Promise<void> {
   if (!hub || Date.now() - usageAt < USAGE_EVERY_MS) return
   usageAt = Date.now()
   try {
-    const u = await hub.usage()
+    const [u, a] = await Promise.all([hub.usage(), hub.isAdmin()])
     usage = { docBytes: u.doc_bytes, fileBytes: u.file_bytes }
+    admin = a
   } catch {
     // usage is a nicety; the next pass tries again
     usageAt = 0
@@ -309,6 +313,7 @@ function end(): void {
   state = 'off'
   message = null
   usage = null
+  admin = false
 }
 
 /** at startup: pick up where the last session left off */
@@ -337,10 +342,52 @@ async function signIn(email: string, password: string): Promise<SyncStatus> {
       `This PC's library syncs with ${own.email}. Sign in with that account to keep it in sync.`
     )
   }
+  return start(h)
+}
+
+function start(h: SupabaseHub): SyncStatus {
   end()
   begin(h)
   schedule(0)
   return syncStatus()
+}
+
+/** a new account, with a password the person picks; their email must be approved */
+async function signUp(email: string, password: string): Promise<SyncStatus> {
+  const cfg = hubConfig()
+  if (!cfg) throw new Error('This build has no sync hub set up.')
+  if (!looksLikeEmail(email)) throw new Error('Enter the email that was approved for you.')
+  if (password.length < MIN_PASSWORD) throw new Error(`Use at least ${MIN_PASSWORD} characters for your password.`)
+  // a library that already syncs with an account can't move to a new one
+  const own = owner()
+  if (own) {
+    throw new Error(
+      `This PC's library already syncs with ${own.email}. Sign in with that account instead.`
+    )
+  }
+  return start(await SupabaseHub.signUp(cfg, email, password, (s) => saveSession(cfg, s)))
+}
+
+function adminHub(): SupabaseHub {
+  if (!hub) throw new Error('Sign in first.')
+  if (!admin) throw new Error('Only the hub’s administrators can approve accounts.')
+  return hub
+}
+
+async function approve(email: string): Promise<SignupApproval[]> {
+  const h = adminHub()
+  const clean = email.trim().toLowerCase()
+  if (!looksLikeEmail(clean)) throw new Error('That doesn’t look like an email address.')
+  try {
+    await h.approve(clean)
+  } catch (err) {
+    if (!(err instanceof HubError) || err.status !== 409) throw err
+    const existing = (await h.approvals()).find((a) => a.email === clean)
+    throw new Error(
+      existing?.usedAt ? `${clean} already has an account.` : `${clean} is already approved.`
+    )
+  }
+  return h.approvals()
 }
 
 async function signOut(): Promise<SyncStatus> {
@@ -379,6 +426,14 @@ export function registerSyncIpc(opts: { onSettingsSynced: () => void }): void {
     }
   })
   ipcMain.handle('sync:signIn', (_e, email: string, password: string) => signIn(email, password))
+  ipcMain.handle('sync:signUp', (_e, email: string, password: string) => signUp(email, password))
+  ipcMain.handle('sync:approvals', () => adminHub().approvals())
+  ipcMain.handle('sync:approve', (_e, email: string) => approve(email))
+  ipcMain.handle('sync:withdraw', async (_e, email: string) => {
+    const h = adminHub()
+    await h.withdraw(email)
+    return h.approvals()
+  })
   ipcMain.handle('sync:signOut', () => signOut())
   ipcMain.handle('sync:now', () => {
     schedule(0)
@@ -386,7 +441,7 @@ export function registerSyncIpc(opts: { onSettingsSynced: () => void }): void {
   })
   ipcMain.handle('sync:changePassword', async (_e, password: string) => {
     if (!hub) throw new Error('Sign in first.')
-    if (password.length < 8) throw new Error('Use at least 8 characters.')
+    if (password.length < MIN_PASSWORD) throw new Error(`Use at least ${MIN_PASSWORD} characters.`)
     await hub.changePassword(password)
     return syncStatus()
   })
