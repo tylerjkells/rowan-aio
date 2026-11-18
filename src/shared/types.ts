@@ -1203,3 +1203,36 @@ export interface UsageSummary {
   thisMonth: MonthUsage
   lastMonth: MonthUsage | null
 }
+
+// ---- Sync -------------------------------------------------------------------
+
+export type SyncState = 'off' | 'idle' | 'syncing' | 'offline' | 'error' | 'attention'
+
+export interface SyncStatus {
+  /** a hub is configured for this build (built in, or entered by hand) */
+  available: boolean
+  /** the hub was entered by hand rather than built in */
+  customHub: boolean
+  hubUrl: string | null
+  signedIn: boolean
+  email: string | null
+  state: SyncState
+  /** progress while syncing, the problem when offline or in error */
+  message: string | null
+  lastSyncAt: string | null
+  /** local deletions held back until confirmed (see Settings → Sync) */
+  heldDeletes: number
+  /** recordings and attachments over the hub's 50 MB file limit, kept on this PC only */
+  tooLarge: number
+  /** days of recordings kept in the hub; 0 keeps none */
+  audioDays: number
+  /** this person's share of the hub, when known */
+  usage: { docBytes: number; fileBytes: number } | null
+}
+
+/** sent to the window after a sync pass changed data on this PC */
+export interface SyncChangeEvent {
+  areas: string[]
+  meetings: string[]
+  removedMeetings: string[]
+}

@@ -68,6 +68,11 @@ interface StoredSettings {
   clickupTokenEncrypted: string | null
   /** base64 of safeStorage-encrypted OpenAI API key */
   openaiKeyEncrypted: string | null
+  /** days of recordings kept in the sync hub; 0 keeps none (portable) */
+  syncAudioDays: number
+  /** a sync hub other than the built-in one (this machine only) */
+  syncHubUrl: string | null
+  syncHubKey: string | null
 }
 
 const DEFAULTS: StoredSettings = {
@@ -116,7 +121,10 @@ const DEFAULTS: StoredSettings = {
   apiKeyEncrypted: null,
   calendarUrlEncrypted: null,
   clickupTokenEncrypted: null,
-  openaiKeyEncrypted: null
+  openaiKeyEncrypted: null,
+  syncAudioDays: 7,
+  syncHubUrl: null,
+  syncHubKey: null
 }
 
 function settingsPath(): string {
@@ -415,6 +423,96 @@ export function getLastBackupAt(): number {
 export function setLastBackupAt(ms: number): void {
   const s = load()
   s.lastBackupAt = ms
+  persist()
+}
+
+// ---------------------------------------------------------------------------
+// Sync: the settings that describe the person (their name, roster, AI and
+// summary preferences, look) follow them to every PC; the ones that describe
+// this machine (folders, the speech model, startup and tray behavior,
+// encrypted keys, which are bound to this Windows account) stay put.
+// ---------------------------------------------------------------------------
+
+const PORTABLE_KEYS = [
+  'aiProvider',
+  'claudeModel',
+  'openaiModel',
+  'autoSummarize',
+  'mailAssistant',
+  'theme',
+  'vocabulary',
+  'vocabFromCalendar',
+  'summaryInstructions',
+  'tagColors',
+  'people',
+  'yourName',
+  'personAliases',
+  'workdayStart',
+  'workdayEnd',
+  'calendarIgnores',
+  'hiddenTabs',
+  'reportNames',
+  'mailSignatureHtml',
+  'syncAudioDays'
+] as const satisfies readonly (keyof StoredSettings)[]
+
+type PortableKey = (typeof PORTABLE_KEYS)[number]
+
+export function readPortableSettings(): Record<string, unknown> {
+  const s = load()
+  const out: Record<string, unknown> = {}
+  for (const k of PORTABLE_KEYS) out[k] = s[k] ?? DEFAULTS[k]
+  return out
+}
+
+/** take another device's portable settings, keeping only well-formed values */
+export function applyPortableSettings(v: Record<string, unknown>): void {
+  const s = load() as unknown as Record<PortableKey, unknown>
+  for (const k of PORTABLE_KEYS) {
+    if (!(k in v)) continue
+    const value = v[k]
+    const fallback = DEFAULTS[k]
+    const sameShape =
+      Array.isArray(fallback)
+        ? Array.isArray(value)
+        : typeof fallback === 'object' && fallback !== null
+          ? typeof value === 'object' && value !== null && !Array.isArray(value)
+          : typeof value === typeof fallback
+    if (!sameShape) continue
+    s[k] = value
+  }
+  const typed = load()
+  typed.people = dedupeNames(typed.people ?? [])
+  typed.hiddenTabs = (typed.hiddenTabs ?? []).filter(isNavTab)
+  typed.mailSignatureHtml = sanitizeSignatureHtml(typed.mailSignatureHtml ?? '')
+  typed.syncAudioDays = clampAudioDays(typed.syncAudioDays)
+  persist()
+}
+
+function clampAudioDays(n: unknown): number {
+  const v = Math.round(Number(n))
+  return Number.isFinite(v) ? Math.min(90, Math.max(0, v)) : DEFAULTS.syncAudioDays
+}
+
+export function getSyncPrefs(): { audioDays: number; hubUrl: string | null; hubKey: string | null } {
+  const s = load()
+  return {
+    audioDays: clampAudioDays(s.syncAudioDays ?? DEFAULTS.syncAudioDays),
+    hubUrl: s.syncHubUrl ?? null,
+    hubKey: s.syncHubKey ?? null
+  }
+}
+
+export function setSyncPrefs(patch: {
+  audioDays?: number
+  hub?: { url: string; key: string } | null
+}): void {
+  const s = load()
+  if (patch.audioDays !== undefined) s.syncAudioDays = clampAudioDays(patch.audioDays)
+  if (patch.hub !== undefined) {
+    s.syncHubUrl = patch.hub?.url.trim() || null
+    s.syncHubKey = patch.hub?.key.trim() || null
+  }
   persist()
 }
 

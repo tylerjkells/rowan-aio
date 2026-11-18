@@ -224,6 +224,7 @@ import { askAboutMeeting, testApiKey } from './summarize'
 import { askLibrary, clearAskHistory, readAskHistory } from './ask'
 import { createImportedMeeting } from './importer'
 import { patchLegacyAudioDurations } from './migrate'
+import { initSync, registerSyncIpc } from './sync'
 import { cleanTag } from '../shared/tags'
 import type {
   ActionRollupItem,
@@ -505,6 +506,7 @@ app.whenReady().then(() => {
   startMailWatch()
   startMailAssist()
   startBriefWatch()
+  initSync()
   // the newest Claude model in each family, checked at most daily
   refreshClaudeLineup().catch(() => {})
 
@@ -591,6 +593,12 @@ function setupAutoUpdate(): void {
 }
 
 function registerIpc(): void {
+  // --- sync ---
+  registerSyncIpc({
+    // a theme picked on another PC repaints this window's frame too
+    onSettingsSynced: () => applyFrameTheme()
+  })
+
   // --- settings ---
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:update', (_e, patch: Partial<AppSettings>) => {
@@ -878,6 +886,8 @@ function registerIpc(): void {
     return results
   })
 
+  // a synced meeting's recording may live only on the PC that made it
+  ipcMain.handle('meetings:audioHere', (_e, id: string) => findAudio(id) !== null)
   ipcMain.handle('meetings:deleteAudio', (_e, id: string) => {
     const m = readMeeting(id)
     if (!m) return null

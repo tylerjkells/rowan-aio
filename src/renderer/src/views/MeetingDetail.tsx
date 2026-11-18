@@ -529,6 +529,13 @@ export function MeetingView({
     })
   }, [id])
 
+  // a synced meeting's recording can live only on the PC that made it
+  const [audioHere, setAudioHere] = useState(true)
+  useEffect(() => {
+    if (!meeting?.hasAudio) return
+    window.scribe.meetings.audioHere(meeting.id).then(setAudioHere)
+  }, [meeting])
+
   // jump to the cited moment when opened from an Ask citation
   const transcriptLoaded = (meeting?.transcript?.length ?? 0) > 0
   useEffect(() => {
@@ -739,7 +746,8 @@ export function MeetingView({
     window.scribe.meetings.resummarize(meeting.id, model, instructions)
   }
 
-  const linkable = meeting.hasAudio
+  const audible = meeting.hasAudio && audioHere
+  const linkable = audible
   const speakerColors = speakerColorMap(meeting.transcript)
 
   return (
@@ -875,13 +883,19 @@ export function MeetingView({
         />
       )}
 
-      {meeting.hasAudio && (
+      {audible && (
         <AudioPlayer
           src={`scribe-media://${meeting.id}`}
           fallbackMs={meeting.durationMs}
           control={playerRef}
           onTimeMs={setPlayheadMs}
         />
+      )}
+      {meeting.hasAudio && !audioHere && (
+        <p className="opt-desc audio-elsewhere">
+          The recording is on the PC that made it. Recent recordings sync between your PCs; this
+          one is older than the window set in Settings → Sync, or is still on its way.
+        </p>
       )}
 
       {working && (
@@ -912,7 +926,7 @@ export function MeetingView({
             <button className="btn" onClick={() => window.scribe.meetings.retry(meeting.id)}>
               Try again
             </button>
-            {meeting.hasAudio && (
+            {audible && (
               <button
                 className="btn"
                 onClick={retranscribe}
@@ -1173,7 +1187,7 @@ export function MeetingView({
                 {meeting.transcript.some((s) => s.speaker === 'me' || s.speaker === 'them') && (
                   <SpeakerNames meeting={meeting} onSaved={setMeeting} />
                 )}
-                {meeting.hasAudio && (
+                {audible && (
                   <button
                     className="btn transcript-identify"
                     disabled={!!retranscribing || meeting.stage === 'transcribing'}
@@ -1183,7 +1197,7 @@ export function MeetingView({
                     Re-transcribe
                   </button>
                 )}
-                {voiceOn && voiceReady && meeting.hasAudio && (
+                {voiceOn && voiceReady && audible && (
                   <button
                     className="btn transcript-identify"
                     disabled={!!voicePhase || working || !!retranscribing}
@@ -1247,7 +1261,7 @@ export function MeetingView({
                         ? (meeting.speakerNames?.them ?? 'Them')
                         : seg.speaker
                   const active = playheadMs >= seg.from && playheadMs < seg.to
-                  const seekable = meeting.hasAudio
+                  const seekable = audible
                   return (
                     <div
                       className={`transcript-seg ${active ? 'active' : ''} ${seekable ? 'seekable' : ''} ${i === flashIdx ? 'cited' : ''}`}

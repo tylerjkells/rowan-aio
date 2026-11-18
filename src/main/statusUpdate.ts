@@ -69,6 +69,11 @@ function file(): string {
 
 let cache: StatusUpdateData | null = null
 
+/** forget the in-memory copy (sync rewrote status-update.json underneath it) */
+export function dropStatusUpdateCache(): void {
+  cache = null
+}
+
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 const isHex = (v: unknown): v is string => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v)
 

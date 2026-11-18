@@ -2649,6 +2649,56 @@ select.text-input {
   color: var(--accent-strong);
 }
 
+/* ---------- settings: sync ---------- */
+
+.sync-signin {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--s2);
+}
+
+.sync-gap {
+  margin-top: var(--s3);
+}
+
+.sync-state {
+  flex-wrap: wrap;
+}
+
+.sync-callout {
+  margin: 0 0 var(--s3);
+  padding: var(--s3);
+  border-radius: var(--r-ctl);
+  background: var(--accent-tint);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.sync-callout p {
+  margin: 0 0 var(--s2);
+}
+
+.sync-audio {
+  max-width: 320px;
+  margin-top: var(--s2);
+}
+
+.sync-hub {
+  margin-top: var(--s3);
+}
+
+.sync-hub-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-hub-toggle {
+  padding-left: 0;
+}
+
 /* ---------- settings layout ---------- */
 
 /* Label-left, controls-right sections split by hairlines: one vertical

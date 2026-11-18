@@ -34,6 +34,11 @@ function file(): string {
 
 let cache: DeskFile | null = null
 
+/** forget the in-memory copy (sync rewrote tickets.json underneath it) */
+export function dropTicketsCache(): void {
+  cache = null
+}
+
 function load(): DeskFile {
   if (cache) return cache
   try {

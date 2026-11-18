@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AppSettings,
   AutoEndReason,
@@ -69,6 +69,31 @@ export type View =
   | { name: 'import' }
   | { name: 'settings' }
 
+/**
+ * Which synced data each page shows. When a sync pass changes any of it the
+ * page is rebuilt so it reloads; pages not listed either take their data as
+ * props (the library) or update themselves (a meeting, via meeting:updated).
+ */
+const VIEW_SYNC_AREAS: Partial<Record<View['name'], string[]>> = {
+  today: ['meetings', 'planner', 'links', 'today', 'settings'],
+  series: ['meetings'],
+  actions: ['meetings'],
+  people: ['people', 'meetings', 'settings'],
+  person: ['people', 'meetings', 'settings'],
+  links: ['links'],
+  brand: ['brand'],
+  planner: ['planner'],
+  tickets: ['tickets'],
+  toolbox: ['toolbox']
+}
+
+/** typing somewhere: a rebuild now would throw the draft away */
+function editing(): boolean {
+  const el = document.activeElement as HTMLElement | null
+  if (!el) return false
+  return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)
+}
+
 /** compact live timer for the sidebar recording indicator */
 function RecTicker({ rec }: { rec: RecorderHandles }): React.JSX.Element {
   const [, force] = useState(0)
@@ -98,6 +123,10 @@ export default function App(): React.JSX.Element {
   // sign-ins) do not reload every time you come back to it
   const [dashboardsSeen, setDashboardsSeen] = useState(false)
   if (view.name === 'dashboards' && !dashboardsSeen) setDashboardsSeen(true)
+  // bumped to rebuild the current page after sync changed what it shows
+  const [syncEpoch, setSyncEpoch] = useState(0)
+  const viewRef = useRef(view)
+  viewRef.current = view
 
   useEffect(() => window.scribe.update.onReady(setUpdateVersion), [])
 
@@ -139,6 +168,48 @@ export default function App(): React.JSX.Element {
     window.scribe.engine.status().then(setEngine)
     const off = window.scribe.meetings.onUpdated(() => refreshMeetings())
     return off
+  }, [refreshMeetings])
+
+  // another device changed data: refresh what's on screen, without
+  // yanking a page out from under someone mid-edit
+  useEffect(() => {
+    // the page waiting for its rebuild until the person stops typing
+    let pending: string | null = null
+    const rebuild = (): void => {
+      if (editing()) {
+        pending = viewRef.current.name
+        return
+      }
+      pending = null
+      setSyncEpoch((n) => n + 1)
+    }
+    const onFocusOut = (): void => {
+      if (pending === null) return
+      setTimeout(() => {
+        // moved to another page meanwhile: that one loaded fresh anyway
+        if (pending !== viewRef.current.name) pending = null
+        else rebuild()
+      }, 0)
+    }
+    document.addEventListener('focusout', onFocusOut)
+    const off = window.scribe.sync.onChanged((c) => {
+      refreshMeetings()
+      if (c.areas.includes('settings')) window.scribe.settings.get().then(setSettings)
+      const v = viewRef.current
+      if (v.name === 'meeting' && c.removedMeetings.includes(v.id)) {
+        setView({ name: 'library' })
+        return
+      }
+      const touched =
+        (VIEW_SYNC_AREAS[v.name] ?? []).some((a) => c.areas.includes(a)) ||
+        // past a handful of meetings there are no per-meeting updates
+        (v.name === 'meeting' && c.meetings.includes(v.id) && c.meetings.length > 20)
+      if (touched) rebuild()
+    })
+    return () => {
+      off()
+      document.removeEventListener('focusout', onFocusOut)
+    }
   }, [refreshMeetings])
 
   // guard against losing an active recording by closing the window
@@ -337,6 +408,7 @@ export default function App(): React.JSX.Element {
         style={view.name === 'dashboards' ? { display: 'none' } : undefined}
         key={
           view.name +
+          `#${syncEpoch}` +
           ('id' in view ? view.id : '') +
           ('person' in view ? view.person : '') +
           ('title' in view ? view.title : '') +

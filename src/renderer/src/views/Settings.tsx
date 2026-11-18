@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { MailGuideDialog } from '../MailGuide'
 import { VersionHistory } from '../WhatsNew'
+import { SyncSettings, useSyncStatus } from './SyncSettings'
 import { sanitizeSignatureHtml } from '../../../shared/signature'
 import { NAV_TABS } from '../../../shared/tabs'
 import { CLAUDE_FALLBACK, CLAUDE_FAMILIES, type ClaudeFamily, type ClaudeLineup } from '../../../shared/claudeModels'
@@ -554,6 +555,8 @@ export function SettingsView({
   const [savingOKey, setSavingOKey] = useState(false)
   const [customModelDraft, setCustomModelDraft] = useState('')
   const [guideOpen, setGuideOpen] = useState(false)
+  const sync = useSyncStatus()
+  const syncing = !!sync?.signedIn
   const [toc, setToc] = useState<{ id: string; label: string }[]>([])
   const [activeToc, setActiveToc] = useState('')
   const tocLockUntil = useRef(0)
@@ -1501,8 +1504,10 @@ export function SettingsView({
         <header className="settings-label">
           <h2>Storage</h2>
           <p className="hint">
-            Meetings live on this machine only. Reclaim space from any meeting&apos;s page with
-            &ldquo;Delete audio, keep notes&rdquo;.
+            {syncing
+              ? 'Meetings live on this PC and sync to your hub. '
+              : 'Meetings live on this machine only. '}
+            Reclaim space from any meeting&apos;s page with &ldquo;Delete audio, keep notes&rdquo;.
           </p>
         </header>
         <div className="settings-body">
@@ -1776,6 +1781,21 @@ export function SettingsView({
 
       <section className="settings-section">
         <header className="settings-label">
+          <h2>Sync</h2>
+          <p className="hint">
+            Keep your library the same on every PC you use. Everything still lives on this PC; sync
+            keeps a copy in your private hub and folds in what your other devices changed. Only
+            your account can read it. API keys and this machine&apos;s own settings (folders,
+            startup, the speech model) stay here.
+          </p>
+        </header>
+        <div className="settings-body">
+          <SyncSettings status={sync} />
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <header className="settings-label">
           <h2>Backup</h2>
           <p className="hint">
             The library lives in one folder on this PC. Back it up on demand, or pick a folder
@@ -1831,13 +1851,29 @@ export function SettingsView({
           <h2>Privacy</h2>
         </header>
         <div className="settings-body">
-          <p className="opt-desc">
-            Audio is recorded, transcribed, and stored only on this PC — recordings never leave
-            it. Exactly two things ever go over the network: transcript text sent to
-            Anthropic&apos;s Claude API when you summarize or ask questions (not used to train
-            models under Anthropic&apos;s commercial terms), and read-only fetches of your
-            calendar feed. Delete a meeting and it is gone; there is no cloud copy.
-          </p>
+          {syncing ? (
+            <p className="opt-desc">
+              Audio is recorded and transcribed only on your own PCs. Sync is on, so your
+              transcripts, summaries, notes and workspace (planner, tickets, links, people, toolbox
+              and the rest) are kept in your private sync hub for your other devices, along with
+              {sync && sync.audioDays > 0
+                ? ` recordings from the last ${sync.audioDays} ${sync.audioDays === 1 ? 'day' : 'days'}`
+                : ' no recordings'}
+              . Only your account can read them, though the hub&apos;s administrator can see what
+              is stored. Delete a meeting and it is removed from the hub and your other PCs too.
+              The other things that go over the network: transcript text sent to your AI provider
+              when you summarize or ask questions (not used to train models under Anthropic&apos;s
+              commercial terms), and read-only fetches of your calendar feed.
+            </p>
+          ) : (
+            <p className="opt-desc">
+              Audio is recorded, transcribed, and stored only on this PC — recordings never leave
+              it. Exactly two things ever go over the network: transcript text sent to
+              Anthropic&apos;s Claude API when you summarize or ask questions (not used to train
+              models under Anthropic&apos;s commercial terms), and read-only fetches of your
+              calendar feed. Delete a meeting and it is gone; there is no cloud copy.
+            </p>
+          )}
         </div>
       </section>
 

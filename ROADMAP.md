@@ -94,16 +94,22 @@ usable in meetings that touch student data.
 - [ ] **Transcript redaction** — remove a sensitive span from the transcript, summary, and
       Ask context permanently.
 
-## 6. Multi-device (future)
+## 6. Multi-device
 
-- [ ] **Data folder location setting** — point the app at a user-chosen folder so two PCs can
-      share one library via Syncthing (peer-to-peer, keeps the privacy story intact) or
-      OneDrive. Secrets stay per-machine (DPAPI is machine-bound by design). Avoid running
-      both machines simultaneously.
-- [ ] **Markdown auto-export** — write each summary to a synced folder of the user's choosing
-      as the read-only phone story (OneDrive/Obsidian on mobile). User chooses what syncs;
-      transcripts and audio stay home.
-- [ ] **Mobile companion app** — someday-maybe; reading and in-person capture only.
+- [x] **Sync between PCs** — sign in from Settings → Sync and the library (meetings, planner,
+      tickets, people, links, toolbox, Ask history, personal settings) stays the same on every PC,
+      through a private Supabase hub with one account per person. Three-way merges per field and
+      per item, deletions held for a yes when many happen at once, recent recordings (window set in
+      Settings) ride along. See docs/SYNC.md.
+- [ ] **Phone web app** — a home-screen web app on the same hub: browse and edit meetings, check
+      off action items, the planner, and record in-person meetings (screen on); recordings go to
+      the hub and the person's PC transcribes them.
+- [ ] **"Send to Rowan" shortcut** — an iOS Shortcut in the share sheet that sends a Voice Memos
+      recording (made with the phone locked) through the same pipeline.
+- [ ] **Ask and transcription on the phone** — Ask over the hub, and an optional cloud
+      transcription fallback for when no PC is on.
+- [ ] **Sync mail triage** — handled/starred/read marks, once trimming them against the mailbox
+      can't undo another PC's marks.
 
 ## 7. Trust
 
