@@ -75,6 +75,7 @@ import type {
   WhisperModel
 } from '../shared/types'
 import type { ClaudeLineup } from '../shared/claudeModels'
+import type { SignupApproval } from '../shared/hub'
 
 export interface LiveUpdate {
   id: string
@@ -115,8 +116,15 @@ const api = {
     status: (): Promise<SyncStatus> => ipcRenderer.invoke('sync:status'),
     signIn: (email: string, password: string): Promise<SyncStatus> =>
       ipcRenderer.invoke('sync:signIn', email, password),
+    /** create an account (the email must be approved on the hub) and sign in */
+    signUp: (email: string, password: string): Promise<SyncStatus> =>
+      ipcRenderer.invoke('sync:signUp', email, password),
     signOut: (): Promise<SyncStatus> => ipcRenderer.invoke('sync:signOut'),
     now: (): Promise<SyncStatus> => ipcRenderer.invoke('sync:now'),
+    /** the hub's administrators: who may create an account */
+    approvals: (): Promise<SignupApproval[]> => ipcRenderer.invoke('sync:approvals'),
+    approve: (email: string): Promise<SignupApproval[]> => ipcRenderer.invoke('sync:approve', email),
+    withdraw: (email: string): Promise<SignupApproval[]> => ipcRenderer.invoke('sync:withdraw', email),
     changePassword: (password: string): Promise<SyncStatus> =>
       ipcRenderer.invoke('sync:changePassword', password),
     setAudioDays: (days: number): Promise<SyncStatus> => ipcRenderer.invoke('sync:setAudioDays', days),

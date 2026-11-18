@@ -1,4 +1,4 @@
-import { BUILT_IN_HUB } from '../../src/shared/hub'
+import { BUILT_IN_HUB, CONFIRM_EMAIL_PROBLEM, signUpProblem } from '../../src/shared/hub'
 
 // ---------------------------------------------------------------------------
 // The phone's line to the sync hub: email + password sign-in (the session
@@ -143,12 +143,38 @@ export class Hub {
   static async signIn(email: string, password: string): Promise<Hub> {
     const cfg = hubConfig()
     if (!cfg) throw new HubError('No sync hub is set up yet.', 'server')
-    const t = await token(cfg, 'password', { email: email.trim(), password })
+    return Hub.started(cfg, await token(cfg, 'password', { email: email.trim(), password }), email)
+  }
+
+  /** a new account with a password the person picks; the hub only takes approved emails */
+  static async signUp(email: string, password: string): Promise<Hub> {
+    const cfg = hubConfig()
+    if (!cfg) throw new HubError('No sync hub is set up yet.', 'server')
+    const res = await call(`${cfg.url}/auth/v1/signup`, {
+      method: 'POST',
+      headers: { apikey: cfg.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim(), password })
+    })
+    if (!res.ok) {
+      const msg = await errorText(res)
+      throw new HubError(signUpProblem(res.status, msg, email), res.status < 500 || /database error/i.test(msg) ? 'auth' : 'server', res.status)
+    }
+    const t = (await res.json()) as Partial<TokenResponse>
+    // with "Confirm email" on, the hub answers with the user and no session
+    if (!t.access_token || !t.refresh_token || !t.user?.id) throw new HubError(CONFIRM_EMAIL_PROBLEM, 'auth')
+    return Hub.started(cfg, { ...t, expires_in: t.expires_in ?? 3600 } as TokenResponse, email)
+  }
+
+  private static started(cfg: HubConfig, t: TokenResponse, email: string): Hub {
     const session = { hubUrl: cfg.url, userId: t.user.id, email: t.user.email ?? email.trim(), refreshToken: t.refresh_token }
     write(SESSION, session)
     const hub = new Hub(cfg, session)
     hub.access = { token: t.access_token, expiresAt: Date.now() + t.expires_in * 1000 }
     return hub
+  }
+
+  async changePassword(password: string): Promise<void> {
+    await this.request('/auth/v1/user', { method: 'PUT', body: JSON.stringify({ password }) })
   }
 
   get userId(): string {

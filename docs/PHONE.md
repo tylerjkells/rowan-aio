@@ -10,8 +10,13 @@ reach your PCs within a minute.
 ## Installing it
 
 1. On the iPhone, open the address above in **Safari**.
-2. Sign in with your sync account (the one in Settings → Sync on your PC).
+2. Sign in with your sync account (the one in Settings → Sync on your PC). New
+   to sync? Once the hub's administrator has approved your email, tap **Create
+   an account** and choose your own password; your PC then signs in with the
+   same one.
 3. Tap **Share → Add to Home Screen**.
+
+More → **Change password** changes it for the PCs too.
 
 The Home Screen app keeps its own sign-in, separate from Safari, so sign in
 again the first time you open it from there.
