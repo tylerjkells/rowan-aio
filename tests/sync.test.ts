@@ -41,6 +41,8 @@ class PC {
   readonly hub: FakeHub
   engine: SyncEngine
   written: string[] = []
+  /** phone recordings this PC was told to transcribe */
+  processed: string[] = []
 
   constructor(
     readonly server: FakeServer,
@@ -62,7 +64,10 @@ class PC {
       },
       applyPortableSettings: (v) => this.setPortable(v),
       fileWritten: (rel) => this.written.push(rel),
-      audioDays: () => Number(this.portable().syncAudioDays ?? 7)
+      audioDays: () => Number(this.portable().syncAudioDays ?? 7),
+      process: (id) => {
+        if (!this.processed.includes(id)) this.processed.push(id)
+      }
     })
   }
 
@@ -497,4 +502,76 @@ test('a setting only a newer version knows survives an older PC, without ping-po
     await newer.sync()
   }
   assert.equal(newer.hub.pushes + older.hub.pushes, settle)
+})
+
+/** what the phone app does: audio to storage, its manifest row, then the meeting */
+async function phoneUpload(server: FakeServer, id: string, extra: Record<string, unknown> = {}): Promise<void> {
+  const hub = server.hub('u1')
+  const createdAt = new Date().toISOString()
+  await hub.upload(`u1/audio/${id}.m4a`, Buffer.from('aac audio from the phone'))
+  await hub.push([{ collection: 'audio', doc_id: id, body: { ext: '.m4a', bytes: 24, createdAt }, deleted: false, base_rev: null }])
+  await hub.push([
+    {
+      collection: 'meeting',
+      doc_id: id,
+      body: { id, title: 'Hallway chat', createdAt, durationMs: 90_000, mode: 'in-person', stage: 'uploaded', hasAudio: true, source: 'phone', ...extra },
+      deleted: false,
+      base_rev: null
+    }
+  ])
+}
+
+test('a phone recording is taken by exactly one PC, even when both race for it', async () => {
+  const { server, a, b } = setup()
+  await phoneUpload(server, 'ph1')
+  await Promise.all([a.sync(), b.sync()])
+  await Promise.all([a.sync(), b.sync()])
+  const takers = [a, b].filter((pc) => pc.processed.includes('ph1'))
+  assert.equal(takers.length, 1)
+  const taker = takers[0]
+  assert.equal(readFileSync(taker.path('meetings', 'ph1', 'audio.m4a'), 'utf8'), 'aac audio from the phone')
+  const claimed = server.docsOf('u1').get('meeting:ph1')?.body as Record<string, unknown>
+  assert.ok(claimed.claimedBy, 'the claim is in the hub for the phone to see')
+
+  // the taker transcribes it; the result reaches the hub and the other PC
+  taker.editMeeting('ph1', { stage: 'ready', transcript: [{ from: 0, to: 1000, text: 'see you at three' }], summary: { tldr: 'Meet at three.', actionItems: [] } })
+  await taker.sync()
+  const other = taker === a ? b : a
+  await other.sync()
+  assert.equal(other.getMeeting('ph1')?.stage, 'ready')
+  assert.equal((server.docsOf('u1').get('meeting:ph1')?.body as Record<string, unknown>).stage, 'ready')
+  assert.equal(other.processed.length, 0)
+})
+
+test('a phone recording is kept until transcribed, even with hub audio off', async () => {
+  const { server, a } = setup()
+  a.setPortable({ syncAudioDays: 0 })
+  await phoneUpload(server, 'ph2')
+  await a.sync()
+  await a.sync()
+  assert.deepEqual(a.processed, ['ph2'])
+  assert.ok(server.files.has('u1/audio/ph2.m4a'), 'still in the hub while waiting')
+  a.editMeeting('ph2', { stage: 'ready' })
+  await a.sync()
+  assert.ok(!server.files.has('u1/audio/ph2.m4a'), 'gone from the hub once transcribed')
+  assert.ok(existsSync(a.path('meetings', 'ph2', 'audio.m4a')), 'the PC keeps its copy')
+})
+
+test('notes typed on the phone while the PC transcribes are merged in', async () => {
+  const { server, a } = setup()
+  await phoneUpload(server, 'ph3')
+  await a.sync()
+  assert.deepEqual(a.processed, ['ph3'])
+  a.editMeeting('ph3', { stage: 'transcribing', progress: 30 })
+  // the phone adds notes to the claimed meeting meanwhile
+  const hub = server.hub('u1')
+  const row = server.docsOf('u1').get('meeting:ph3')!
+  await hub.push([{ collection: 'meeting', doc_id: 'ph3', body: { ...(row.body as object), notes: 'Ask about Q3' }, deleted: false, base_rev: row.rev }])
+  await a.sync()
+  a.editMeeting('ph3', { stage: 'ready', progress: undefined, transcript: [{ from: 0, to: 1, text: 'hi' }] })
+  await a.sync()
+  const m = a.getMeeting('ph3') as Meeting
+  assert.equal(m.notes, 'Ask about Q3')
+  assert.equal(m.stage, 'ready')
+  assert.equal((server.docsOf('u1').get('meeting:ph3')?.body as Record<string, unknown>).notes, 'Ask about Q3')
 })

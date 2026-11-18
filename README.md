@@ -78,6 +78,9 @@ module of several.)
 - **Sync** — sign in from Settings → Sync and your library stays the same on every PC you use,
   through a private hub where only your account can read your data. Everything still lives on
   each PC and works offline; edits made on two PCs merge. See [docs/SYNC.md](docs/SYNC.md).
+- **On your phone** — a Home Screen web app on the same hub: today's view, meetings with their
+  summaries and notes, action items, the Planner, and recording in-person meetings that one of
+  your PCs then transcribes. No App Store. See [docs/PHONE.md](docs/PHONE.md).
 - **Choose your AI** — Claude or ChatGPT power summaries and Ask; both keys
   storable, per-provider model picks. A Claude pick is a family (Haiku, Sonnet
   or Opus) that always runs on its newest model, checked daily with

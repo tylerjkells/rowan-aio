@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PHONE_APP_URL } from '../../../shared/hub'
 import type { SyncStatus } from '../../../shared/types'
 
 /** the live sync status, kept current by the main process */
@@ -347,6 +348,17 @@ export function SyncSettings({ status }: { status: SyncStatus | null }): React.J
           limit per file, so {status.tooLarge === 1 ? 'it stays' : 'they stay'} on this PC only.
         </p>
       )}
+      <div className="card-subhead sync-gap">Your phone</div>
+      <p className="opt-desc">
+        On your iPhone, open <span className="sync-url">{PHONE_APP_URL}</span> in Safari, sign in with
+        this account, then tap Share → Add to Home Screen. You can read and edit meetings there, check
+        off action items, use the Planner, and record in-person meetings, which this PC transcribes.
+      </p>
+      <div className="field-row">
+        <button className="btn btn-ghost" onClick={() => navigator.clipboard.writeText(PHONE_APP_URL).then(() => setNote({ ok: true, msg: 'Link copied.' }))}>
+          Copy link
+        </button>
+      </div>
       {status.usage && (
         <p className="opt-desc">
           Your share of the hub: {formatBytes(status.usage.docBytes)} of notes and transcripts,{' '}

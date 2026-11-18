@@ -10,6 +10,7 @@ import type {
 } from '../../shared/types'
 import { NAV_TABS } from '../../shared/tabs'
 import type { RecorderHandles } from './recorder'
+import { retranscribeMeeting } from './retranscribe'
 import { LibraryView } from './views/Library'
 import { RecordView } from './views/Record'
 import { MeetingView } from './views/MeetingDetail'
@@ -211,6 +212,55 @@ export default function App(): React.JSX.Element {
       document.removeEventListener('focusout', onFocusOut)
     }
   }, [refreshMeetings])
+
+  // phone recordings this PC took from the hub: decode each and run it through
+  // the normal pipeline, one at a time, and never while a recording is live
+  const recording = rec !== null
+  useEffect(() => {
+    if (recording) return
+    let stopped = false
+    let draining = false
+    const settled = (id: string): Promise<void> =>
+      new Promise((resolve) => {
+        const check = (): void => {
+          window.scribe.meetings.get(id).then((m) => {
+            const busy = m && ['recorded', 'transcribing', 'identifying', 'summarizing'].includes(m.stage)
+            if (!busy || stopped) {
+              clearInterval(timer)
+              resolve()
+            }
+          })
+        }
+        const timer = setInterval(check, 5000)
+        check()
+      })
+    const drain = async (): Promise<void> => {
+      if (draining) return
+      draining = true
+      try {
+        while (!stopped) {
+          const id = await window.scribe.sync.nextUpload()
+          if (!id) break
+          try {
+            await retranscribeMeeting(id, () => {})
+            await window.scribe.sync.uploadDone(id)
+            await settled(id)
+          } catch (err) {
+            const msg = err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(err)
+            await window.scribe.sync.uploadDone(id, msg)
+          }
+        }
+      } finally {
+        draining = false
+      }
+    }
+    void drain()
+    const off = window.scribe.sync.onUploadWaiting(() => void drain())
+    return () => {
+      stopped = true
+      off()
+    }
+  }, [recording])
 
   // guard against losing an active recording by closing the window
   useEffect(() => {

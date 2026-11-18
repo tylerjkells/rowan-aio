@@ -46,6 +46,11 @@ summarizing on a PC is not synced until it is done.
   notes" removes the recording on every PC. A meeting whose recording is on
   another PC says so where the player would be.
 
+- **Phone recordings** arrive as meetings with the stage `uploaded`. A PC
+  downloads their audio whatever the window, claims the meeting (an ordinary
+  revision-checked push, so exactly one PC wins), and transcribes it like a
+  re-transcribe. The hub keeps the audio until then. See [PHONE.md](PHONE.md).
+
 Code: `src/main/sync/` (`engine.ts` does the work and knows nothing about
 Electron; `merge.ts` is the merge; `hub.ts` talks to Supabase; `index.ts` wires
 it into the app). Tests: `npm test`. Schema: `supabase/migrations/`.

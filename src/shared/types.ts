@@ -3,6 +3,8 @@ import type { ClaudeFamily } from './claudeModels'
 export type RecordingMode = 'in-person' | 'virtual' | 'imported'
 
 export type MeetingStage =
+  /** recorded on the phone; waiting for one of your PCs to transcribe it */
+  | 'uploaded'
   | 'recorded'
   | 'transcribing'
   | 'identifying'
@@ -171,6 +173,11 @@ export interface Meeting {
   voices?: Record<string, VoiceMeta>
   /** why the last voice identification run failed, if it did */
   voiceError?: string
+  /** where it was recorded, when not on a PC */
+  source?: 'phone'
+  /** the PC (sync device id) that took an uploaded recording to transcribe, and when */
+  claimedBy?: string
+  claimedAt?: string
 }
 
 /** Lightweight listing shape (no transcript body) */

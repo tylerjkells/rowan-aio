@@ -79,6 +79,14 @@ export const MAX_FILE_BYTES = 50 * 1024 * 1024
 /** meetings this PC is still working on are never synced mid-flight */
 const BUSY_STAGES = new Set(['recorded', 'transcribing', 'identifying', 'summarizing'])
 
+/** a recording from the phone, waiting for one of the person's PCs to transcribe it */
+const UPLOADED = 'uploaded'
+
+/** a PC that claimed an upload and then went quiet for this long loses it to another */
+const CLAIM_STALE_MS = 3 * 60 * 60_000
+
+const AUDIO_EXTS = ['.webm', '.wav', '.m4a']
+
 /** re-list rows from a little before the cursor: a slow write can land late */
 const LOOKBACK_MS = 2 * 60_000
 const PAGE = 500
@@ -106,6 +114,8 @@ export interface SyncHooks {
   /** days of recordings kept in the hub; 0 keeps none */
   audioDays(): number
   progress?(text: string | null): void
+  /** this PC took a phone recording: transcribe it (its audio is on disk) */
+  process?(meetingId: string): void
 }
 
 interface DocState {
@@ -220,7 +230,8 @@ function mimeOf(path: string): string {
     '.html': 'text/html',
     '.pdf': 'application/pdf',
     '.webm': 'audio/webm',
-    '.wav': 'audio/wav'
+    '.wav': 'audio/wav',
+    '.m4a': 'audio/mp4'
   }
   return known[ext] ?? 'application/octet-stream'
 }
@@ -479,7 +490,7 @@ export class SyncEngine {
   }
 
   private audioFile(id: string): string | null {
-    for (const name of ['audio.webm', 'audio.wav']) {
+    for (const name of AUDIO_EXTS.map((e) => `audio${e}`)) {
       const p = join(this.meetingsDir, id, name)
       if (existsSync(p)) return p
     }
@@ -887,7 +898,7 @@ export class SyncEngine {
     if (!/^[\w-]+$/.test(d.doc_id)) return
     this.state.audio[d.doc_id] = {
       rev: d.rev,
-      ext: body.ext === '.wav' ? '.wav' : '.webm',
+      ext: AUDIO_EXTS.includes(String(body.ext)) ? String(body.ext) : '.webm',
       bytes: Number(body.bytes ?? 0),
       createdAt: String(body.createdAt ?? '')
     }
@@ -917,6 +928,8 @@ export class SyncEngine {
     for (const [id, as] of Object.entries(st.audio)) {
       if (as.deleted) continue
       const m = this.meetingMeta(id)
+      // a phone recording stays until a PC has transcribed it, whatever the window
+      if (typeof m === 'object' && m.stage === UPLOADED) continue
       if (!inWindow(as.createdAt) || (typeof m === 'object' && !m.hasAudio)) await this.dropAudio(id)
     }
 
@@ -925,7 +938,8 @@ export class SyncEngine {
       : []
     for (const id of ids) {
       const m = this.meetingMeta(id)
-      if (typeof m !== 'object' || !m.hasAudio || BUSY_STAGES.has(m.stage) || !inWindow(m.createdAt)) continue
+      const uploaded = typeof m === 'object' && m.stage === UPLOADED
+      if (typeof m !== 'object' || !m.hasAudio || BUSY_STAGES.has(m.stage) || (!uploaded && !inWindow(m.createdAt))) continue
       const as = st.audio[id]
       const file = this.audioFile(id)
       if (!file) {
@@ -961,6 +975,54 @@ export class SyncEngine {
     }
   }
 
+  // ---- recordings from the phone ----------------------------------------------
+
+  /**
+   * Take phone recordings whose audio has arrived. The claim is an ordinary
+   * push, so the hub's revision check lets exactly one PC win it; the others
+   * see the claim on their next pull and leave the meeting alone.
+   */
+  private async claimUploads(): Promise<void> {
+    if (!this.hooks.process || !existsSync(this.meetingsDir)) return
+    const st = this.state
+    for (const e of readdirSync(this.meetingsDir, { withFileTypes: true })) {
+      if (!e.isDirectory()) continue
+      const id = e.name
+      const m = this.meetingMeta(id)
+      if (typeof m !== 'object' || m.stage !== UPLOADED || !this.audioFile(id)) continue
+      const key = keyOf('meeting', id)
+      const ds = st.docs[key]
+      if (!ds || ds.hash !== m.lhash) continue // local edits not yet in the hub: next pass
+      const path = this.docPath('meeting', id) as string
+      let body: Record<string, unknown>
+      try {
+        body = this.readDoc(path).body as Record<string, unknown>
+      } catch {
+        continue
+      }
+      const claimedAt = Date.parse(String(body.claimedAt ?? ''))
+      if (body.claimedBy === st.device) {
+        this.hooks.process(id)
+        continue
+      }
+      if (body.claimedBy && Number.isFinite(claimedAt) && Date.now() - claimedAt < CLAIM_STALE_MS) continue
+      const claimed = { ...body, claimedBy: st.device, claimedAt: new Date().toISOString() }
+      const [r] = await this.hub.push(
+        [{ collection: 'meeting', doc_id: id, body: claimed, deleted: false, base_rev: ds.rev }],
+        st.device
+      )
+      if (!r?.ok) {
+        st.retry.push(key)
+        continue
+      }
+      const stat = this.writeDoc('meeting', id, claimed)
+      this.setBase(key, claimed, r.rev, { lhash: hashOf(claimed), ...stat })
+      this.saveState()
+      this.change.meetings.push(id)
+      this.hooks.process(id)
+    }
+  }
+
   // ---- the pass ----------------------------------------------------------
 
   /** one full pass: pull, push, attachments, audio. Throws HubError on trouble. */
@@ -975,6 +1037,7 @@ export class SyncEngine {
       }
       await this.pushBlobs()
       await this.syncAudio()
+      await this.claimUploads()
       this.state.confirmDeletes = false
       this.state.lastSyncAt = new Date().toISOString()
     } finally {

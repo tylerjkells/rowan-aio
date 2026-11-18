@@ -8,3 +8,6 @@ export const BUILT_IN_HUB = {
   url: '',
   key: ''
 }
+
+/** where the phone app is published (GitHub Pages, from main; see .github/workflows/phone.yml) */
+export const PHONE_APP_URL = 'https://tylerjkells.github.io/rowan-aio/'

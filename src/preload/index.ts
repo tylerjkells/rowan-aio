@@ -133,6 +133,15 @@ const api = {
       const handler = (_e: unknown, c: SyncChangeEvent): void => cb(c)
       ipcRenderer.on('sync:changed', handler)
       return () => ipcRenderer.removeListener('sync:changed', handler)
+    },
+    /** phone recordings this PC took: next one to transcribe, or null */
+    nextUpload: (): Promise<string | null> => ipcRenderer.invoke('sync:nextUpload'),
+    uploadDone: (id: string, error?: string): Promise<void> =>
+      ipcRenderer.invoke('sync:uploadDone', id, error),
+    onUploadWaiting: (cb: () => void): (() => void) => {
+      const handler = (): void => cb()
+      ipcRenderer.on('sync:transcribe', handler)
+      return () => ipcRenderer.removeListener('sync:transcribe', handler)
     }
   },
   settings: {

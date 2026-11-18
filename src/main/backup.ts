@@ -48,7 +48,7 @@ export async function runBackup(destZip: string, skipAudio: boolean): Promise<Ba
   const args = ['-a', '-c', '-f', destZip, '-C', userData]
   if (skipAudio) {
     // audio dwarfs everything else; notes stay tiny and searchable
-    args.push('--exclude', '*.webm', '--exclude', '*audio.wav')
+    args.push('--exclude', '*.webm', '--exclude', '*audio.wav', '--exclude', '*audio.m4a')
   }
   args.push(...targets)
 

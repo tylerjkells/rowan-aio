@@ -7,7 +7,7 @@ import { applyPortableSettings, getSyncPrefs, readPortableSettings, setSyncPrefs
 import { dropTicketsCache } from '../tickets'
 import { dropTeamCache } from '../team'
 import { dropStatusUpdateCache } from '../statusUpdate'
-import { readMeeting } from '../store'
+import { readMeeting, writeMeeting } from '../store'
 import { BLOB_DIRS, SYNCED_FILES, SyncEngine } from './engine'
 import { HubError, SupabaseHub, type HubConfig, type SavedSession } from './hub'
 
@@ -37,6 +37,14 @@ let message: string | null = null
 let usage: SyncStatus['usage'] = null
 let usageAt = 0
 let onSettingsSynced: () => void = () => {}
+
+/**
+ * Phone recordings this PC claimed. Decoding the audio needs the window (the
+ * main process has no decoder), so the window takes them from here one at a
+ * time through the same path as "Re-transcribe".
+ */
+const toTranscribe = new Set<string>()
+const transcribing = new Set<string>()
 
 function root(): string {
   return app.getPath('userData')
@@ -279,6 +287,11 @@ function begin(h: SupabaseHub): void {
     progress: (text) => {
       message = text
       announce()
+    },
+    process: (id) => {
+      if (transcribing.has(id) || toTranscribe.has(id)) return
+      toTranscribe.add(id)
+      broadcast('sync:transcribe', id)
     }
   })
   engine.purgeTrash()
@@ -345,6 +358,26 @@ export function registerSyncIpc(opts: { onSettingsSynced: () => void }): void {
     if (engine && !running && Date.now() - lastPassAt > FOCUS_GAP_MS) schedule(500)
   })
   ipcMain.handle('sync:status', () => syncStatus())
+  // the window asks for the next phone recording to transcribe, then reports back
+  ipcMain.handle('sync:nextUpload', () => {
+    const next = [...toTranscribe][0] ?? null
+    if (next) {
+      toTranscribe.delete(next)
+      transcribing.add(next)
+    }
+    return next
+  })
+  ipcMain.handle('sync:uploadDone', (_e, id: string, error?: string) => {
+    transcribing.delete(id)
+    if (!error) return
+    // an unreadable recording would otherwise be offered again every pass
+    const m = readMeeting(id)
+    if (m && m.stage === 'uploaded') {
+      const failed = { ...m, stage: 'error' as const, error: `Couldn't transcribe the recording from your phone: ${error}` }
+      writeMeeting(failed)
+      broadcast('meeting:updated', failed)
+    }
+  })
   ipcMain.handle('sync:signIn', (_e, email: string, password: string) => signIn(email, password))
   ipcMain.handle('sync:signOut', () => signOut())
   ipcMain.handle('sync:now', () => {

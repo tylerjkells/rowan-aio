@@ -919,6 +919,15 @@ export function MeetingView({
         </div>
       )}
 
+      {meeting.stage === 'uploaded' && (
+        <div className="stage-banner">
+          <span className="stage-banner-text">
+            Recorded on your phone. This PC transcribes it as soon as the recording has downloaded
+            {meeting.claimedBy ? ' (one of your PCs has already taken it)' : ''}.
+          </span>
+        </div>
+      )}
+
       {meeting.stage === 'error' && !retranscribing && (
         <div className="stage-banner error" role="alert">
           <span className="stage-banner-text">{meeting.error ?? 'Processing failed.'}</span>

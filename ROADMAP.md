@@ -101,11 +101,13 @@ usable in meetings that touch student data.
       through a private Supabase hub with one account per person. Three-way merges per field and
       per item, deletions held for a yes when many happen at once, recent recordings (window set in
       Settings) ride along. See docs/SYNC.md.
-- [ ] **Phone web app** — a home-screen web app on the same hub: browse and edit meetings, check
-      off action items, the planner, and record in-person meetings (screen on); recordings go to
-      the hub and the person's PC transcribes them.
-- [ ] **"Send to Rowan" shortcut** — an iOS Shortcut in the share sheet that sends a Voice Memos
-      recording (made with the phone locked) through the same pipeline.
+- [x] **Phone web app** — a home-screen web app on the same hub (GitHub Pages): Today, meetings
+      (summary, action items, notes, transcript, playback), open action items, the Planner, and
+      recording in-person meetings with the screen on. Recordings go to the hub and one of the
+      person's PCs claims, transcribes and summarizes them. Voice memos import from Files.
+      See docs/PHONE.md.
+- [ ] **"Send to Rowan" shortcut** — an iOS Shortcut in the share sheet, so a Voice Memo goes
+      straight to Rowan without the Save to Files step.
 - [ ] **Ask and transcription on the phone** — Ask over the hub, and an optional cloud
       transcription fallback for when no PC is on.
 - [ ] **Sync mail triage** — handled/starred/read marks, once trimming them against the mailbox

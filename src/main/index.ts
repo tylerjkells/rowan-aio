@@ -431,7 +431,7 @@ app.whenReady().then(() => {
     if (!file) return new Response('not found', { status: 404 })
 
     const total = statSync(file).size
-    const mime = file.endsWith('.wav') ? 'audio/wav' : 'audio/webm'
+    const mime = file.endsWith('.wav') ? 'audio/wav' : file.endsWith('.m4a') ? 'audio/mp4' : 'audio/webm'
     const range = request.headers.get('range')
 
     if (range) {
@@ -908,7 +908,7 @@ function registerIpc(): void {
       for (const f of readdirSync(meetingDir(entry.name))) {
         const size = statSync(join(meetingDir(entry.name), f)).size
         totalBytes += size
-        if (f === 'audio.webm' || f === 'audio.wav') audioBytes += size
+        if (f === 'audio.webm' || f === 'audio.wav' || f === 'audio.m4a') audioBytes += size
       }
     }
     return { count, totalBytes, audioBytes }
