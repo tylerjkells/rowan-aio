@@ -24,7 +24,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: phone-pages
+  # per branch: a feature-branch build must not cancel main's deploy
+  group: phone-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
