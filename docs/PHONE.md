@@ -32,6 +32,10 @@ again the first time you open it from there.
   a progress note, move or finish an item.
 - **Record:** see below.
 
+It fits the screen it's on: short screens tighten up, a landscape phone drops
+the tab labels, and a wide screen (an unfolded phone, an iPad) shows Today in two
+columns and the meetings list beside the open meeting. It keeps clear of the
+notch, the home bar, and a status column down the side where a phone has one.
 It follows the theme you picked on your PC. The last things it loaded stay
 on the phone, so it still opens offline (with a note saying so); edits need a
 connection.

@@ -1,4 +1,20 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+
+/** follows a CSS media query, e.g. whether the screen is wide enough for two panes */
+export function useMedia(query: string): boolean {
+  const [on, setOn] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const update = (): void => setOn(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [query])
+  return on
+}
+
+/** wide enough to show a list and the item it opens side by side (unfolded, iPad, landscape) */
+export const WIDE = '(min-width: 760px)'
 
 // small shared pieces: icons, dates and durations, status lines
 
@@ -96,6 +112,13 @@ export function errorText(err: unknown): string {
 }
 
 // ---- time -------------------------------------------------------------------
+
+/** YYYY-MM-DD on this phone's calendar, `days` from today (not UTC's) */
+export function localDay(days = 0): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()

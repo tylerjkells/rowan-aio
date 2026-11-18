@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Hub, HubError } from './api'
 import { clearCache, loadSettings, peek, type PhoneSettings } from './data'
-import { ActionsIcon, MeetingsIcon, MicIcon, PlannerIcon, TodayIcon, errorText } from './ui'
+import { ActionsIcon, MeetingsIcon, MicIcon, PlannerIcon, TodayIcon, WIDE, errorText, useMedia } from './ui'
 import { SignIn } from './views/SignIn'
 import { TodayView } from './views/Today'
 import { MeetingsView } from './views/Meetings'
@@ -68,6 +68,7 @@ export default function App(): React.JSX.Element {
   const [tick, setTick] = useState(0)
   const [signedOutNote, setSignedOutNote] = useState<string | null>(null)
   const recording = useRecording()
+  const wide = useMedia(WIDE)
 
   useEffect(() => applyTheme(settings?.theme), [settings?.theme])
 
@@ -163,14 +164,33 @@ export default function App(): React.JSX.Element {
 
   return (
     <Ctx.Provider value={{ hub, settings, go, back, fail, tick, signOut }}>
-      <main className="screen" key={route.name === 'meeting' ? `meeting-${route.id}` : route.name}>
-        {route.name === 'today' && <TodayView />}
-        {route.name === 'meetings' && <MeetingsView />}
-        {route.name === 'meeting' && <MeetingView id={route.id} />}
-        {route.name === 'record' && <RecordView />}
-        {route.name === 'actions' && <ActionsView />}
-        {route.name === 'planner' && <PlannerView />}
-      </main>
+      {wide && (route.name === 'meetings' || route.name === 'meeting') ? (
+        // a wide screen shows the list and the open meeting side by side
+        <main className="screen split" key="split">
+          <div className="split-list">
+            <MeetingsView selected={route.name === 'meeting' ? route.id : null} />
+          </div>
+          <div className="split-detail" key={route.name === 'meeting' ? route.id : 'none'}>
+            {route.name === 'meeting' ? (
+              <MeetingView id={route.id} embedded />
+            ) : (
+              <p className="empty split-empty">Choose a meeting to read it here.</p>
+            )}
+          </div>
+        </main>
+      ) : (
+        <main
+          className={`screen ${route.name === 'today' ? 'screen-wide' : ''}`}
+          key={route.name === 'meeting' ? `meeting-${route.id}` : route.name}
+        >
+          {route.name === 'today' && <TodayView />}
+          {route.name === 'meetings' && <MeetingsView selected={null} />}
+          {route.name === 'meeting' && <MeetingView id={route.id} />}
+          {route.name === 'record' && <RecordView />}
+          {route.name === 'actions' && <ActionsView />}
+          {route.name === 'planner' && <PlannerView />}
+        </main>
+      )}
       <nav className="tabbar" aria-label="Sections">
         {TABS.map(({ path, name, label, Icon }) => (
           <a

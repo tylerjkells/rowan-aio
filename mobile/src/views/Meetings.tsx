@@ -3,7 +3,7 @@ import { useApp } from '../App'
 import { listMeetings, peek, type MeetingRow } from '../data'
 import { ChevronIcon, Problem, Stale, dayLabel, duration, stageNote, timeOf } from '../ui'
 
-export function MeetingsView(): React.JSX.Element {
+export function MeetingsView({ selected }: { selected: string | null }): React.JSX.Element {
   const { hub, go, fail, tick } = useApp()
   const [meetings, setMeetings] = useState<MeetingRow[] | null>(() => peek('meetings'))
   const [query, setQuery] = useState('')
@@ -68,9 +68,14 @@ export function MeetingsView(): React.JSX.Element {
               {g.items.map((m) => {
                 const note = stageNote(m.stage, m.claimedBy)
                 return (
-                  <button key={m.id} className="row meeting-row" onClick={() => go(`/meeting/${encodeURIComponent(m.id)}`)}>
+                  <button
+                    key={m.id}
+                    className={`row meeting-row ${selected === m.id ? 'selected' : ''}`}
+                    aria-current={selected === m.id ? 'true' : undefined}
+                    onClick={() => go(`/meeting/${encodeURIComponent(m.id)}`)}
+                  >
                     <span className="row-main">
-                      <span className="row-title">{m.title}</span>
+                      <span className="row-title clamp-2">{m.title}</span>
                       <span className="row-sub">{[timeOf(m.createdAt), duration(m.durationMs), m.source === 'phone' ? 'from phone' : ''].filter(Boolean).join(' · ')}</span>
                       {note ? <span className="row-note">{note}</span> : m.tldr && <span className="row-tldr">{m.tldr}</span>}
                     </span>

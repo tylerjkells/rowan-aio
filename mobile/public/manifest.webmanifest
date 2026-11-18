@@ -5,7 +5,6 @@
   "start_url": "./#/today",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
   "background_color": "#1b1717",
   "theme_color": "#1b1717",
   "icons": [

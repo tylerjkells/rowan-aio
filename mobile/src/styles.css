@@ -8,6 +8,15 @@
   box-sizing: border-box;
 }
 
+/* the screen's edges that belong to the system: the notch, the home bar, and
+   on some phones a status column down one side */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
 html {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
@@ -59,8 +68,8 @@ a {
 .screen {
   max-width: 680px;
   margin: 0 auto;
-  padding: calc(env(safe-area-inset-top) + 12px) max(16px, env(safe-area-inset-right))
-    calc(env(safe-area-inset-bottom) + 96px) max(16px, env(safe-area-inset-left));
+  padding: calc(var(--safe-top) + 12px) max(16px, var(--safe-right))
+    calc(var(--safe-bottom) + 96px) max(16px, var(--safe-left));
   animation: enter 220ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
@@ -113,7 +122,27 @@ section {
 }
 
 .section-title.overdue {
-  color: var(--accent-strong);
+  color: var(--danger);
+}
+
+.overdue-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 10px 12px 10px 14px;
+  border-radius: 10px;
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: 15px;
+  font-weight: 600;
+  transition: opacity 100ms ease-out;
+}
+
+.overdue-banner:active {
+  opacity: 0.65;
+  transition: none;
 }
 
 /* ---------- grouped lists ---------- */
@@ -204,12 +233,32 @@ button.row:active,
 }
 
 .row-sub.overdue {
-  color: var(--accent-strong);
+  color: var(--danger);
 }
 
 .row-note {
   font-size: 13.5px;
   color: var(--accent-strong);
+}
+
+/* long action items stay scannable in lists; the meeting shows them whole */
+.clamp-2,
+.clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
+.clamp-3 {
+  -webkit-line-clamp: 3;
+}
+
+.row.selected {
+  background: var(--accent-tint);
 }
 
 .row-note.error {
@@ -479,8 +528,8 @@ textarea::placeholder {
   z-index: 10;
   display: flex;
   justify-content: space-around;
-  padding: 6px max(8px, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 4px)
-    max(8px, env(safe-area-inset-left));
+  padding: 6px max(8px, var(--safe-right)) calc(var(--safe-bottom) + 4px)
+    max(8px, var(--safe-left));
   background: color-mix(in oklch, var(--bg) 78%, transparent);
   backdrop-filter: blur(22px) saturate(180%);
   -webkit-backdrop-filter: blur(22px) saturate(180%);
@@ -540,8 +589,8 @@ textarea::placeholder {
   position: sticky;
   top: 0;
   z-index: 5;
-  margin: calc(-12px - env(safe-area-inset-top)) -16px 0;
-  padding: calc(env(safe-area-inset-top) + 6px) 8px 6px;
+  margin: calc(-12px - var(--safe-top)) -16px 0;
+  padding: calc(var(--safe-top) + 6px) 8px 6px;
   background: color-mix(in oklch, var(--bg) 82%, transparent);
   backdrop-filter: blur(22px) saturate(180%);
   -webkit-backdrop-filter: blur(22px) saturate(180%);
@@ -981,7 +1030,7 @@ textarea::placeholder {
 .signin {
   max-width: 420px;
   margin: 0 auto;
-  padding: calc(env(safe-area-inset-top) + 64px) 20px calc(env(safe-area-inset-bottom) + 32px);
+  padding: calc(var(--safe-top) + 64px) 20px calc(var(--safe-bottom) + 32px);
   text-align: center;
 }
 
@@ -1052,10 +1101,112 @@ textarea::placeholder {
   margin-top: 28px;
 }
 
+/* ---------- screen sizes ----------
+   One layout for every iPhone: short screens tighten up so more fits above
+   the tab bar; a landscape phone drops the tab labels; a wide screen (an
+   unfolded phone, an iPad) puts two columns side by side. */
+
+@media (max-height: 740px) {
+  .page-head {
+    margin: 0 0 8px;
+  }
+  .large-title {
+    font-size: 28px;
+  }
+  section {
+    margin-top: 18px;
+  }
+  .record-card {
+    margin-top: 10px;
+    padding: 12px 14px;
+  }
+  .record-card-dot {
+    width: 40px;
+    height: 40px;
+  }
+  .tabbar {
+    padding-top: 4px;
+  }
+  .tab-label {
+    font-size: 10px;
+  }
+  .rec-btn {
+    width: 84px;
+    height: 84px;
+  }
+  .big-clock {
+    font-size: 46px;
+  }
+  .stop-btn {
+    width: 72px;
+    height: 72px;
+  }
+  .signin {
+    padding-top: calc(var(--safe-top) + 28px);
+  }
+}
+
+@media (max-height: 500px) {
+  .tab-label {
+    display: none;
+  }
+  .screen {
+    padding-bottom: calc(var(--safe-bottom) + 64px);
+  }
+}
+
+@media (min-width: 760px) {
+  /* lists and forms keep a readable line length; Today spreads into two columns */
+  .screen {
+    max-width: 760px;
+  }
+  .screen.screen-wide {
+    max-width: 1120px;
+  }
+  .today-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .tabbar {
+    justify-content: center;
+    gap: 8px;
+  }
+  .tab {
+    flex: 0 1 108px;
+  }
+
+  /* the meetings list and the open meeting, each scrolling on its own */
+  .screen.split {
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 28px;
+    max-width: 1240px;
+    height: 100dvh;
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+  .split-list,
+  .split-detail {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: calc(var(--safe-bottom) + 96px);
+  }
+  .split-detail {
+    animation: enter 220ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .split-empty {
+    margin-top: 30vh;
+  }
+}
+
 /* ---------- motion and transparency preferences ---------- */
 
 @media (prefers-reduced-motion: reduce) {
-  .screen {
+  .screen,
+  .split-detail {
     animation: none;
   }
   .tab-record.live .tab-icon,
