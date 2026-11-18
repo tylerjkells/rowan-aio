@@ -6,6 +6,12 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.43.0': [
+    'Sync keeps your library the same on every PC you use. Sign in under Settings → Sync and your meetings, action items, Planner, tickets, people, links, toolbox and personal settings stay in step through your own private hub, which only your account can read. Everything still lives on this PC and works offline, and edits made on two PCs are merged rather than overwriting each other. Recordings from the last 7 days ride along too (change that in Settings → Sync); older ones stay on the PC that made them.',
+    'Rowan on your iPhone. Open tylerjkells.github.io/rowan-aio in Safari, sign in with your sync account, and add it to your Home Screen. It has a Today view, your meetings with their summaries, notes and transcripts, your open action items and the Planner, and what you change there reaches your PCs within a minute. The link is in Settings → Sync.',
+    'Record in-person meetings on the phone: set it down with Rowan open and tap Record. When you stop, one of your PCs picks up the recording, transcribes and summarizes it like any other, and the finished meeting shows up on the phone too. Recorded in Voice Memos with the phone locked? Save it to Files and choose it under Record.',
+    'Sync guards against accidents. If many things disappear from one PC at once, sync holds those deletions until you confirm them in Settings → Sync, and anything deleted on another device is kept on this PC for 30 days before it goes.'
+  ],
   '0.42.0': [
     'A Planner for the work that isn’t in ClickUp or a ticket: the dashboard someone asked for in passing, a one-off data pull. It’s in the sidebar under ClickUp. Sort items into Now, Next, Waiting and Later on a board (drag to move them, drop on Done when finished) or see them as a list. Each one keeps who asked, a due date, a checklist of steps, notes, links and a running log of updates, and projects group related work.',
     'Planner work shows up where you need it. Today lists what’s in Now and anything due, an email becomes a Planner item with Add to Planner, and Ask and Claude Desktop can see it. When something becomes official, Send to ClickUp hands it over with its notes and steps.',
