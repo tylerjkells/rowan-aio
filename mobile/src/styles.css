@@ -66,6 +66,7 @@ a {
 /* ---------- screen frame ---------- */
 
 .screen {
+  container-type: inline-size;
   max-width: 680px;
   margin: 0 auto;
   padding: calc(var(--safe-top) + 12px) max(16px, var(--safe-right))
@@ -1101,6 +1102,341 @@ textarea::placeholder {
   margin-top: 28px;
 }
 
+/* ---------- people ---------- */
+
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent-tint-strong);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.avatar.large {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 10px;
+  font-size: 26px;
+}
+
+.person-head {
+  margin: 14px 0 4px;
+  text-align: center;
+}
+
+.person-head .title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.person-head .meta {
+  margin: 4px 0 0;
+}
+
+.contact-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 16px 0 6px;
+}
+
+.contact {
+  flex: 1;
+  max-width: 120px;
+  padding: 10px 0;
+  border-radius: 12px;
+  background: var(--bg-raised);
+  color: var(--accent-strong);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  transition: transform 100ms ease-out;
+}
+
+.contact:active {
+  transform: scale(0.96);
+  transition: none;
+}
+
+.details {
+  margin-top: 14px;
+}
+
+.detail {
+  display: flex;
+  gap: 12px;
+  padding: 11px 14px;
+  font-size: 15px;
+}
+
+.detail-label {
+  flex: none;
+  width: 64px;
+  color: var(--ink-soft);
+}
+
+.detail-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* ---------- tickets ---------- */
+
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.flag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-overlay);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.flag.hot {
+  background: var(--accent-tint-strong);
+  color: var(--accent-strong);
+}
+
+.entry-head .flag {
+  margin-left: 6px;
+}
+
+.field-input {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: var(--r-card);
+  background: var(--bg-raised);
+  font-size: 16px;
+}
+
+.link.inline {
+  display: inline-block;
+  margin-top: 8px;
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.entry {
+  padding: 10px 14px;
+  border-radius: var(--r-card);
+  background: var(--bg-raised);
+}
+
+.entry.mine {
+  background: var(--accent-tint);
+}
+
+.entry-head {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.entry-text,
+.plain {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- more, links, toolbox, brand ---------- */
+
+.row-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+a.row:active {
+  background: var(--bg-overlay);
+  transition: none;
+}
+
+.danger-row {
+  justify-content: center;
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.lead {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tile-pic {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--r-card);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.tile-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.tile-name {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.query .section-title {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.sql {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: var(--bg-raised);
+  font: 13px/1.45 ui-monospace, 'SF Mono', Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.guide {
+  margin-top: 14px;
+  padding: 4px 16px 12px;
+  border-radius: var(--r-card);
+  background: var(--bg-raised);
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.guide img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.guide table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.guide td,
+.guide th {
+  padding: 4px 8px;
+  border: 0.5px solid var(--line);
+}
+
+.guide a {
+  color: var(--accent-strong);
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: var(--r-card);
+  background: var(--bg-raised);
+  transition: transform 100ms ease-out;
+}
+
+.swatch:active:not(:disabled) {
+  transform: scale(0.97);
+  transition: none;
+}
+
+.swatch:disabled {
+  opacity: 1;
+}
+
+.swatch-chip {
+  display: grid;
+  place-items: center;
+  height: 64px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background: repeating-linear-gradient(45deg, var(--bg-overlay) 0 6px, var(--bg) 6px 12px);
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.12);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.swatch-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.swatch-code {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- wide screens: the desktop's sidebar ---------- */
+
+.sidebar {
+  display: none;
+}
+
+.brand-dot.small {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 0 4px var(--accent-tint-strong);
+}
+
 /* ---------- screen sizes ----------
    One layout for every iPhone: short screens tighten up so more fits above
    the tab bar; a landscape phone drops the tab labels; a wide screen (an
@@ -1150,24 +1486,120 @@ textarea::placeholder {
   .tab-label {
     display: none;
   }
+
   .screen {
     padding-bottom: calc(var(--safe-bottom) + 64px);
   }
 }
 
+/* Today goes two columns when its own column has the room (a sidebar takes some) */
+@container (min-width: 620px) {
+  .today-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+}
+
 @media (min-width: 760px) {
+  .app-wide {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    min-height: 100dvh;
+  }
+  .sidebar {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    height: 100dvh;
+    overflow-y: auto;
+    padding: calc(var(--safe-top) + 16px) 12px calc(var(--safe-bottom) + 16px) max(12px, var(--safe-left));
+    background: var(--bg-sidebar);
+    box-shadow: inset -0.5px 0 0 var(--line);
+  }
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 8px 14px;
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .sidebar-record {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 0 4px 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 15px;
+    font-weight: 600;
+    transition: transform 100ms ease-out;
+  }
+  .sidebar-record:active {
+    transform: scale(0.97);
+    transition: none;
+  }
+  .sidebar-record.live {
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    color: var(--ink);
+    font-size: 15.5px;
+    font-weight: 500;
+  }
+  .sidebar-item svg {
+    color: var(--accent-strong);
+  }
+  .sidebar-item.active {
+    background: var(--accent-tint-strong);
+    color: var(--accent-strong);
+  }
+  .sidebar-item:active {
+    background: var(--bg-overlay);
+  }
+  .sidebar-foot {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: auto 8px 0;
+    padding-top: 16px;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    overflow-wrap: anywhere;
+  }
+  .sidebar-foot .link {
+    align-self: flex-start;
+    font-size: 13px;
+  }
+  .app-wide .screen {
+    /* a grid item with auto margins shrinks to its content, and a size
+       container's content counts as nothing: give it the full column */
+    width: 100%;
+    padding-bottom: calc(var(--safe-bottom) + 32px);
+  }
+  .app-wide .split-list,
+  .app-wide .split-detail {
+    padding-bottom: calc(var(--safe-bottom) + 32px);
+  }
+
   /* lists and forms keep a readable line length; Today spreads into two columns */
   .screen {
     max-width: 760px;
   }
   .screen.screen-wide {
     max-width: 1120px;
-  }
-  .today-cols {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 28px;
-    align-items: start;
   }
   .tabbar {
     justify-content: center;
@@ -1180,9 +1612,9 @@ textarea::placeholder {
   /* the meetings list and the open meeting, each scrolling on its own */
   .screen.split {
     display: grid;
-    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    grid-template-columns: minmax(240px, 2fr) minmax(0, 3fr);
     grid-template-rows: minmax(0, 1fr);
-    gap: 28px;
+    gap: 20px;
     max-width: 1240px;
     height: 100dvh;
     padding-bottom: 0;
@@ -1199,6 +1631,34 @@ textarea::placeholder {
   }
   .split-empty {
     margin-top: 30vh;
+  }
+}
+
+/* a landscape phone: the sidebar's whole list fits without scrolling */
+@media (min-width: 760px) and (max-height: 500px) {
+  .sidebar-brand {
+    display: none;
+  }
+  .sidebar-record {
+    margin-bottom: 6px;
+    padding: 7px 10px;
+  }
+  .sidebar-item {
+    padding: 5px 10px;
+    font-size: 14.5px;
+  }
+  .sidebar-foot {
+    display: none;
+  }
+}
+
+@media (min-width: 1200px) {
+  .app-wide {
+    grid-template-columns: 236px minmax(0, 1fr);
+  }
+  .screen.split {
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    gap: 28px;
   }
 }
 

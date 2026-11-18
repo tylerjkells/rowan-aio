@@ -1,5 +1,18 @@
 import { parseDueDate } from '../../src/shared/dates'
-import type { ActionItem, Meeting, PlanItem, PlanStatus } from '../../src/shared/types'
+import type {
+  ActionItem,
+  BrandData,
+  DashboardEntry,
+  LinkEntry,
+  Meeting,
+  PersonDetails,
+  PlanItem,
+  PlanStatus,
+  Ticket,
+  TicketNote,
+  TicketPlan,
+  ToolboxData
+} from '../../src/shared/types'
 import { deviceId, type Hub } from './api'
 
 // ---------------------------------------------------------------------------
@@ -34,6 +47,7 @@ export interface MeetingRow {
   source: string | null
   claimedBy: string | null
   tags: string[] | null
+  attendees: string[] | null
 }
 
 export interface OpenAction {
@@ -146,7 +160,8 @@ const MEETING_FIELDS = [
   'notes:body->>notes',
   'source:body->>source',
   'claimedBy:body->>claimedBy',
-  'tags:body->tags'
+  'tags:body->tags',
+  'attendees:body->attendees'
 ].join(',')
 
 export function listMeetings(hub: Hub): Promise<{ value: MeetingRow[]; stale: boolean }> {
@@ -341,14 +356,104 @@ export function addPlanUpdate(hub: Hub, itemId: string, text: string): Promise<P
 export interface PhoneSettings {
   theme: string
   yourName: string
+  /** the team directory's names, as spelled on the PC */
+  people: string[]
+  /** desktop sections switched off in Settings; the phone hides them too */
+  hiddenTabs: string[]
 }
 
 export function loadSettings(hub: Hub): Promise<{ value: PhoneSettings; stale: boolean }> {
   return cached('settings', async () => {
     const d = await getDoc<Record<string, unknown>>(hub, 'settings', 'portable')
+    const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
     return {
       theme: typeof d?.body.theme === 'string' ? d.body.theme : 'studio',
-      yourName: typeof d?.body.yourName === 'string' ? d.body.yourName : ''
+      yourName: typeof d?.body.yourName === 'string' ? d.body.yourName : '',
+      people: list(d?.body.people),
+      hiddenTabs: list(d?.body.hiddenTabs)
     }
   })
+}
+
+// ---- workspace: people, tickets, links, dashboards, toolbox, brand ---------------
+
+export function loadDirectory(hub: Hub): Promise<{ value: Record<string, PersonDetails>; stale: boolean }> {
+  return cached('directory', async () => (await getDoc<Record<string, PersonDetails>>(hub, 'file', 'directory.json'))?.body ?? {})
+}
+
+/** tickets.json as the PC stores it: tickets and your notes keyed by INC number */
+export interface TicketFile {
+  tickets: Record<string, Ticket>
+  notes: Record<string, TicketNote>
+  me: string | null
+  syncedAt: string | null
+}
+
+const EMPTY_TICKETS: TicketFile = { tickets: {}, notes: {}, me: null, syncedAt: null }
+
+export function loadTickets(hub: Hub): Promise<{ value: TicketFile; stale: boolean }> {
+  return cached('tickets', async () => {
+    const f = (await getDoc<TicketFile>(hub, 'file', 'tickets.json'))?.body
+    return { ...EMPTY_TICKETS, ...(f ?? {}) }
+  })
+}
+
+const EMPTY_NOTE: TicketNote = { plan: '', next: '', notes: '', seen: '' }
+
+export async function setTicketNote(
+  hub: Hub,
+  number: string,
+  patch: Partial<Pick<TicketNote, 'plan' | 'next' | 'notes'>>
+): Promise<TicketFile> {
+  const d = await updateDoc<TicketFile>(
+    hub,
+    'file',
+    'tickets.json',
+    (f) => {
+      const notes = f.notes ?? {}
+      const cur = { ...EMPTY_NOTE, ...(notes[number] ?? {}) }
+      const next = { ...cur, ...patch }
+      if (cur.plan === next.plan && cur.next === next.next && cur.notes === next.notes) return null
+      return { ...f, notes: { ...notes, [number]: next } }
+    },
+    EMPTY_TICKETS
+  )
+  cacheSet('tickets', d.body)
+  return d.body
+}
+
+export const TICKET_PLANS: { id: TicketPlan; label: string }[] = [
+  { id: 'now', label: 'Now' },
+  { id: 'next', label: 'Next' },
+  { id: 'waiting', label: 'Waiting' },
+  { id: 'later', label: 'Later' }
+]
+
+export function loadLinks(hub: Hub): Promise<{ value: LinkEntry[]; stale: boolean }> {
+  return cached('links', async () => (await getDoc<LinkEntry[]>(hub, 'file', 'links.json'))?.body ?? [])
+}
+
+export function loadDashboards(hub: Hub): Promise<{ value: DashboardEntry[]; stale: boolean }> {
+  return cached('dashboards', async () => (await getDoc<DashboardEntry[]>(hub, 'file', 'dashboards.json'))?.body ?? [])
+}
+
+export function loadToolbox(hub: Hub): Promise<{ value: ToolboxData; stale: boolean }> {
+  return cached('toolbox', async () => {
+    const t = (await getDoc<Partial<ToolboxData>>(hub, 'file', 'toolbox/toolbox.json'))?.body ?? {}
+    return { guides: t.guides ?? [], images: t.images ?? [], files: t.files ?? [], queries: t.queries ?? [] }
+  })
+}
+
+export function loadBrand(hub: Hub): Promise<{ value: BrandData | null; stale: boolean }> {
+  return cached('brand', async () => (await getDoc<BrandData>(hub, 'file', 'brand.json'))?.body ?? null)
+}
+
+/**
+ * An attachment the PCs synced (a toolbox image or file, a guide's page, a
+ * link thumbnail), by its path in the library. Null when it isn't in the hub.
+ */
+export async function attachment(hub: Hub, rel: string): Promise<Blob | null> {
+  const doc = await getDoc<{ hash?: string }>(hub, 'blob', rel)
+  if (!doc?.body.hash) return null
+  return hub.download(`${hub.userId}/files/${doc.body.hash}`)
 }
