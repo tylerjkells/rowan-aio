@@ -43,12 +43,12 @@ export function audioPath(id: string): string {
   return join(meetingDir(id), 'audio.webm')
 }
 
-/** playback audio: webm for normal recordings, wav for recovered ones */
+/** playback audio: webm for normal recordings, wav for recovered ones, m4a from an iPhone */
 export function findAudio(id: string): string | null {
-  const webm = join(meetingDir(id), 'audio.webm')
-  if (existsSync(webm)) return webm
-  const wav = join(meetingDir(id), 'audio.wav')
-  if (existsSync(wav)) return wav
+  for (const name of ['audio.webm', 'audio.wav', 'audio.m4a']) {
+    const file = join(meetingDir(id), name)
+    if (existsSync(file)) return file
+  }
   return null
 }
 

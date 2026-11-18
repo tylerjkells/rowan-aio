@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
+  SyncChangeEvent,
+  SyncStatus,
   ActionRollupItem,
   AppSettings,
   AutoEndReason,
@@ -109,6 +111,39 @@ export interface Rect {
 }
 
 const api = {
+  sync: {
+    status: (): Promise<SyncStatus> => ipcRenderer.invoke('sync:status'),
+    signIn: (email: string, password: string): Promise<SyncStatus> =>
+      ipcRenderer.invoke('sync:signIn', email, password),
+    signOut: (): Promise<SyncStatus> => ipcRenderer.invoke('sync:signOut'),
+    now: (): Promise<SyncStatus> => ipcRenderer.invoke('sync:now'),
+    changePassword: (password: string): Promise<SyncStatus> =>
+      ipcRenderer.invoke('sync:changePassword', password),
+    setAudioDays: (days: number): Promise<SyncStatus> => ipcRenderer.invoke('sync:setAudioDays', days),
+    resolveDeletes: (choice: 'delete' | 'restore'): Promise<SyncStatus> =>
+      ipcRenderer.invoke('sync:resolveDeletes', choice),
+    setHub: (hub: { url: string; key: string } | null): Promise<SyncStatus> =>
+      ipcRenderer.invoke('sync:setHub', hub),
+    onStatus: (cb: (s: SyncStatus) => void): (() => void) => {
+      const handler = (_e: unknown, s: SyncStatus): void => cb(s)
+      ipcRenderer.on('sync:status', handler)
+      return () => ipcRenderer.removeListener('sync:status', handler)
+    },
+    onChanged: (cb: (c: SyncChangeEvent) => void): (() => void) => {
+      const handler = (_e: unknown, c: SyncChangeEvent): void => cb(c)
+      ipcRenderer.on('sync:changed', handler)
+      return () => ipcRenderer.removeListener('sync:changed', handler)
+    },
+    /** phone recordings this PC took: next one to transcribe, or null */
+    nextUpload: (): Promise<string | null> => ipcRenderer.invoke('sync:nextUpload'),
+    uploadDone: (id: string, error?: string): Promise<void> =>
+      ipcRenderer.invoke('sync:uploadDone', id, error),
+    onUploadWaiting: (cb: () => void): (() => void) => {
+      const handler = (): void => cb()
+      ipcRenderer.on('sync:transcribe', handler)
+      return () => ipcRenderer.removeListener('sync:transcribe', handler)
+    }
+  },
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
     update: (patch: Partial<AppSettings>): Promise<AppSettings> =>
@@ -239,6 +274,8 @@ const api = {
       ipcRenderer.invoke('meetings:briefFor', eventTitle),
     deleteAudio: (id: string): Promise<Meeting | null> =>
       ipcRenderer.invoke('meetings:deleteAudio', id),
+    /** false when the recording lives only on another of your PCs */
+    audioHere: (id: string): Promise<boolean> => ipcRenderer.invoke('meetings:audioHere', id),
     storageStats: (): Promise<StorageStats> => ipcRenderer.invoke('meetings:storageStats'),
     onUpdated: (cb: (m: Meeting) => void): (() => void) => {
       const handler = (_e: unknown, m: Meeting): void => cb(m)

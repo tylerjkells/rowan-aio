@@ -1,0 +1,92 @@
+# Rowan on the phone
+
+A web app you add to your iPhone's Home Screen. It opens full screen like any
+app, with no App Store and no developer fee. It talks to the same sync hub as
+your PCs (see [SYNC.md](SYNC.md)), so it shows the same library and its edits
+reach your PCs within a minute.
+
+**Address:** https://tylerjkells.github.io/rowan-aio/
+
+## Installing it
+
+1. On the iPhone, open the address above in **Safari**.
+2. Sign in with your sync account (the one in Settings → Sync on your PC).
+3. Tap **Share → Add to Home Screen**.
+
+The Home Screen app keeps its own sign-in, separate from Safari, so sign in
+again the first time you open it from there.
+
+## What it does
+
+- **Today:** your greeting, a big Record button, phone recordings waiting on
+  your PC, action items due this week, the Planner's Now column, recent
+  meetings.
+- **Meetings:** search titles, summaries and notes; open one for the summary,
+  action items (check them off), notes (edit them; they autosave), discussion
+  topics, decisions, open questions and the transcript. Rename it by tapping
+  the title. "Play recording" plays the audio when the hub still has it
+  (recordings from the last N days; see Settings → Sync).
+- **Actions:** every open action item across your meetings, grouped overdue /
+  this week / later / no date, with a Mine filter.
+- **Planner:** Now / Next / Waiting / Later / Done; add items, tick steps, add
+  a progress note, move or finish an item.
+- **Record:** see below.
+
+It follows the theme you picked on your PC. The last things it loaded stay
+on the phone, so it still opens offline (with a note saying so); edits need a
+connection.
+
+## Recording
+
+Tap Record, set the phone down with Rowan open, and tap Stop when you're done.
+The recording goes to the hub, and **one of your PCs** downloads it,
+transcribes it with the same engine as everything else, and writes the
+summary; the finished meeting then appears on the phone. Notes typed while
+recording go with it.
+
+- **Keep the app open with the screen on.** Rowan keeps the screen from
+  sleeping while it records. iOS stops a web app's microphone when the phone
+  locks or you switch apps; Rowan keeps everything recorded up to that moment
+  and says so.
+- **For long meetings or with the phone locked**, record in Voice Memos, then
+  tap Share → Save to Files, and in Rowan tap Record → *Choose a recording…*.
+  It goes through the same steps.
+- Audio is saved on the phone every few seconds while recording, so if iOS
+  closes the app, nothing but the last few seconds is lost: the recording
+  waits under *Not sent yet*.
+- If you're offline when you stop, it waits under *Not sent yet* with a Send
+  button.
+- The hub takes files up to 50 MB: about 2 hours 20 minutes of phone audio.
+- A PC has to be on to transcribe. If none is, the recording waits in the hub
+  until one is.
+
+### How a PC picks it up
+
+The phone uploads the audio, then creates the meeting with the stage
+`uploaded`. On its next sync pass a PC downloads the audio (whatever the audio
+window is set to) and claims the meeting: the claim is an ordinary sync push,
+so the hub's revision check lets exactly one PC win. That PC decodes the audio
+in its window, the same way "Re-transcribe" does, and runs the normal
+pipeline. A PC that claimed a recording and then went quiet for three hours
+loses it to another. A recording that can't be decoded is marked "needs
+attention" rather than retried forever.
+
+## Hosting and updates
+
+The phone app is a static site built from `mobile/` into `out/mobile` and
+published to GitHub Pages by `.github/workflows/phone.yml` on every push to
+`main` that touches it. Pushes to `claude/*` branches build it (to catch a
+broken build) but don't publish, since there is one live site.
+
+**One-time setup:** repo Settings → Pages → Source: **GitHub Actions**.
+
+A new version reaches phones the next time the app is opened online.
+
+## Working on it
+
+- `npm run mobile:dev` serves it at http://localhost:5180 with live reload. A
+  phone on the same network can open it, but iOS only allows the microphone
+  on https, so test recording on the published site.
+- `npm run mobile:build` builds `out/mobile`.
+- The hub address comes from `src/shared/hub.ts`; until it's set there, the
+  sign-in screen asks for a hub address and key.

@@ -1,0 +1,203 @@
+/* Rowan's palettes, copied from the desktop app (src/renderer/src/styles.css)
+   so a theme chosen there looks the same here. The phone uses the system
+   font instead of Segoe. */
+
+:root {
+  /* color */
+  --ink: oklch(0.93 0.004 25);
+  --ink-soft: oklch(0.72 0.008 25);
+  --ink-faint: oklch(0.55 0.01 25);
+  --bg: oklch(0.185 0.006 25);
+  --bg-raised: oklch(0.225 0.007 25);
+  --bg-overlay: oklch(0.26 0.008 25);
+  --line: oklch(0.32 0.008 25);
+  --line-soft: oklch(0.27 0.007 25);
+  --bg-sidebar: oklch(0.165 0.006 25);
+  --line-strong: oklch(0.38 0.01 25);
+  --accent: oklch(0.63 0.17 27);
+  --accent-strong: oklch(0.68 0.19 27);
+  --accent-dim: oklch(0.45 0.11 27);
+  --accent-tint: oklch(0.63 0.17 27 / 0.12);
+  --accent-tint-strong: oklch(0.63 0.17 27 / 0.2);
+  --accent-flash: oklch(0.63 0.17 27 / 0.3);
+  --accent-glow: oklch(0.63 0.17 27 / 0.5);
+  /* ink on accent-colored surfaces (buttons, checked boxes) */
+  --on-accent: oklch(0.15 0.02 27);
+  /* switch thumb when the switch is on */
+  --knob-on: oklch(0.97 0.005 27);
+  --ok: oklch(0.72 0.13 155);
+  --warn: oklch(0.78 0.13 85);
+
+  /* type */
+  --font-ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', 'Consolas', monospace;
+
+  /* space (4px base) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* radius system */
+  --r-ctl: 8px;
+  --r-card: 12px;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --t-fast: 130ms;
+  --t-med: 220ms;
+}
+
+/* ---------- themes ----------
+   Every color flows through the variables above, so a theme is just a
+   different palette. Dark themes keep the same lightness architecture;
+   Paper inverts it. */
+
+:root[data-theme='rowan'] {
+  /* brown & gold, after the Profs */
+  --ink: oklch(0.93 0.008 85);
+  --ink-soft: oklch(0.73 0.015 80);
+  --ink-faint: oklch(0.56 0.02 75);
+  --bg: oklch(0.19 0.012 65);
+  --bg-raised: oklch(0.23 0.014 65);
+  --bg-overlay: oklch(0.265 0.016 65);
+  --line: oklch(0.32 0.02 70);
+  --line-soft: oklch(0.27 0.018 70);
+  --bg-sidebar: oklch(0.165 0.012 65);
+  --line-strong: oklch(0.39 0.025 70);
+  --accent: oklch(0.8 0.14 90);
+  --accent-strong: oklch(0.86 0.15 92);
+  --accent-dim: oklch(0.55 0.09 85);
+  --accent-tint: oklch(0.8 0.14 90 / 0.12);
+  --accent-tint-strong: oklch(0.8 0.14 90 / 0.2);
+  --accent-flash: oklch(0.8 0.14 90 / 0.3);
+  --accent-glow: oklch(0.8 0.14 90 / 0.45);
+  --on-accent: oklch(0.22 0.04 75);
+  --knob-on: oklch(0.2 0.03 75);
+  /* warn shifts to orange so it can't be confused with the gold accent */
+  --warn: oklch(0.74 0.13 60);
+}
+
+:root[data-theme='slate'] {
+  /* cool graphite with steel blue */
+  --ink: oklch(0.93 0.005 250);
+  --ink-soft: oklch(0.72 0.01 250);
+  --ink-faint: oklch(0.55 0.012 250);
+  --bg: oklch(0.185 0.008 255);
+  --bg-raised: oklch(0.225 0.01 255);
+  --bg-overlay: oklch(0.26 0.012 255);
+  --line: oklch(0.32 0.012 255);
+  --line-soft: oklch(0.27 0.01 255);
+  --bg-sidebar: oklch(0.163 0.008 255);
+  --line-strong: oklch(0.38 0.015 255);
+  --accent: oklch(0.68 0.12 245);
+  --accent-strong: oklch(0.74 0.13 245);
+  --accent-dim: oklch(0.47 0.09 248);
+  --accent-tint: oklch(0.68 0.12 245 / 0.13);
+  --accent-tint-strong: oklch(0.68 0.12 245 / 0.2);
+  --accent-flash: oklch(0.68 0.12 245 / 0.3);
+  --accent-glow: oklch(0.68 0.12 245 / 0.45);
+  --on-accent: oklch(0.14 0.02 250);
+  --knob-on: oklch(0.97 0.005 250);
+}
+
+:root[data-theme='paper'] {
+  /* light, for bright offices; the signal-red family stays */
+  --ink: oklch(0.25 0.012 27);
+  --ink-soft: oklch(0.42 0.012 27);
+  --ink-faint: oklch(0.55 0.012 27);
+  --bg: oklch(0.975 0.003 60);
+  --bg-raised: oklch(0.945 0.004 60);
+  --bg-overlay: oklch(0.915 0.005 60);
+  --line: oklch(0.85 0.008 50);
+  --line-soft: oklch(0.9 0.006 50);
+  --bg-sidebar: oklch(0.955 0.004 60);
+  --line-strong: oklch(0.75 0.012 50);
+  --accent: oklch(0.56 0.19 27);
+  --accent-strong: oklch(0.5 0.19 27);
+  --accent-dim: oklch(0.75 0.09 27);
+  --accent-tint: oklch(0.56 0.19 27 / 0.09);
+  --accent-tint-strong: oklch(0.56 0.19 27 / 0.16);
+  --accent-flash: oklch(0.56 0.19 27 / 0.25);
+  --accent-glow: oklch(0.56 0.19 27 / 0.35);
+  --on-accent: oklch(0.985 0.005 27);
+  --knob-on: oklch(0.985 0.005 27);
+  --ok: oklch(0.5 0.12 155);
+  --warn: oklch(0.55 0.11 80);
+}
+
+:root[data-theme='notion'] {
+  /* flat white and calm grays, for Notion muscle memory */
+  --ink: #37352f;
+  --ink-soft: #73726e;
+  --ink-faint: #9b9a97;
+  --bg: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-overlay: #f1f1ef;
+  --line: #e3e2e0;
+  --line-soft: #ededec;
+  --bg-sidebar: #f7f7f5;
+  --line-strong: #d3d1cb;
+  --accent: #2383e2;
+  --accent-strong: #1b6ec2;
+  --accent-dim: #8fc1ef;
+  --accent-tint: rgba(35, 131, 226, 0.1);
+  --accent-tint-strong: rgba(35, 131, 226, 0.18);
+  --accent-flash: rgba(35, 131, 226, 0.28);
+  --accent-glow: rgba(35, 131, 226, 0.3);
+  --on-accent: #ffffff;
+  --knob-on: #ffffff;
+  --ok: #0f7b6c;
+  --warn: #cb912f;
+  --r-ctl: 6px;
+  --r-card: 8px;
+}
+
+:root[data-theme='ios'] {
+  /* grouped white cards on gray, Apple blue */
+  --ink: #1c1c1e;
+  --ink-soft: #6c6c70;
+  --ink-faint: #aeaeb2;
+  --bg: #f2f2f7;
+  --bg-raised: #ffffff;
+  --bg-overlay: #e9e9ee;
+  --line: #d1d1d6;
+  --line-soft: #e5e5ea;
+  --bg-sidebar: #ebebf0;
+  --line-strong: #c7c7cc;
+  --accent: #007aff;
+  --accent-strong: #005ecb;
+  --accent-dim: #7ab8ff;
+  --accent-tint: rgba(0, 122, 255, 0.1);
+  --accent-tint-strong: rgba(0, 122, 255, 0.18);
+  --accent-flash: rgba(0, 122, 255, 0.28);
+  --accent-glow: rgba(0, 122, 255, 0.3);
+  --on-accent: #ffffff;
+  --knob-on: #ffffff;
+  --ok: #34c759;
+  --warn: #ff9500;
+  --r-ctl: 10px;
+  --r-card: 14px;
+  --font-ui: 'SF Pro Text', 'Helvetica Neue', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'SF Pro Display', 'Helvetica Neue', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+}
+
+:root,
+:root[data-theme] {
+  --font-ui: -apple-system, system-ui, 'Segoe UI', sans-serif;
+  --font-display: -apple-system, system-ui, 'Segoe UI', sans-serif;
+}
+
+/* light themes tell the browser so form controls and scrollbars match */
+:root[data-theme='paper'],
+:root[data-theme='notion'],
+:root[data-theme='ios'] {
+  color-scheme: light;
+}
+:root {
+  color-scheme: dark;
+}

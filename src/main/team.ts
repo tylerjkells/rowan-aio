@@ -23,6 +23,11 @@ function file(): string {
 
 let cache: TeamFile | null = null
 
+/** forget the in-memory copy (sync rewrote team-tickets.json underneath it) */
+export function dropTeamCache(): void {
+  cache = null
+}
+
 function load(): TeamFile {
   if (cache) return cache
   try {

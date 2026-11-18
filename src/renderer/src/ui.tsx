@@ -132,6 +132,8 @@ export function StageBadge({
       )
     case 'recorded':
       return <span className="badge badge-quiet">Queued</span>
+    case 'uploaded':
+      return <span className="badge badge-quiet">From your phone · waiting</span>
     case 'transcript-only':
       return <span className="badge badge-quiet">Transcript only</span>
     case 'error':

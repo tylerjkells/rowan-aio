@@ -1,0 +1,68 @@
+# Builds the phone web app (mobile/) and publishes it with GitHub Pages at
+# https://tylerjkells.github.io/rowan-aio/ — a static site, so nothing else
+# to host. Every push that touches it is built (so a broken build shows up on
+# the branch); only main is published, since there is one live site.
+#
+# One-time setup: repo Settings -> Pages -> Source: "GitHub Actions".
+name: Phone app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main', 'claude/**']
+    paths:
+      - 'mobile/**'
+      - 'src/shared/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.mobile.json'
+      - '.github/workflows/phone.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: phone-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.mobile.json
+
+      - name: Build
+        run: npm run mobile:build
+
+      - name: Package for Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: out/mobile
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4

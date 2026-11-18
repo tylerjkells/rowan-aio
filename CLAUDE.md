@@ -39,3 +39,22 @@ Do all of these together:
    publish from the Releases page. Watch the run with `actions_list` and
    report the outcome; a red run is yours to fix.
    (An older note here said dispatching got a 403; that is no longer true.)
+
+## Sync hub
+
+Sync (`src/main/sync/`, docs/SYNC.md) talks to the Supabase project
+**rowan-aio** (ref `qjmrckbavboyenjzlywu`, in Tyler's org, us-east-1) whose
+address and publishable key live in `src/shared/hub.ts`. Schema changes go in a new file
+under `supabase/migrations/` and are applied to that project; never edit an
+applied migration. Never delete a user in the hub: their synced data cascades
+with them. `npm test` runs the merge and sync-engine tests (two simulated PCs
+over an in-memory hub with the same rules as the SQL).
+
+## Phone app
+
+`mobile/` is a separate Vite + React web app (docs/PHONE.md) that shares
+`src/shared/` with the desktop. `npm run typecheck` covers it; build it with
+`npm run mobile:build`. It is published to GitHub Pages from `main` by
+`.github/workflows/phone.yml`, so merging to main ships it to phones; it has no
+version number of its own. Phone edits are operations replayed on the hub's
+current copy (`mobile/src/data.ts`), not merges; the PCs merge them in.
