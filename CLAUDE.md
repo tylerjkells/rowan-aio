@@ -42,8 +42,9 @@ Do all of these together:
 
 ## Sync hub
 
-Sync (`src/main/sync/`, docs/SYNC.md) talks to a Supabase project whose address
-and publishable key live in `src/shared/hub.ts`. Schema changes go in a new file
+Sync (`src/main/sync/`, docs/SYNC.md) talks to the Supabase project
+**rowan-aio** (ref `qjmrckbavboyenjzlywu`, in Tyler's org, us-east-1) whose
+address and publishable key live in `src/shared/hub.ts`. Schema changes go in a new file
 under `supabase/migrations/` and are applied to that project; never edit an
 applied migration. Never delete a user in the hub: their synced data cascades
 with them. `npm test` runs the merge and sync-engine tests (two simulated PCs
