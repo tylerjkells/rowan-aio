@@ -6,6 +6,11 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.44.0': [
+    'Make your own sync account. Once the person who runs your Rowan hub approves your email, open Settings → Sync, choose create an account, and pick your own password. You can do the same from the sign-in screen of Rowan on your iPhone.',
+    'Hub administrators approve people from Settings → Sync → Who can join: enter an email, click Approve, and the instructions to send them are copied for you. The list shows who has joined, and Withdraw takes back an approval that hasn’t been used.',
+    'Rowan on your iPhone now has every section: People, Tickets, Links, Dashboards, Toolbox and Brand sit under More, and the phone hides the same sections you hid here. It fits every iPhone screen, and when there’s room (an unfolded phone, an iPad, landscape) it switches to a sidebar with the list beside what you opened. Change your password there under More.'
+  ],
   '0.43.0': [
     'Sync keeps your library the same on every PC you use. Sign in under Settings → Sync and your meetings, action items, Planner, tickets, people, links, toolbox and personal settings stay in step through your own private hub, which only your account can read. Everything still lives on this PC and works offline, and edits made on two PCs are merged rather than overwriting each other. Recordings from the last 7 days ride along too (change that in Settings → Sync); older ones stay on the PC that made them.',
     'Rowan on your iPhone. Open tylerjkells.github.io/rowan-aio in Safari, sign in with your sync account, and add it to your Home Screen. It has a Today view, your meetings with their summaries, notes and transcripts, your open action items and the Planner, and what you change there reaches your PCs within a minute. The link is in Settings → Sync.',
