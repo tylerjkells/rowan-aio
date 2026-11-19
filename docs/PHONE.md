@@ -51,7 +51,12 @@ desktop's Settings → Tabs are hidden here too.
 - **Tickets:** your ServiceNow incidents by plan (Now / Next / Waiting /
   Later), with the desktop's "They replied", "No reply yet" and "Quiet 30+
   days" flags; set a ticket's plan, next step and notes, read its history, open
-  it in ServiceNow.
+  it in ServiceNow. The **Reports** tab has the service report's snapshot (last
+  week, last month, month to date or 12 months), this month's status update,
+  the agenda summary and the monthly recap, under the names you gave them on
+  the PC. They're read-only and counted with the same shared code as the PC's
+  (`src/shared/teamStats.ts`, `ticketReports.ts`, `statusItems.ts`), so the
+  numbers match; Copy as text copies the agenda or the recap.
 - **Links** and **Dashboards:** open in Safari, which keeps its own sign-ins.
 - **Toolbox:** read guides, view images, copy saved queries, open template files.
 - **Brand:** the palettes; tap a color to copy its hex code.
