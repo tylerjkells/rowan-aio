@@ -1,4 +1,4 @@
-import { BUILT_IN_HUB, CONFIRM_EMAIL_PROBLEM, signUpProblem } from '../../src/shared/hub'
+import { BUILT_IN_HUB, signUpProblem } from '../../src/shared/hub'
 
 // ---------------------------------------------------------------------------
 // The phone's line to the sync hub: email + password sign-in (the session
@@ -123,6 +123,66 @@ async function token(cfg: HubConfig, grant: 'password' | 'refresh_token', body: 
   throw new HubError(msg, 'server', res.status)
 }
 
+/** a JWT's claims, unverified: only to name the account the hub just handed over */
+function claimsOf(jwt: string): { sub?: string; email?: string; iss?: string } | null {
+  try {
+    const part = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const bin = atob(part.padEnd(Math.ceil(part.length / 4) * 4, '='))
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))))
+  } catch {
+    return null
+  }
+}
+
+export interface AuthReturn {
+  /** signed in by the link */
+  hub: Hub | null
+  /** what went wrong with the link, for the sign-in screen */
+  problem: string | null
+  /** the link confirmed a new account's email */
+  confirmed: boolean
+}
+
+/**
+ * A link Supabase emailed (confirming a new account's email, for one) comes
+ * back to this app's address with the session, or what went wrong, after the
+ * #. Take it, sign in with it, and put the address back to Today. Null when
+ * the address holds nothing of the kind.
+ */
+export function takeAuthReturn(): AuthReturn | null {
+  const fragment = new URLSearchParams(location.hash.replace(/^#\/?/, ''))
+  const query = new URLSearchParams(location.search)
+  const get = (k: string): string | null => fragment.get(k) ?? query.get(k)
+  const access = fragment.get('access_token')
+  const refresh = fragment.get('refresh_token')
+  const error = get('error_description') ?? get('error')
+  if (!error && !(access && refresh)) return null
+  history.replaceState(null, '', `${location.pathname}#/today`)
+  if (error) {
+    const code = get('error_code') ?? ''
+    return {
+      hub: null,
+      confirmed: false,
+      problem: /expired|invalid/i.test(`${code} ${error}`)
+        ? 'That email link has expired or was already used. If you opened it before, your account is confirmed: sign in below.'
+        : `That email link didn’t work (${error.replace(/\+/g, ' ')}). Try signing in below.`
+    }
+  }
+  const cfg = hubConfig()
+  const claims = claimsOf(access as string)
+  // only a session from this app's own hub
+  if (!cfg || !claims?.sub || (claims.iss && !claims.iss.startsWith(cfg.url))) {
+    return { hub: null, confirmed: false, problem: 'That link is for a different hub. Sign in below.' }
+  }
+  const t: TokenResponse = {
+    access_token: access as string,
+    refresh_token: refresh as string,
+    expires_in: Number(fragment.get('expires_in')) || 3600,
+    user: { id: claims.sub, email: claims.email }
+  }
+  return { hub: Hub.started(cfg, t, claims.email ?? ''), problem: null, confirmed: fragment.get('type') === 'signup' }
+}
+
 export class Hub {
   private access: { token: string; expiresAt: number } | null = null
   private refreshing: Promise<string> | null = null
@@ -146,8 +206,11 @@ export class Hub {
     return Hub.started(cfg, await token(cfg, 'password', { email: email.trim(), password }), email)
   }
 
-  /** a new account with a password the person picks; the hub only takes approved emails */
-  static async signUp(email: string, password: string): Promise<Hub> {
+  /**
+   * A new account with a password the person picks; the hub only takes
+   * approved emails. Null: made, but the hub wants the email confirmed first.
+   */
+  static async signUp(email: string, password: string): Promise<Hub | null> {
     const cfg = hubConfig()
     if (!cfg) throw new HubError('No sync hub is set up yet.', 'server')
     const res = await call(`${cfg.url}/auth/v1/signup`, {
@@ -161,11 +224,11 @@ export class Hub {
     }
     const t = (await res.json()) as Partial<TokenResponse>
     // with "Confirm email" on, the hub answers with the user and no session
-    if (!t.access_token || !t.refresh_token || !t.user?.id) throw new HubError(CONFIRM_EMAIL_PROBLEM, 'auth')
+    if (!t.access_token || !t.refresh_token || !t.user?.id) return null
     return Hub.started(cfg, { ...t, expires_in: t.expires_in ?? 3600 } as TokenResponse, email)
   }
 
-  private static started(cfg: HubConfig, t: TokenResponse, email: string): Hub {
+  static started(cfg: HubConfig, t: TokenResponse, email: string): Hub {
     const session = { hubUrl: cfg.url, userId: t.user.id, email: t.user.email ?? email.trim(), refreshToken: t.refresh_token }
     write(SESSION, session)
     const hub = new Hub(cfg, session)

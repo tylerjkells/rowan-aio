@@ -53,10 +53,26 @@ export interface MeetingRow {
 export interface OpenAction {
   meetingId: string
   meetingTitle: string
+  /** when the meeting was */
+  createdAt: string
   index: number
   item: ActionItem
   /** YYYY-MM-DD when known */
   due: string | null
+}
+
+/** what you added to your Action items list (the rest stay in their meetings) */
+export function onList(items: OpenAction[]): OpenAction[] {
+  return items.filter((a) => a.item.tracked)
+}
+
+/** how far back the Action items screen offers items to add (the PC's too) */
+export const RECENT_DAYS = 7
+
+/** open items from the last week's meetings that aren't on your list */
+export function addable(items: OpenAction[]): OpenAction[] {
+  const since = Date.now() - RECENT_DAYS * 86_400_000
+  return items.filter((a) => !a.item.tracked && new Date(a.createdAt).getTime() >= since)
 }
 
 export type PlannerFile = { items: PlanItem[] }
@@ -197,6 +213,19 @@ export function setActionDone(hub: Hub, meetingId: string, index: number, task: 
   })
 }
 
+/** on or off your Action items list; the item stays in its meeting either way */
+export function setActionTracked(hub: Hub, meetingId: string, index: number, task: string, tracked: boolean): Promise<Meeting> {
+  return updateMeeting(hub, meetingId, (m) => {
+    const item = findItem(m, index, task)
+    if (!item || !!item.tracked === tracked) return null
+    if (tracked) {
+      item.tracked = true
+      delete item.dismissed
+    } else delete item.tracked
+    return m
+  })
+}
+
 export function setNotes(hub: Hub, meetingId: string, notes: string): Promise<Meeting> {
   return updateMeeting(hub, meetingId, (m) => {
     const next = notes.trim() ? notes : undefined
@@ -235,6 +264,7 @@ export function openActions(hub: Hub): Promise<{ value: OpenAction[]; stale: boo
         out.push({
           meetingId: r.id,
           meetingTitle: r.title,
+          createdAt: r.createdAt,
           index,
           item,
           due: item.dueDate ?? parseDueDate(item.due, r.createdAt)
@@ -248,12 +278,13 @@ export function openActions(hub: Hub): Promise<{ value: OpenAction[]; stale: boo
 // ---- recordings in the hub ------------------------------------------------------
 
 /** a playable address for a meeting's recording, when the hub has it */
-export async function recordingUrl(hub: Hub, meetingId: string): Promise<string | null> {
+/** a meeting's recording from the hub, and its kind (".webm" from a PC, ".m4a" from a phone) */
+export async function recordingFile(hub: Hub, meetingId: string): Promise<{ blob: Blob; ext: string } | null> {
   const doc = await getDoc<{ ext?: string }>(hub, 'audio', meetingId)
   if (!doc) return null
   const ext = ['.webm', '.wav', '.m4a'].includes(String(doc.body.ext)) ? String(doc.body.ext) : '.webm'
   const blob = await hub.download(`${hub.userId}/audio/${meetingId}${ext}`)
-  return URL.createObjectURL(blob)
+  return { blob, ext }
 }
 
 // ---- planner ---------------------------------------------------------------------

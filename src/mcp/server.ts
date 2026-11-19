@@ -40,7 +40,7 @@ interface Meeting {
   summary?: {
     tldr: string
     decisions: string[]
-    actionItems: { task: string; owner: string | null; due: string | null; done?: boolean }[]
+    actionItems: { task: string; owner: string | null; due: string | null; done?: boolean; tracked?: boolean; dismissed?: boolean }[]
     openQuestions: string[]
     topics?: { heading: string; notes: string[] }[]
   }
@@ -236,23 +236,29 @@ server.registerTool(
   'list_action_items',
   {
     description:
-      'Action items across all meetings, with task, owner, free-text due, done state, and the source meeting. "Me" as owner means the MeetingScribe user.',
+      'Action items from meetings, with task, owner, free-text due, done state, and the source meeting. "Me" as owner means the MeetingScribe user. By default only the items on the user\'s Action items list (the ones they chose to follow); every meeting summary lists more.',
     inputSchema: {
       owner: z.string().optional().describe('Filter to one owner name (case-insensitive)'),
-      open_only: z.boolean().optional().describe('Only items not yet done (default true)')
+      open_only: z.boolean().optional().describe('Only items not yet done (default true)'),
+      on_my_list_only: z
+        .boolean()
+        .optional()
+        .describe('Only items the user added to their Action items list (default true); false includes every item in every summary')
     }
   },
-  async ({ owner, open_only }) => {
+  async ({ owner, open_only, on_my_list_only }) => {
     const items: Record<string, unknown>[] = []
     for (const m of allMeetings()) {
       m.summary?.actionItems.forEach((a, index) => {
-        if ((open_only ?? true) && a.done) return
+        if ((open_only ?? true) && (a.done || a.dismissed)) return
+        if ((on_my_list_only ?? true) && !a.tracked) return
         if (owner && a.owner?.trim().toLowerCase() !== owner.trim().toLowerCase()) return
         items.push({
           task: a.task,
           owner: a.owner,
           due: a.due,
           done: a.done ?? false,
+          on_my_list: !!a.tracked,
           meetingId: m.id,
           meetingTitle: m.title,
           meetingDate: m.createdAt
@@ -302,7 +308,7 @@ server.registerTool(
       for (const item of m.summary?.actionItems ?? []) {
         if (item.owner && !['me', 'them'].includes(item.owner.trim().toLowerCase())) {
           names.add(item.owner)
-          if (!item.done) add(item.owner).openItems++
+          if (item.tracked && !item.done && !item.dismissed) add(item.owner).openItems++
         }
       }
       for (const n of names) add(n).meetings++

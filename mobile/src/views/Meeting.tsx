@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { parseDueDate } from '../../../src/shared/dates'
 import type { Meeting } from '../../../src/shared/types'
-import { HubError } from '../api'
 import { useApp } from '../App'
-import { loadMeeting, peek, recordingUrl, renameMeeting, setActionDone, setNotes } from '../data'
-import { BackIcon, Check, Problem, Spinner, Stale, clock, dayLabel, dueLabel, duration, stageNote, timeOf } from '../ui'
+import { loadMeeting, peek, renameMeeting, setActionDone, setActionTracked, setNotes } from '../data'
+import { RecordingPlayer } from './RecordingPlayer'
+import { BackIcon, Check, Problem, Stale, clock, dayLabel, dueLabel, duration, stageNote, timeOf } from '../ui'
 
 function speakerOf(m: Meeting, s: string | undefined): string {
   if (!s) return ''
@@ -23,7 +23,6 @@ export function MeetingView({ id, embedded = false }: { id: string; embedded?: b
   const [notesState, setNotesState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [renaming, setRenaming] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
-  const [audio, setAudio] = useState<{ state: 'idle' | 'loading' | 'ready' | 'missing'; url?: string }>({ state: 'idle' })
   const [showTranscript, setShowTranscript] = useState(false)
   const notesDirty = useRef(false)
   const saveTimer = useRef<number | null>(null)
@@ -48,10 +47,6 @@ export function MeetingView({ id, embedded = false }: { id: string; embedded?: b
       live = false
     }
   }, [hub, id, tick, fail])
-
-  useEffect(() => () => {
-    if (audio.url) URL.revokeObjectURL(audio.url)
-  }, [audio.url])
 
   async function saveNotes(text: string): Promise<void> {
     setNotesState('saving')
@@ -89,6 +84,20 @@ export function MeetingView({ id, embedded = false }: { id: string; embedded?: b
     }
   }
 
+  async function track(index: number, task: string, tracked: boolean): Promise<void> {
+    if (!meeting) return
+    const optimistic = structuredClone(meeting)
+    const item = optimistic.summary?.actionItems[index]
+    if (item) item.tracked = tracked
+    setMeeting(optimistic)
+    try {
+      setMeeting(await setActionTracked(hub, id, index, task, tracked))
+    } catch (err) {
+      setMeeting(meeting)
+      setError(fail(err))
+    }
+  }
+
   async function rename(): Promise<void> {
     setRenaming(false)
     if (!meeting || !titleDraft.trim() || titleDraft.trim() === meeting.title) return
@@ -96,20 +105,6 @@ export function MeetingView({ id, embedded = false }: { id: string; embedded?: b
       setMeeting(await renameMeeting(hub, id, titleDraft))
     } catch (err) {
       setError(fail(err))
-    }
-  }
-
-  async function playRecording(): Promise<void> {
-    setAudio({ state: 'loading' })
-    try {
-      const url = await recordingUrl(hub, id)
-      setAudio(url ? { state: 'ready', url } : { state: 'missing' })
-    } catch (err) {
-      if (err instanceof HubError && err.kind === 'missing') setAudio({ state: 'missing' })
-      else {
-        setAudio({ state: 'idle' })
-        setError(fail(err))
-      }
     }
   }
 
@@ -164,25 +159,7 @@ export function MeetingView({ id, embedded = false }: { id: string; embedded?: b
             {meeting.stage === 'error' && meeting.error && <p className="problem">{meeting.error}</p>}
           </header>
 
-          {meeting.hasAudio && (
-            <section className="player">
-              {audio.state === 'ready' && audio.url ? (
-                <audio controls src={audio.url} preload="metadata" />
-              ) : audio.state === 'missing' ? (
-                <p className="fine">The recording isn’t in the hub anymore; it’s on the PC that made it.</p>
-              ) : (
-                <button className="btn-secondary" disabled={audio.state === 'loading'} onClick={() => void playRecording()}>
-                  {audio.state === 'loading' ? (
-                    <>
-                      <Spinner /> Loading recording…
-                    </>
-                  ) : (
-                    'Play recording'
-                  )}
-                </button>
-              )}
-            </section>
-          )}
+          {meeting.hasAudio && <RecordingPlayer meetingId={id} onError={setError} />}
 
           {s?.tldr && <p className="tldr">{s.tldr}</p>}
 
@@ -192,8 +169,10 @@ export function MeetingView({ id, embedded = false }: { id: string; embedded?: b
               <div className="group">
                 {s.actionItems.map((a, i) =>
                   a.dismissed ? null : (
-                    <button key={i} className={`row check-row ${a.done ? 'done' : ''}`} onClick={() => void toggle(i, a.task, !a.done)} aria-pressed={!!a.done}>
-                      <Check done={!!a.done} />
+                    <div key={i} className={`row check-row ${a.done ? 'done' : ''}`}>
+                      <button className="check-hit" onClick={() => void toggle(i, a.task, !a.done)} aria-pressed={!!a.done} aria-label={a.done ? 'Mark not done' : 'Mark done'}>
+                        <Check done={!!a.done} />
+                      </button>
                       <span className="row-main">
                         <span className="row-title">{a.task}</span>
                         {(a.owner || a.due || a.dueDate) && (
@@ -202,7 +181,15 @@ export function MeetingView({ id, embedded = false }: { id: string; embedded?: b
                           </span>
                         )}
                       </span>
-                    </button>
+                      <button
+                        className={`track ${a.tracked ? 'on' : ''}`}
+                        onClick={() => void track(i, a.task, !a.tracked)}
+                        aria-pressed={!!a.tracked}
+                        aria-label={a.tracked ? `On your list: ${a.task}. Tap to take it off` : `Add to your list: ${a.task}`}
+                      >
+                        {a.tracked ? 'On list' : 'Add'}
+                      </button>
+                    </div>
                   )
                 )}
               </div>

@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ActionRollupItem } from '../../../shared/types'
-import { isOpenAction, isSnoozed, isStaleAction, todayIso } from '../../../shared/actions'
+import { isOpenAction, isSnoozed, RECENT_DAYS, todayIso } from '../../../shared/actions'
 import { DueEditor, formatWhen, isOverdue, OwnerEditor, useConfirm } from '../ui'
 import { ClickupPushDialog } from '../ClickupPush'
 
 /**
- * Action items across every meeting. The page is built around one idea: the
- * only things that should demand attention are the ones with a date, and
- * everything else reads best in the context of the meeting it came from.
- * So dated items lead, grouped by when; undated items follow, grouped by
- * meeting; and anything from a meeting more than two weeks old with no live
- * date is folded into a stale section to be reviewed in bulk. Beyond "done",
- * an item can be dismissed (it was never a task) or snoozed (not now).
+ * Your Action items list: only the items you chose to follow, yours or ones
+ * you're waiting on from others. Every meeting summary keeps all of its items;
+ * you add the ones that matter from there, or from "From recent meetings" at
+ * the bottom of this page, and Remove takes one off the list again (it stays
+ * in its meeting). Dated items lead, grouped by when; undated items follow,
+ * grouped by meeting. Beyond "done", an item can be snoozed (not now).
  */
 
 function shiftIso(days: number): string {
@@ -75,15 +74,13 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
   const [directory, setDirectory] = useState<string[]>([])
   const [hasClickup, setHasClickup] = useState(false)
   const [loaded, setLoaded] = useState(false)
-  const [who, setWho] = useState<WhoKey>('me')
+  const [who, setWho] = useState<WhoKey>('all')
   const [mode, setMode] = useState<Mode>(
     () => (localStorage.getItem('actionsView') as Mode) || 'due'
   )
   const [query, setQuery] = useState('')
   const [showDone, setShowDone] = useState(false)
-  const [showDismissed, setShowDismissed] = useState(false)
   const [showSnoozed, setShowSnoozed] = useState(false)
-  const [showStale, setShowStale] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
@@ -107,8 +104,6 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
     window.scribe.actions.list().then((list) => {
       setItems(list)
       setLoaded(true)
-      // default to "assigned to me", but not to an empty view
-      if (!list.some((i) => i.owners.includes('Me') && isOpenAction(i))) setWho('all')
     })
   }, [])
 
@@ -126,19 +121,30 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
     !needle ||
     [i.task, i.owner ?? '', i.meetingTitle, ...i.owners].join(' ').toLowerCase().includes(needle)
 
+  // the list is only what you added; every other item stays in its meeting
+  const listed = useMemo(() => items.filter((i) => i.tracked), [items])
+
   const scoped = useMemo(
-    () => items.filter((i) => matchesWho(i) && matchesQuery(i)),
+    () => listed.filter((i) => matchesWho(i) && matchesQuery(i)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, who, needle]
+    [listed, who, needle]
   )
+
+  // what you could add: open items from the last week's meetings, not on the list yet
+  const recent = useMemo(() => {
+    const since = Date.now() - RECENT_DAYS * 86_400_000
+    return items.filter(
+      (i) => !i.tracked && !i.done && !i.dismissed && new Date(i.createdAt).getTime() >= since && matchesWho(i) && matchesQuery(i)
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, who, needle])
 
   // ---- buckets -------------------------------------------------------------
 
   const open = useMemo(() => scoped.filter((i) => isOpenAction(i, today)), [scoped, today])
-  const live = useMemo(() => open.filter((i) => !isStaleAction(i, today)), [open, today])
-  const stale = useMemo(() => open.filter((i) => isStaleAction(i, today)).sort(byUrgency), [open, today])
+  // you added each of these yourself, so nothing folds away as stale
+  const live = open
   const done = useMemo(() => scoped.filter((i) => i.done && !i.dismissed), [scoped])
-  const dismissed = useMemo(() => scoped.filter((i) => i.dismissed), [scoped])
   const snoozed = useMemo(
     () => scoped.filter((i) => !i.done && !i.dismissed && isSnoozed(i, today)),
     [scoped, today]
@@ -155,7 +161,7 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
 
   const people = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const i of items) {
+    for (const i of listed) {
       if (!isOpenAction(i, today)) continue
       for (const o of i.owners) {
         if (o === 'Me') continue
@@ -163,16 +169,16 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
       }
     }
     // people with nothing open still exist (done items) but don't earn a chip
-    for (const i of items) for (const o of i.owners) if (o !== 'Me' && !counts.has(o)) counts.set(o, 0)
+    for (const i of listed) for (const o of i.owners) if (o !== 'Me' && !counts.has(o)) counts.set(o, 0)
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([name, count]) => ({ name, count }))
-  }, [items, today])
+  }, [listed, today])
 
   const chipPeople = people.slice(0, CHIP_LIMIT)
   const morePeople = people.slice(CHIP_LIMIT)
-  const myOpen = items.filter((i) => isOpenAction(i, today) && i.owners.includes('Me')).length
-  const unassignedOpen = items.filter((i) => isOpenAction(i, today) && i.owners.length === 0).length
+  const myOpen = listed.filter((i) => isOpenAction(i, today) && i.owners.includes('Me')).length
+  const unassignedOpen = listed.filter((i) => isOpenAction(i, today) && i.owners.length === 0).length
 
   const knownOwners = useMemo(() => {
     const names = new Set<string>(['Me', ...directory])
@@ -200,12 +206,13 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
     setBusy(false)
   }
 
-  async function setDismissed(list: ActionRollupItem[], value: boolean): Promise<void> {
+  /** on or off your list; the item itself stays in its meeting either way */
+  async function setTracked(list: ActionRollupItem[], value: boolean): Promise<void> {
     setBusy(true)
     for (const i of list) {
-      await window.scribe.actions.setState(i.meetingId, i.index, { dismissed: value })
+      await window.scribe.actions.setState(i.meetingId, i.index, { tracked: value })
     }
-    patchLocal(new Set(list.map(keyOf)), { dismissed: value })
+    patchLocal(new Set(list.map(keyOf)), value ? { tracked: true, dismissed: false } : { tracked: false })
     setBusy(false)
   }
 
@@ -230,14 +237,14 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
     await reload()
   }
 
-  async function dismissStale(): Promise<void> {
+  async function removeMany(list: ActionRollupItem[], where: string): Promise<void> {
     const ok = await confirm({
-      title: `Dismiss ${stale.length} stale ${stale.length === 1 ? 'item' : 'items'}?`,
-      body: `Everything still open from meetings more than two weeks old with no upcoming due date${who !== 'all' ? ', for the person selected' : ''}. Dismissed items are kept and can be restored from the Dismissed view; they don't count as done.`,
-      confirmLabel: 'Dismiss all'
+      title: `Take ${list.length} ${list.length === 1 ? 'item' : 'items'} off your list?`,
+      body: `Everything open ${where}. They stay in their meetings' summaries, where you can add them back.`,
+      confirmLabel: 'Remove'
     })
     if (!ok) return
-    await setDismissed(stale, true)
+    await setTracked(list, false)
   }
 
   // ---- selection -----------------------------------------------------------
@@ -273,11 +280,11 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
     setSelected(new Set())
   }
 
-  async function bulk(action: 'done' | 'dismiss' | 'snooze-week'): Promise<void> {
+  async function bulk(action: 'done' | 'remove' | 'snooze-week'): Promise<void> {
     const list = selectedItems
     if (list.length === 0) return
     if (action === 'done') await setDone(list, true)
-    else if (action === 'dismiss') await setDismissed(list, true)
+    else if (action === 'remove') await setTracked(list, false)
     else await setSnooze(list, shiftIso(7))
     leaveSelect()
   }
@@ -402,10 +409,10 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
                 </button>
                 <button
                   className="ai-action"
-                  onClick={() => setDismissed([item], true)}
-                  title="Not a real task, or not yours. Kept under Dismissed, not counted as done"
+                  onClick={() => setTracked([item], false)}
+                  title="Take it off your list. It stays in its meeting's summary"
                 >
-                  Dismiss
+                  Remove
                 </button>
               </>
             )}
@@ -414,9 +421,13 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
                 Unsnooze
               </button>
             )}
-            {state === 'dismissed' && (
-              <button className="ai-action" onClick={() => setDismissed([item], false)}>
-                Restore
+            {state === 'done' && (
+              <button
+                className="ai-action"
+                onClick={() => setTracked([item], false)}
+                title="Take it off your list. It stays in its meeting's summary"
+              >
+                Remove
               </button>
             )}
           </span>
@@ -497,10 +508,10 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
                 g.items.some((i) => isOpenAction(i, today)) && (
                   <button
                     className="link-btn ai-section-action"
-                    onClick={() => setDismissed(g.items.filter((i) => isOpenAction(i, today)), true)}
-                    title="Dismiss every open item from this meeting"
+                    onClick={() => removeMany(g.items.filter((i) => isOpenAction(i, today)), `from “${g.title}”`)}
+                    title="Take every open item from this meeting off your list"
                   >
-                    Dismiss all
+                    Remove all
                   </button>
                 )
               )}
@@ -512,8 +523,66 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
     })
 
   const nothingOpen = open.length === 0
-  const nothingShown =
-    nothingOpen && !(showDone && done.length) && !(showDismissed && dismissed.length) && !(showSnoozed && snoozed.length)
+  const nothingShown = nothingOpen && !(showDone && done.length) && !(showSnoozed && snoozed.length)
+
+  /** one item you could add: what, who, when, where from, and Add */
+  const renderSuggestion = (item: ActionRollupItem): React.JSX.Element => (
+    <div className="ai-row suggest" key={keyOf(item)}>
+      <div className="ai-body">
+        <span className="ai-task">{item.task}</span>
+        <span className="ai-meta">
+          {item.owners.length > 0 && <span className="ai-owner-plain">{item.owners.join(' + ')}</span>}
+          {item.due && <span className={`action-due ${isOverdue(item) ? 'overdue' : ''}`}>{item.due}</span>}
+        </span>
+      </div>
+      <span className="ai-actions shown">
+        <button className="btn ai-add" disabled={busy} onClick={() => setTracked([item], true)}>
+          + Add to my list
+        </button>
+      </span>
+    </div>
+  )
+
+  const recentGroups = byMeeting(recent)
+  const recentOpen = !isCollapsed('recent', listed.length === 0)
+  const recentSection = recent.length > 0 && (
+    <section className="section ai-section ai-recent">
+      <div className="ai-section-head quiet">
+        <button className="cu-section-head" onClick={() => toggleCollapsed('recent')} aria-expanded={recentOpen}>
+          <span className={`cu-section-chevron ${recentOpen ? 'open' : ''}`}>›</span>
+          <span className="card-subhead">From recent meetings · {recent.length}</span>
+        </button>
+        <span className="ai-section-tools">
+          <span className="ai-section-note">the last {RECENT_DAYS} days, not on your list</span>
+        </span>
+      </div>
+      {recentOpen && (
+        <div className="ai-meetings">
+          {recentGroups.map((g) => (
+            <div className="ai-meeting" key={`recent:${g.meetingId}`}>
+              <div className="ai-meeting-head">
+                <span className="ai-meeting-toggle static">
+                  <span className="ai-meeting-title">{g.title}</span>
+                  <span className="ai-meeting-when">{formatMeetingDay(g.createdAt)}</span>
+                </span>
+                <span className="ai-section-tools">
+                  <button className="link-btn ai-section-action" onClick={() => onOpen(g.meetingId)}>
+                    Open meeting
+                  </button>
+                  {g.items.length > 1 && (
+                    <button className="link-btn ai-section-action" disabled={busy} onClick={() => setTracked(g.items, true)}>
+                      Add all {g.items.length}
+                    </button>
+                  )}
+                </span>
+              </div>
+              <div className="ai-list">{g.items.map(renderSuggestion)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
 
   return (
     <>
@@ -581,7 +650,7 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
             className={`btn ${selecting ? 'btn-primary' : 'btn-ghost'}`}
             aria-pressed={selecting}
             onClick={() => (selecting ? leaveSelect() : setSelecting(true))}
-            title="Tick several items, then mark them done, dismiss, or snooze together"
+            title="Tick several items, then mark them done, remove them, or snooze them together"
           >
             {selecting ? 'Done selecting' : 'Select'}
           </button>
@@ -655,15 +724,6 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
             Snoozed · {snoozed.length}
           </button>
         )}
-        {dismissed.length > 0 && (
-          <button
-            className={`who-chip who-state ${showDismissed ? 'active' : ''}`}
-            aria-pressed={showDismissed}
-            onClick={() => setShowDismissed(!showDismissed)}
-          >
-            Dismissed · {dismissed.length}
-          </button>
-        )}
         {done.length > 0 && (
           <button
             className={`who-chip who-state ${showDone ? 'active' : ''}`}
@@ -683,8 +743,8 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
           <button className="btn btn-primary" disabled={busy || selectedItems.length === 0} onClick={() => bulk('done')}>
             Mark done
           </button>
-          <button className="btn" disabled={busy || selectedItems.length === 0} onClick={() => bulk('dismiss')}>
-            Dismiss
+          <button className="btn" disabled={busy || selectedItems.length === 0} onClick={() => bulk('remove')}>
+            Remove from list
           </button>
           <button className="btn" disabled={busy || selectedItems.length === 0} onClick={() => bulk('snooze-week')}>
             Snooze a week
@@ -695,17 +755,29 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
         </div>
       )}
 
-      {loaded && nothingShown && (
+      {loaded && listed.length === 0 && !needle ? (
         <div className="empty-state ai-empty">
-          <h2>{needle ? 'Nothing matches' : 'All caught up'}</h2>
+          <h2>Your list is empty</h2>
           <p>
-            {needle
-              ? `No open item matches “${query.trim()}”.`
-              : who === 'all'
-                ? 'Every action item is done, dismissed, or snoozed.'
-                : 'Nothing open here. Switch person, or show snoozed and dismissed items.'}
+            Add the action items you want to follow: yours, or ones you&apos;re waiting on from
+            someone else. Every meeting&apos;s summary keeps all of its items with an Add to my list
+            button, and this week&apos;s are below.
           </p>
         </div>
+      ) : (
+        loaded &&
+        nothingShown && (
+          <div className="empty-state ai-empty">
+            <h2>{needle ? 'Nothing matches' : 'All caught up'}</h2>
+            <p>
+              {needle
+                ? `Nothing on your list matches “${query.trim()}”.`
+                : who === 'all'
+                  ? 'Everything on your list is done or snoozed.'
+                  : 'Nothing open here. Switch person, or show snoozed items.'}
+            </p>
+          </div>
+        )
       )}
 
       {mode === 'due' ? (
@@ -733,35 +805,6 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
         )
       )}
 
-      {stale.length > 0 && (
-        <section className="section ai-section ai-stale">
-          <div className="ai-section-head quiet">
-            <button className="cu-section-head" onClick={() => setShowStale(!showStale)} aria-expanded={showStale}>
-              <span className={`cu-section-chevron ${showStale ? 'open' : ''}`}>›</span>
-              <span className="card-subhead">Stale · {stale.length}</span>
-            </button>
-            <span className="ai-section-tools">
-              <span className="ai-section-note">
-                from meetings over two weeks old, no upcoming date
-              </span>
-              {selecting && showStale ? (
-                <button
-                  className="link-btn ai-section-action"
-                  onClick={() => selectMany(stale, !stale.every((i) => selected.has(keyOf(i))))}
-                >
-                  {stale.every((i) => selected.has(keyOf(i))) ? 'Deselect all' : 'Select all'}
-                </button>
-              ) : (
-                <button className="link-btn ai-section-action" onClick={dismissStale} disabled={busy}>
-                  Dismiss all
-                </button>
-              )}
-            </span>
-          </div>
-          {showStale && <div className="ai-meetings">{meetingGroups(byMeeting(stale), 'stale')}</div>}
-        </section>
-      )}
-
       {showSnoozed && snoozed.length > 0 && (
         <section className="section ai-section">
           {sectionHead('snoozed', 'Snoozed', snoozed.length, snoozed, { tone: 'quiet' })}
@@ -775,15 +818,6 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
         </section>
       )}
 
-      {showDismissed && dismissed.length > 0 && (
-        <section className="section ai-section">
-          {sectionHead('dismissed', 'Dismissed', dismissed.length, dismissed, { tone: 'quiet' })}
-          {!isCollapsed('dismissed', true) && (
-            <div className="ai-meetings">{meetingGroups(byMeeting(dismissed), 'dismissed')}</div>
-          )}
-        </section>
-      )}
-
       {showDone && done.length > 0 && (
         <section className="section ai-section">
           {sectionHead('done', 'Done', done.length, done, { tone: 'quiet' })}
@@ -792,6 +826,8 @@ export function ActionsView({ onOpen }: { onOpen: (id: string) => void }): React
           )}
         </section>
       )}
+
+      {recentSection}
 
       {pushing && (
         <ClickupPushDialog

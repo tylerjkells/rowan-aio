@@ -102,6 +102,24 @@ test('a transcript changed on both sides is taken whole from one side', () => {
   assert.deepEqual(merge3(base, local, remote, 'remote'), remote)
 })
 
+test('action items changed in place on both sides merge item by item', () => {
+  const item = (task: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({ task, owner: 'Me', due: null, ...extra })
+  const base = { summary: { actionItems: [item('a'), item('b'), item('c')] } }
+  const local = { summary: { actionItems: [item('a', { done: true }), item('b'), item('c')] } }
+  const remote = { summary: { actionItems: [item('a'), item('b'), item('c', { tracked: true })] } }
+  assert.deepEqual(merge3(base, local, remote, 'remote'), {
+    summary: { actionItems: [item('a', { done: true }), item('b'), item('c', { tracked: true })] }
+  })
+})
+
+test('a re-summarized list of action items is taken whole from one side', () => {
+  const item = (task: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({ task, owner: null, due: null, ...extra })
+  const base = { actionItems: [item('a'), item('b')] }
+  const local = { actionItems: [item('a', { tracked: true }), item('b')] }
+  const remote = { actionItems: [item('x'), item('y')] }
+  assert.deepEqual(merge3(base, local, remote, 'remote'), remote)
+})
+
 test('sanitize removes what Postgres jsonb rejects', () => {
   assert.equal(sanitize('a\u0000b'), 'ab')
   assert.equal(sanitize('x\ud800y'), 'x�y')

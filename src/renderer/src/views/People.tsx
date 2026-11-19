@@ -1016,7 +1016,10 @@ export function PersonView({
           )}
         </div>
         {visibleItems.length === 0 ? (
-          <p className="today-quiet">Nothing on their plate from your meetings.</p>
+          <p className="today-quiet">
+            Nothing of theirs on your Action items list. Add their items from a meeting&apos;s summary
+            to follow them here.
+          </p>
         ) : (
           <div className="rollup-list">
             {visibleItems.map((item) => (

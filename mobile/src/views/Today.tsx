@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PlanItem } from '../../../src/shared/types'
 import { useApp } from '../App'
-import { listMeetings, loadPlanner, openActions, peek, type MeetingRow, type OpenAction } from '../data'
+import { listMeetings, loadPlanner, onList, openActions, peek, type MeetingRow, type OpenAction } from '../data'
 import { pending, type PendingRecording } from '../recorder'
 import { ChevronIcon, MicIcon, Problem, Stale, dayLabel, dueLabel, duration, localDay, stageNote, timeOf } from '../ui'
 
@@ -42,8 +42,10 @@ export function TodayView(): React.JSX.Element {
   const todayIso = localDay()
   const weekAhead = localDay(7)
   // what's coming up this week; long-overdue items would crowd it out, so they get a count of their own
-  const due = (actions ?? []).filter((a) => a.due && a.due >= todayIso && a.due <= weekAhead).slice(0, 5)
-  const overdue = (actions ?? []).filter((a) => a.due && a.due < todayIso).length
+  // only your Action items list: what you added from meetings
+  const listed = actions ? onList(actions) : null
+  const due = (listed ?? []).filter((a) => a.due && a.due >= todayIso && a.due <= weekAhead).slice(0, 5)
+  const overdue = (listed ?? []).filter((a) => a.due && a.due < todayIso).length
   const now = (plan ?? []).filter((p) => p.status === 'now').sort((a, b) => a.order - b.order)
   // phone recordings not yet back from the PC as a finished meeting
   const waiting = (meetings ?? []).filter(
@@ -112,9 +114,9 @@ export function TodayView(): React.JSX.Element {
       <section>
         <div className="section-head">
           <h2 className="section-title">Due soon</h2>
-          {actions && actions.length > 0 && (
+          {listed && listed.length > 0 && (
             <button className="link" onClick={() => go('/actions')}>
-              All {actions.length}
+              All {listed.length}
             </button>
           )}
         </div>
@@ -127,7 +129,13 @@ export function TodayView(): React.JSX.Element {
         {actions === null ? (
           <div className="group skeleton" />
         ) : due.length === 0 ? (
-          <p className="empty">{overdue > 0 ? 'Nothing else due this week.' : 'Nothing due this week.'}</p>
+          <p className="empty">
+            {listed && listed.length === 0
+              ? 'Your list is empty. Add action items from a meeting, or under Actions.'
+              : overdue > 0
+                ? 'Nothing else due this week.'
+                : 'Nothing due this week.'}
+          </p>
         ) : (
           <div className="group">
             {due.map((a) => (

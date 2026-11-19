@@ -14,7 +14,7 @@ import { ChevronIcon, formatDuration, formatWhen, isOverdue, MicIcon, StageBadge
 import { ClickupCompleteDialog } from '../ClickupComplete'
 import { PrepBody, PrepDialog } from '../PrepDialog'
 import { MorningBrief } from '../MorningBrief'
-import { isOpenAction, isStaleAction } from '../../../shared/actions'
+import { isListedAction } from '../../../shared/actions'
 
 /**
  * The location field on virtual/hybrid events often carries platform
@@ -263,17 +263,12 @@ export function TodayView({
   }, [events])
 
   const todayMeetings = useMemo(() => meetings.filter((m) => isToday(m.createdAt)), [meetings])
-  // stale items (old meeting, nothing due) stay on the Action items page;
-  // Today only shows what still plausibly needs doing
+  // your Action items list: only what you added, soonest due first
   const myOpenActions = useMemo(
     () =>
       actions
-        .filter((a) => isOpenAction(a) && !isStaleAction(a) && a.owners.includes('Me'))
+        .filter((a) => isListedAction(a))
         .sort((a, b) => ((a.dueDate ?? '9999') < (b.dueDate ?? '9999') ? -1 : 1)),
-    [actions]
-  )
-  const myStaleCount = useMemo(
-    () => actions.filter((a) => isOpenAction(a) && isStaleAction(a) && a.owners.includes('Me')).length,
     [actions]
   )
   const timedEvents = events.filter((e) => !e.allDay)
@@ -529,9 +524,15 @@ export function TodayView({
         </section>
 
         <section className="today-section">
-          <div className="card-subhead">Your open action items</div>
+          <div className="card-subhead">Your action items</div>
           {myOpenActions.length === 0 ? (
-            <p className="today-quiet">Nothing open with your name on it.</p>
+            <p className="today-quiet">
+              Nothing on your list. Add the action items you want to follow from a meeting&apos;s summary, or{' '}
+              <button className="link-btn" onClick={onActions}>
+                from this week&apos;s meetings
+              </button>
+              .
+            </p>
           ) : (
             <>
               <div className="rollup-list">
@@ -560,10 +561,9 @@ export function TodayView({
                   </div>
                 ))}
               </div>
-              {(myOpenActions.length > 6 || myStaleCount > 0) && (
+              {myOpenActions.length > 6 && (
                 <button className="link-btn today-more" onClick={onActions}>
-                  {myOpenActions.length > 6 ? `All ${myOpenActions.length} open items` : 'All open items'}
-                  {myStaleCount > 0 ? ` · ${myStaleCount} stale to review` : ''}
+                  All {myOpenActions.length} on your list
                 </button>
               )}
             </>

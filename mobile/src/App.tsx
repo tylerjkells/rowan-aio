@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Hub, HubError } from './api'
+import { Hub, HubError, takeAuthReturn } from './api'
 import { clearCache, loadSettings, peek, type PhoneSettings } from './data'
 import { ActionsIcon, MeetingsIcon, MicIcon, MoreIcon, TodayIcon, WIDE, errorText, useMedia } from './ui'
 import { visibleSections } from './sections'
@@ -85,11 +85,14 @@ const TABS = [
 ] as const
 
 export default function App(): React.JSX.Element {
-  const [hub, setHub] = useState<Hub | null>(() => Hub.restore())
+  // first, before the address is read as a screen: a link Supabase emailed
+  const [authReturn] = useState(() => takeAuthReturn())
+  const [hub, setHub] = useState<Hub | null>(() => authReturn?.hub ?? Hub.restore())
   const [route, setRoute] = useState<Route>(() => parse(location.hash))
+  const [welcome, setWelcome] = useState(() => !!authReturn?.confirmed)
   const [settings, setSettings] = useState<PhoneSettings | null>(() => peek<PhoneSettings>('settings'))
   const [tick, setTick] = useState(0)
-  const [signedOutNote, setSignedOutNote] = useState<string | null>(null)
+  const [signedOutNote, setSignedOutNote] = useState<string | null>(() => authReturn?.problem ?? null)
   const recording = useRecording()
   const wide = useMedia(WIDE)
 
@@ -101,6 +104,11 @@ export default function App(): React.JSX.Element {
   const shownHash = useRef(location.hash)
   useEffect(() => {
     const onHash = (e: HashChangeEvent): void => {
+      // a link Supabase emailed, opened where Rowan is already showing: start over to take it
+      if (/(^|[#&/])(access_token|error_description)=/.test(location.hash)) {
+        location.reload()
+        return
+      }
       scrolls.current.set(new URL(e.oldURL).hash, window.scrollY)
       setRoute(parse(location.hash))
     }
@@ -274,6 +282,16 @@ export default function App(): React.JSX.Element {
             className={`screen ${route.name === 'today' ? 'screen-wide' : ''}`}
             key={'id' in route ? `${route.name}-${route.id}` : route.name}
           >
+            {welcome && (
+              <div className="notice welcome" role="status">
+                <p>
+                  Your email is confirmed and you’re signed in. On your PC, open Rowan → Settings → Sync and choose <b>I have an account</b>, with the same email and password.
+                </p>
+                <button className="link" onClick={() => setWelcome(false)}>
+                  OK
+                </button>
+              </div>
+            )}
             {single(route)}
           </main>
         )}

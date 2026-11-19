@@ -157,6 +157,15 @@ function mergeSet(base: unknown[] | undefined, local: unknown[], remote: unknown
  * undefined when the two never shared a version (the first sync of a PC
  * that already had data): then anything present on only one side is kept.
  */
+/** two lists of action items holding the same tasks in the same order */
+function sameTasks(a: unknown[], b: unknown[]): boolean {
+  return (
+    a.length > 0 &&
+    a.length === b.length &&
+    a.every((x, i) => isObj(x) && isObj(b[i]) && typeof x.task === 'string' && x.task === b[i].task)
+  )
+}
+
 export function merge3(base: unknown, local: unknown, remote: unknown, prefer: Prefer): unknown {
   if (equal(local, remote)) return local
   if (base !== undefined) {
@@ -186,6 +195,13 @@ export function merge3(base: unknown, local: unknown, remote: unknown, prefer: P
     }
     if (primitiveSet(local) && primitiveSet(remote) && (!b || primitiveSet(b))) {
       return mergeSet(b, local, remote)
+    }
+    // a meeting's action items, the same ones on every side, with flags
+    // changed in place (one marked done here, another added to the list
+    // there): merge them item by item. Anything else, such as a transcript
+    // or a re-summarized list, is still taken whole from one side.
+    if (b && sameTasks(b, local) && sameTasks(b, remote)) {
+      return local.map((x, i) => merge3(b[i], x, remote[i], prefer))
     }
     if (b && isPrefix(b, local) && isPrefix(b, remote)) {
       const remoteAdds = remote.slice(b.length)

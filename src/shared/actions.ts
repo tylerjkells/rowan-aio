@@ -6,6 +6,8 @@
 // ---------------------------------------------------------------------------
 
 export interface ActionState {
+  /** on your Action items list: only what you added there counts as yours to follow */
+  tracked?: boolean
   done?: boolean
   dismissed?: boolean
   /** ISO date; hidden from open lists until this day arrives */
@@ -25,6 +27,14 @@ export function isSnoozed(item: ActionState, today: string = todayIso()): boolea
 export function isOpenAction(item: ActionState, today: string = todayIso()): boolean {
   return !item.done && !item.dismissed && !isSnoozed(item, today)
 }
+
+/** open and on your list: what Today, the list, reminders and the brief count */
+export function isListedAction(item: ActionState, today: string = todayIso()): boolean {
+  return !!item.tracked && isOpenAction(item, today)
+}
+
+/** how far back the Action items page offers items to add */
+export const RECENT_DAYS = 7
 
 /** items from meetings older than this, with no live due date, are stale */
 export const STALE_DAYS = 14

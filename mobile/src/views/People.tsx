@@ -146,7 +146,7 @@ export function PersonView({ name, embedded = false }: { name: string; embedded?
 
   const d: PersonDetails = dir[name.toLowerCase()] ?? {}
   const reports = names.filter((n) => (dir[n.toLowerCase()]?.reportsTo ?? '').toLowerCase() === name.toLowerCase())
-  const theirs = (actions ?? []).filter((a) => owns(a.item.owner, name)).slice(0, 8)
+  const theirs = (actions ?? []).filter((a) => a.item.tracked && owns(a.item.owner, name)).slice(0, 8)
   const together = (meetings ?? [])
     .filter((m) => (m.attendees ?? []).some((a) => a.toLowerCase() === name.toLowerCase()))
     .slice(0, 8)

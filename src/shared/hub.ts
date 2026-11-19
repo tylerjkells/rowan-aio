@@ -41,9 +41,15 @@ export function signUpProblem(status: number, msg: string, email: string): strin
   return msg
 }
 
-/** the account was made, but the hub wants the email confirmed first, which it can't send */
-export const CONFIRM_EMAIL_PROBLEM =
-  'The hub wants this email confirmed before you can sign in, and it can’t send the confirmation. Ask the person who runs your Rowan hub to turn off “Confirm email” in Supabase, then sign in.'
+/**
+ * The account was made, but the hub wants the email confirmed before it lets
+ * the person in (Supabase's "Confirm email" is on). Opening the emailed link
+ * confirms the account even when the page it lands on is an error page (the
+ * project's Site URL decides where it goes).
+ */
+export function confirmEmailNote(email: string): string {
+  return `Almost done: check ${email.trim()} for an email from Supabase (it may be in Junk) and open its confirmation link. If that link opens an error page, your account is still confirmed. Then sign in here with the same password.`
+}
 
 /** someone approved to create an account (Settings → Sync, for the hub's administrators) */
 export interface SignupApproval {

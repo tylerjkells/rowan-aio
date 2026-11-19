@@ -1,7 +1,7 @@
 import { listMeetings, readMeeting } from './store'
 import { actionRollup, identityContext } from './identity'
 import type { ActionRollupItem, SeriesData } from '../shared/types'
-import { isOpenAction } from '../shared/actions'
+import { isListedAction } from '../shared/actions'
 
 // ---------------------------------------------------------------------------
 // Meeting series: meetings sharing a title form a thread. Recordings inherit
@@ -48,7 +48,7 @@ export function seriesData(title: string): SeriesData {
       decisions.push({ meetingId: m.id, createdAt: m.createdAt, items: m.summary.decisions })
     }
     for (const rollup of actionRollup(m, ctx)) {
-      if (isOpenAction(rollup)) openActions.push(rollup)
+      if (isListedAction(rollup)) openActions.push(rollup)
     }
   }
 

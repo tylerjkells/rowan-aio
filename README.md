@@ -59,9 +59,10 @@ module of several.)
   when you start the next one. Planner work is offered as suggestions (finished
   this month for Completed, in Now or Waiting for In Progress, newly added for
   New Requests): nothing goes in until you click Add, and × stops suggesting it.
-- **Action items** — every follow-up from every meeting in one place: dated
-  items grouped by when, undated ones grouped by meeting, stale ones folded
-  away for a bulk review. Done, dismissed, and snoozed are kept apart; select
+- **Action items** — your list of follow-ups, and only the ones you chose:
+  every meeting's summary keeps all of its items with an *Add to my list*
+  button, and the page offers this week's items to add. Dated items are grouped
+  by when, undated ones by meeting; done and snoozed are kept apart; select
   several to act at once; push any item to ClickUp.
 - **Links** — the org link hub, grouped by category with pinned favorites that
   also appear on Today; compact list or thumbnail cards (upload a screenshot
@@ -97,7 +98,7 @@ module of several.)
 - **Summarize** with the Claude API (pay-per-use — typically 1–5 cents per meeting with Haiku): TL;DR, key points, decisions, action items with owners/due dates, and open questions. Meetings are auto-titled from their content.
 - **Claude app connection** — one click in Settings links your library to Claude Desktop through a local, read-only MCP server. Claude can then answer questions about your meetings, your tickets, the team's queue, the status update and your Planner, build reports and spreadsheets from them, or create tasks in tools you've connected to Claude (like ClickUp).
 - **Ask anything** — a floating assistant on every page. On a meeting page it answers from that meeting's transcript; anywhere else it answers across your whole library ("What did we decide about X?", "What has David committed to?") with citations that jump to the exact transcript moment.
-- **Action items rollup** — every follow-up across all meetings in one checklist, with done-tracking.
+- **Action items list** — the follow-ups you added from your meetings, yours or ones you're waiting on, in one checklist with done-tracking.
 - **People** — a page per colleague: every meeting together, everything they own, and everything you owe them, assembled automatically from owners, attendees, and named speakers.
 - **Weekly digest** — a Monday prompt with last week's meetings, your open items, anything languishing 2+ weeks, and who owes what.
 - **Meeting series** — recurring meetings self-assemble into threads (recordings inherit their calendar event's title): decisions over time, everything still open across the series, and the full occurrence history.

@@ -35,9 +35,14 @@ desktop's Settings → Tabs are hidden here too.
 - **Meetings:** search titles, summaries and notes; open one for the summary,
   action items (check them off), notes (edit them; they autosave), discussion
   topics, decisions, open questions and the transcript. Rename it by tapping
-  the title. "Play recording" plays the audio when the hub still has it.
-- **Action items:** every open one across your meetings, grouped overdue /
-  this week / later / no date, with a Mine filter.
+  the title. Add an action item to your list with its Add button. "Play
+  recording" plays the audio when the hub still has it; a PC's recording
+  (WebM, which Safari won't play) is repackaged on the phone into Apple's CAF
+  container, the same audio with nothing re-encoded, and decoded to WAV as a
+  last resort (`mobile/src/playable.ts`).
+- **Action items:** your list (only what you added on a PC or here), grouped
+  overdue / this week / later / no date, with a Mine filter; Remove takes one
+  off. Below it, open items from the last week's meetings to add.
 - **Planner:** Now / Next / Waiting / Later / Done; add items, tick steps, add
   a progress note, move or finish an item.
 - **People:** the team directory; a person's page has Email, Call and Teams

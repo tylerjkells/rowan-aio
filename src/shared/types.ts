@@ -76,6 +76,12 @@ export interface ActionItem {
   dismissed?: boolean
   /** ISO date; the item hides from open lists until then */
   snoozedUntil?: string | null
+  /**
+   * on your Action items list. Only you add an item (from its meeting, or from
+   * the list's "From recent meetings"); every item stays in its meeting's
+   * summary either way.
+   */
+  tracked?: boolean
 }
 
 /** one Q&A exchange in "ask about this meeting" */
@@ -124,6 +130,8 @@ export interface ActionRollupItem {
   dismissed: boolean
   snoozedUntil?: string
   clickupUrl?: string
+  /** on your Action items list (see ActionItem.tracked) */
+  tracked: boolean
 }
 
 export interface SummaryTopic {

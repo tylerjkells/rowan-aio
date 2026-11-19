@@ -117,7 +117,7 @@ const api = {
     signIn: (email: string, password: string): Promise<SyncStatus> =>
       ipcRenderer.invoke('sync:signIn', email, password),
     /** create an account (the email must be approved on the hub) and sign in */
-    signUp: (email: string, password: string): Promise<SyncStatus> =>
+    signUp: (email: string, password: string): Promise<{ confirm: boolean; status: SyncStatus }> =>
       ipcRenderer.invoke('sync:signUp', email, password),
     signOut: (): Promise<SyncStatus> => ipcRenderer.invoke('sync:signOut'),
     now: (): Promise<SyncStatus> => ipcRenderer.invoke('sync:now'),
@@ -640,7 +640,7 @@ const api = {
     setState: (
       meetingId: string,
       index: number,
-      patch: { dismissed?: boolean; snoozedUntil?: string | null }
+      patch: { tracked?: boolean; dismissed?: boolean; snoozedUntil?: string | null }
     ): Promise<Meeting | null> => ipcRenderer.invoke('actions:setState', meetingId, index, patch),
     toggle: (meetingId: string, index: number): Promise<boolean> =>
       ipcRenderer.invoke('actions:toggle', meetingId, index),

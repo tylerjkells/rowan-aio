@@ -4,13 +4,13 @@ import { join } from 'path'
 import { getEventsBetween, getTodayEvents } from './calendar'
 import { readMailbox } from './mail'
 import { listMeetings, readMeeting } from './store'
-import { actionRollup, identityContext, SELF } from './identity'
+import { actionRollup, identityContext } from './identity'
 import { fetchClickupTasks } from './clickup'
 import { getSettings } from './settings'
 import { aiChat, aiReady } from './ai'
 import { stripDashes, VOICE_RULES } from './voice'
 import type { ActionRollupItem, BriefSlot, DailyRecap, MailMessage, RecapMail } from '../shared/types'
-import { isOpenAction } from '../shared/actions'
+import { isListedAction } from '../shared/actions'
 
 // ---------------------------------------------------------------------------
 // The day's briefs, pulled together from everything Rowan already holds — the
@@ -180,9 +180,9 @@ export async function buildDailyRecap(slotOverride?: BriefSlot): Promise<DailyRe
         tldr: m.summary?.tldr ?? null
       })
     }
+    // your Action items list: what you chose to follow, yours or someone else's
     for (const rollup of actionRollup(m, ctx)) {
-      if (!isOpenAction(rollup)) continue
-      if (rollup.owners.includes(SELF)) myOpen.push(rollup)
+      if (isListedAction(rollup)) myOpen.push(rollup)
     }
   }
   myOpen.sort((a, b) => (a.dueDate ?? '9999') < (b.dueDate ?? '9999') ? -1 : 1)

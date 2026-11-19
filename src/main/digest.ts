@@ -1,7 +1,7 @@
 import { listMeetings, readMeeting } from './store'
 import { actionRollup, identityContext, SELF } from './identity'
 import type { ActionRollupItem, WeeklyDigest } from '../shared/types'
-import { isOpenAction } from '../shared/actions'
+import { isListedAction } from '../shared/actions'
 
 // ---------------------------------------------------------------------------
 // Weekly digest: a Monday-morning review assembled locally from the library —
@@ -37,7 +37,7 @@ export function buildDigest(): WeeklyDigest {
     }
 
     for (const rollup of actionRollup(m, ctx)) {
-      if (!isOpenAction(rollup)) continue
+      if (!isListedAction(rollup)) continue
       if (rollup.owners.includes(SELF)) myOpen.push(rollup)
       for (const owner of rollup.owners) {
         if (owner === SELF) continue

@@ -996,7 +996,14 @@ export function MeetingView({
       {meeting.summary && (
         <>
           {meeting.summary.actionItems.length > 0 && (
-            <Collapse label="Action items" meta={`${meeting.summary.actionItems.length}`}>
+            <Collapse
+              label="Action items"
+              meta={(() => {
+                const n = meeting.summary.actionItems.length
+                const listed = meeting.summary.actionItems.filter((a) => a.tracked).length
+                return listed ? `${n} · ${listed} on your list` : `${n}`
+              })()}
+            >
               <div>
                 {meeting.summary.actionItems.map((a, i) => (
                   <div
@@ -1061,6 +1068,21 @@ export function MeetingView({
                         </button>
                       )
                     )}
+                    <button
+                      className={`btn track-btn ${a.tracked ? 'on' : ''}`}
+                      aria-pressed={!!a.tracked}
+                      onClick={async () => {
+                        const updated = await window.scribe.actions.setState(meeting.id, i, { tracked: !a.tracked })
+                        if (updated) setMeeting(updated)
+                      }}
+                      title={
+                        a.tracked
+                          ? 'On your Action items list. Click to take it off (it stays here)'
+                          : 'Follow this on your Action items list'
+                      }
+                    >
+                      {a.tracked ? '✓ On my list' : '+ Add to my list'}
+                    </button>
                   </div>
                 ))}
               </div>

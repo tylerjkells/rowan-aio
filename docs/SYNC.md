@@ -66,7 +66,10 @@ it into the app). Tests: `npm test`. Schema: `supabase/migrations/`.
    **on** *Allow new users to sign up* and turn **off** *Confirm email* (the
    built-in email can't reach people outside the Supabase organization). The
    database refuses any new account whose email wasn't approved first, so this
-   doesn't open the hub to anyone else.
+   doesn't open the hub to anyone else. Then Authentication → URL Configuration
+   → **Site URL**: the phone app's address (`https://tylerjkells.github.io/rowan-aio/`).
+   Any link Supabase emails (a confirmation, if *Confirm email* is ever on)
+   lands there and signs the person in, instead of on `localhost:3000`.
 4. **Make yourself the administrator**: create your account (see below, but
    for the very first one approve your email in the SQL editor with
    `insert into public.signup_allowlist (email) values ('you@example.com');`),
