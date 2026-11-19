@@ -6,6 +6,10 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.47.0': [
+    'Rowan on your iPhone has the Tickets reports: open Tickets and tap Reports. The service report’s snapshot (last week, last month, month to date or 12 months), this month’s status update, the agenda summary and the monthly recap are all there, with the same numbers as on your PC. Copy as text copies the agenda or the recap; editing and updating stay on the PC.',
+    'The status update’s line under the intro now ends “on our upcoming project list.” If you hadn’t changed that line, it updates on its own.'
+  ],
   '0.46.0': [
     'The status update has its new format. The title reads Dashboard Status Update, each item’s area sits under its name instead of in a bar, and Updates and Enhancements get Open dashboard links like New Dashboards. In Progress shows just each name and status, and On Hold is its own section with a few words on why. A line under the intro says what the update covers, and the bottom links to past monthly updates once you add the link under Email details.',
     'Trimming the In Progress statuses is quicker: Remove… on a status that items use moves them to the status you pick.',
