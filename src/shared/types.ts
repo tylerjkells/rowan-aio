@@ -707,6 +707,10 @@ export interface StatusDef {
 export interface StatusMeta {
   month: string
   intro: string
+  /** under the intro: what the update covers, and that anything missing is still on the list */
+  scope: string
+  /** where past monthly updates are kept, linked at the bottom */
+  pastLink: string
   mailbox: string
   oh1: string
   oh2: string

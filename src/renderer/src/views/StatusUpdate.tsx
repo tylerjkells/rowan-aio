@@ -162,11 +162,6 @@ const statusDef = (d: StatusUpdateData, name: string | undefined): StatusDef | u
   d.statuses.find((x) => x.name === name)
 const isHold = (d: StatusUpdateData, it: StatusItem): boolean =>
   it.section === 'progress' && holdFlag(statusDef(d, it.status))
-/** in progress, with the same note that went out last month */
-const isStale = (it: StatusItem): boolean =>
-  it.section === 'progress' &&
-  typeof it.lastSentNote === 'string' &&
-  (it.note || '').trim() === it.lastSentNote.trim()
 const isUrl = (u: string | undefined): boolean => /^https?:\/\/\S+$/i.test(String(u || '').trim())
 
 function areaRank(a: string): number {
@@ -211,6 +206,9 @@ function countsOf(d: StatusUpdateData): { completed: number; progress: number; h
 
 const isHidden = (d: StatusUpdateData, key: StatusSection): boolean => d.meta.hidden.includes(key)
 
+/** an on-hold reason is a few words, like Awaiting Slate unification */
+const HOLD_REASON_MAX = 90
+
 /** one thing to fix before sending, and the field that fixes it */
 interface Check {
   text: string
@@ -233,18 +231,30 @@ function checksOf(d: StatusUpdateData): Check[] {
         out.push({ text: `An item in ${sec.label} has no name`, focus: `su-${it.id}-name`, ...at })
         continue
       }
-      if (!it.note.trim())
-        out.push({ text: `${nm}: ${sec.noteLabel.toLowerCase()} is empty`, focus: `su-${it.id}-note`, ...at })
-      if (sec.key === 'completed' && it.launched) {
-        if (!(it.link || '').trim())
-          out.push({ text: `${nm}: new dashboard has no link (shows Link coming soon)`, focus: `su-${it.id}-link`, ...at })
-        else if (!isUrl(it.link))
-          out.push({ text: `${nm}: dashboard link doesn’t look like a web address`, focus: `su-${it.id}-link`, ...at })
+      const note = it.note.trim()
+      const noteAt = { focus: `su-${it.id}-note`, ...at }
+      if (sec.key !== 'progress') {
+        if (!note) out.push({ text: `${nm}: ${sec.noteLabel.toLowerCase()} is empty`, ...noteAt })
+      } else if (isHold(d, it)) {
+        // In Progress shows only the name and status; On Hold adds a few words on why
+        if (!note) out.push({ text: `${nm}: on hold, with no reason given`, ...noteAt })
+        else if (note.length > HOLD_REASON_MAX)
+          out.push({ text: `${nm}: the on-hold reason is long; a few words is enough`, ...noteAt })
       }
-      if (isStale(it)) out.push({ text: `${nm}: notes unchanged since last month`, focus: `su-${it.id}-note`, ...at })
+      if (sec.key === 'completed') {
+        const linkAt = { focus: `su-${it.id}-link`, ...at }
+        if (it.launched && !(it.link || '').trim())
+          out.push({ text: `${nm}: new dashboard has no link (shows Link coming soon)`, ...linkAt })
+        else if ((it.link || '').trim() && !isUrl(it.link))
+          out.push({ text: `${nm}: dashboard link doesn’t look like a web address`, ...linkAt })
+      }
     }
   }
   const m = d.meta
+  if (!m.pastLink.trim())
+    out.push({ text: 'No link to past monthly updates (it goes at the bottom)', focus: 'su-m-pastLink', panel: 'meta' })
+  else if (!isUrl(m.pastLink))
+    out.push({ text: 'Past updates link doesn’t look like a web address', focus: 'su-m-pastLink', panel: 'meta' })
   if (m.spotOn) {
     if (!m.spotTitle.trim()) out.push({ text: 'Spotlight is on but has no title', focus: 'su-m-spotTitle', panel: 'spot' })
     if (!m.spotBody.trim()) out.push({ text: 'Spotlight is on but has no text', focus: 'su-m-spotBody', panel: 'spot' })
@@ -425,62 +435,92 @@ function spotlightHtml(d: StatusUpdateData, ed: boolean): string {
 </tr></table></td></tr>`
 }
 
-function emailRows(d: StatusUpdateData, list: StatusItem[], isProg: boolean, ed: boolean): string {
-  const cols = isProg ? 3 : 2
-  const groups = groupByArea(list)
-  const showHeads = groups.some((g) => g.area)
-  let rows = ''
-  for (const g of groups) {
-    if (showHeads)
-      rows += `<tr><td colspan="${cols}" bgcolor="#F0E1BE" style="background-color:#F0E1BE;padding:6px 10px;">${t(up(g.area || 'Other'), { size: '9pt', color: '#57150B', bold: true, spacing: '0.5px' })}</td></tr>`
-    for (const it of g.items) {
-      const hold = isHold(d, it)
-      const st = chipColors(statusDef(d, it.status))
-      rows += `<tr${rowAttr(ed, it.id)}>
-<td valign="top" style="${CELL}">${t(esc(it.name), { size: '10pt', color: hold ? '#75787B' : '#2B2B2B', bold: true, attrs: editAttr(ed, `item:${it.id}:name`) })}${reqLine(it)}</td>
-${isProg ? `<td valign="top" style="${CELL}">${chip(up(it.status || 'In Development').replace(/ /g, '&nbsp;'), st.bg, st.fg)}${(it.target || '').trim() ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:5px;">${t('Target: ' + esc(it.target!.trim()), { size: '8.5pt', color: '#57150B' })}</td></tr></table>` : ''}</td>` : ''}
-<td valign="top" style="${CELL}">${t(br(it.note), { size: '10pt', color: hold ? '#5A5C5E' : '#2B2B2B', attrs: editAttr(ed, `item:${it.id}:note`) })}</td>
-</tr>`
-    }
-  }
-  return rows
-}
+/** the item's area, small and gray under its name, in place of a bar per area */
+const areaLine = (it: StatusItem): string =>
+  it.area ? '<br>' + t(esc(it.area), { size: '8.5pt', color: '#75787B' }) : ''
 
-function launchedTable(list: StatusItem[], ed: boolean): string {
+const nameCell = (it: StatusItem, ed: boolean): string =>
+  `<td valign="top" style="${CELL}">${t(esc(it.name), { size: '10pt', color: '#2B2B2B', bold: true, attrs: editAttr(ed, `item:${it.id}:name`) })}${areaLine(it)}${reqLine(it)}</td>`
+
+const noteCell = (it: StatusItem, ed: boolean): string =>
+  `<td valign="top" style="${CELL}">${t(br(it.note), { size: '10pt', color: '#2B2B2B', attrs: editAttr(ed, `item:${it.id}:note`) })}</td>`
+
+const itemTable = (head: string, rows: string): string =>
+  `<tr><td style="padding:4px 32px 0 32px;">${tableOpen}
+<tr>${head}</tr>${rows}</table></td></tr>`
+
+/** what goes out: anything with a name or a note */
+const filled = (list: StatusItem[]): StatusItem[] => list.filter((i) => i.name.trim() || i.note.trim())
+
+/** completed items with an Open dashboard button; missing is what the Link column says without one */
+function linkTable(list: StatusItem[], ed: boolean, noteHead: string, missing: string): string {
   let rows = ''
   for (const it of list) {
     const link = isUrl(it.link)
       ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr><td nowrap bgcolor="#57150B" style="background-color:#57150B;padding:6px 12px;"><a href="${esc(it.link!.trim())}" style="color:#FFFFFF;text-decoration:none;">${t('Open&nbsp;dashboard', { size: '9pt', color: '#FFFFFF', bold: true, lh: '1.2' })}</a></td></tr></table>`
-      : t('Link&nbsp;coming&nbsp;soon', { size: '9pt', color: '#75787B' })
+      : missing
+        ? t(missing, { size: '9pt', color: '#75787B' })
+        : '&nbsp;'
     rows += `<tr${rowAttr(ed, it.id)}>
-<td valign="top" style="${CELL}">${t(esc(it.name), { size: '10pt', color: '#2B2B2B', bold: true, attrs: editAttr(ed, `item:${it.id}:name`) })}${it.area ? '<br>' + t(esc(it.area), { size: '8.5pt', color: '#75787B' }) : ''}${reqLine(it)}</td>
-<td valign="top" style="${CELL}">${t(br(it.note), { size: '10pt', color: '#2B2B2B', attrs: editAttr(ed, `item:${it.id}:note`) })}</td>
+${nameCell(it, ed)}
+${noteCell(it, ed)}
 <td valign="top" align="right" nowrap style="${CELL}">${link}</td>
 </tr>`
   }
-  return `<tr><td style="padding:4px 32px 0 32px;">${tableOpen}
-<tr>${th('Dashboard', 'width="30%"')}${th('What it covers')}${th('Link', 'width="150" align="right"')}</tr>${rows}</table></td></tr>`
+  return itemTable(th('Dashboard', 'width="30%"') + th(noteHead) + th('Link', 'width="150" align="right"'), rows)
 }
 
-function emailSection(d: StatusUpdateData, sec: Sec, symbol: string, ed: boolean): string {
-  const list = sectionItems(d.items, sec.key).filter((i) => i.name.trim() || i.note.trim())
+function sectionTitle(symbol: string, label: string, sub = ''): string {
+  return `<tr><td style="padding:28px 32px 8px 32px;">${tableOpen}<tr><td bgcolor="#57150B" style="background-color:#57150B;border-bottom:4px solid #FFCC00;padding:9px 12px;"><h2 style="margin:0;padding:0;font-size:15pt;line-height:1.2;">${t(symbol + '&nbsp; ' + up(label), { size: '15pt', color: '#FFFFFF', bold: true, serif: true, spacing: '0.5px', lh: '1.2' })}</h2></td></tr></table>${sub ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:6px;">${t(sub, { size: '9pt', color: '#75787B' })}</td></tr></table>` : ''}</td></tr>`
+}
+
+/** new dashboards, then updates and enhancements, both with their links */
+function completedHtml(d: StatusUpdateData, ed: boolean): string {
+  const list = filled(sectionItems(d.items, 'completed'))
   if (!list.length) return ''
-  const isProg = sec.key === 'progress'
-  const title = `<tr><td style="padding:28px 32px 8px 32px;">${tableOpen}<tr><td bgcolor="#57150B" style="background-color:#57150B;border-bottom:4px solid #FFCC00;padding:9px 12px;"><h2 style="margin:0;padding:0;font-size:15pt;line-height:1.2;">${t(symbol + '&nbsp; ' + up(sec.label), { size: '15pt', color: '#FFFFFF', bold: true, serif: true, spacing: '0.5px', lh: '1.2' })}</h2></td></tr></table>${sec.key === 'new' ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:6px;">${t('Currently in requirements gathering', { size: '9pt', color: '#75787B' })}</td></tr></table>` : ''}</td></tr>`
-  const head = isProg
-    ? th('Dashboard / Project', 'width="28%"') + th('Status', 'width="24%"') + th(sec.noteLabel)
-    : th('Dashboard / Project', 'width="34%"') + th(sec.noteLabel)
-  const table = (l: StatusItem[]): string => `<tr><td style="padding:4px 32px 0 32px;">${tableOpen}
-<tr>${head}</tr>${emailRows(d, l, isProg, ed)}</table></td></tr>`
-  if (sec.key !== 'completed') return title + table(list)
   const launched = list.filter((i) => i.launched)
   const rest = list.filter((i) => !i.launched)
-  if (!launched.length) return title + table(rest)
   return (
-    title +
-    subLabel('New Dashboards', 6) +
-    launchedTable(launched, ed) +
-    (rest.length ? subLabel('Updates and Enhancements', 22) + table(rest) : '')
+    sectionTitle('&#10003;', 'Completed') +
+    (launched.length
+      ? subLabel('New Dashboards', 6) + linkTable(launched, ed, 'What it covers', 'Link&nbsp;coming&nbsp;soon')
+      : '') +
+    (rest.length
+      ? subLabel('Updates and Enhancements', launched.length ? 22 : 6) + linkTable(rest, ed, 'What changed', '')
+      : '')
+  )
+}
+
+/** being worked on: just the name and where it stands */
+function progressHtml(d: StatusUpdateData, ed: boolean): string {
+  const list = filled(sectionItems(d.items, 'progress')).filter((i) => !isHold(d, i))
+  if (!list.length) return ''
+  let rows = ''
+  for (const it of list) {
+    const st = chipColors(statusDef(d, it.status))
+    rows += `<tr${rowAttr(ed, it.id)}>
+${nameCell(it, ed)}
+<td valign="top" style="${CELL}">${chip(up(it.status || 'In Development').replace(/ /g, '&nbsp;'), st.bg, st.fg)}</td>
+</tr>`
+  }
+  return sectionTitle('&#9658;', 'In Progress') + itemTable(th('Dashboard / Project') + th('Status', 'width="34%"'), rows)
+}
+
+/** paused, each with a few words on why */
+function holdHtml(d: StatusUpdateData, ed: boolean): string {
+  const list = filled(sectionItems(d.items, 'progress')).filter((i) => isHold(d, i))
+  if (!list.length) return ''
+  const rows = list.map((it) => `<tr${rowAttr(ed, it.id)}>\n${nameCell(it, ed)}\n${noteCell(it, ed)}\n</tr>`).join('')
+  return sectionTitle('&#10074;&#10074;', 'On Hold') + itemTable(th('Dashboard / Project', 'width="40%"') + th('Reason'), rows)
+}
+
+function newHtml(d: StatusUpdateData, ed: boolean): string {
+  const list = filled(sectionItems(d.items, 'new'))
+  if (!list.length) return ''
+  const rows = list.map((it) => `<tr${rowAttr(ed, it.id)}>\n${nameCell(it, ed)}\n${noteCell(it, ed)}\n</tr>`).join('')
+  return (
+    sectionTitle('&#9733;', 'New Requests', 'Currently in requirements gathering') +
+    itemTable(th('Dashboard / Project', 'width="34%"') + th('Purpose'), rows)
   )
 }
 
@@ -490,6 +530,33 @@ function ohFmt(line: string): string {
   const keep = (x: string): string => esc(x).replace(/ /g, '&nbsp;')
   const m = raw.match(/^(.*),\s*([0-9].*)$/)
   return m ? esc(m[1]) + '<br>' + keep(m[2]) : esc(raw).replace(/([0-9]) (AM|PM)/gi, '$1&nbsp;$2')
+}
+
+/** new Outlook merges formatting on paste by default, which turns the text black */
+const PASTE_TIP =
+  'Paste with Keep source formatting. To make that Outlook’s default: Settings › Mail › Compose and reply › Pasting from other apps.'
+
+/** white, gold, cream: text that needs its dark cell to be read */
+function isLight(hex: string): boolean {
+  const m = hex.match(/^#([0-9a-f]{6})$/i)
+  if (!m) return false
+  const n = parseInt(m[1], 16)
+  return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 150
+}
+
+/**
+ * Light text's color, on its colored cell too. New Outlook pastes with Merge
+ * formatting unless set otherwise, which keeps the cells' colors but turns
+ * every run of text black; a color on the cell itself survives, so white on
+ * maroon stays white (when Outlook's own default text color is Automatic).
+ * Done at copy time, so past issues saved before this get it as well.
+ */
+function colorCells(html: string): string {
+  return html.replace(
+    /<td\b([^>]*\bbgcolor="[^"]*"[^>]*?)style="((?:(?!<\/?td\b)[\s\S])*?<font face="[^"]*" color="(#[0-9A-Fa-f]{6})")/g,
+    (all, attrs: string, rest: string, color: string) =>
+      isLight(color) && !/^color:/.test(rest) ? `<td${attrs}style="color:${color};${rest}` : all
+  )
 }
 
 /** the email as it is copied; ed adds the preview's edit-in-place markers */
@@ -509,13 +576,15 @@ function buildEmail(d: StatusUpdateData, ed = false): string {
     `<td width="${tw}%" align="center" valign="middle" bgcolor="${bg}" style="background-color:${bg};padding:14px 4px;${last ? '' : 'border-right:4px solid #FFFFFF;'}"><h2 style="margin:0;padding:0;font-size:22pt;line-height:1.1;">${t(String(n), { size: '22pt', color: numColor, bold: true, serif: true, lh: '1.1' })}</h2>${t(up(label), { size: '8pt', color: labColor, bold: true, spacing: '1px' })}</td>`
   const tilesHtml = tileDefs.map((x, i) => tile(...x, i === tileDefs.length - 1)).join('\n')
   const mailbox = esc(m.mailbox)
+  const past = isUrl(m.pastLink) ? m.pastLink.trim() : ''
   const band = (pad: string, inner: string): string =>
     `<tr><td bgcolor="#57150B" style="background-color:#57150B;padding:${pad};">${inner}</td></tr>`
   return `<table role="presentation" width="680" cellpadding="0" cellspacing="0" border="0" align="center" bgcolor="#FFFFFF" style="width:680px;max-width:680px;background-color:#FFFFFF;border:1px solid #E2D6BF;margin:0 auto;">
 <tr><td bgcolor="#FFCC00" height="6" style="background-color:#FFCC00;height:6px;line-height:6px;font-size:6px;">&nbsp;</td></tr>
 ${band('24px 32px 2px 32px', t('ROWAN ONLINE OPERATIONAL EFFECTIVENESS TEAM', { size: '9pt', color: '#FFCC00', bold: true, spacing: '1.5px' }))}
-${band('4px 32px 22px 32px', `<h1 style="margin:0;padding:0;font-size:21pt;line-height:1.2;">${t(`<span${editAttr(ed, 'meta:month')}>${esc(m.month)}</span> Status Update`, { size: '21pt', color: '#FFFFFF', bold: true, serif: true, lh: '1.2' })}</h1>`)}
+${band('4px 32px 22px 32px', `<h1 style="margin:0;padding:0;font-size:21pt;line-height:1.2;">${t(`<span${editAttr(ed, 'meta:month')}>${esc(m.month)}</span> Dashboard Status Update`, { size: '21pt', color: '#FFFFFF', bold: true, serif: true, lh: '1.2' })}</h1>`)}
 ${m.intro ? `<tr><td style="padding:24px 32px 8px 32px;">${t(br(m.intro), { size: '10.5pt', color: '#2B2B2B', lh: '1.5', attrs: editAttr(ed, 'meta:intro') })}</td></tr>` : ''}
+${m.scope.trim() ? `<tr><td style="padding:${m.intro ? '4px' : '24px'} 32px 8px 32px;">${t(br(m.scope), { size: '9.5pt', color: '#5A5C5E', lh: '1.5', attrs: editAttr(ed, 'meta:scope') })}</td></tr>` : ''}
 ${
   tileDefs.length
     ? `<tr><td style="padding:12px 32px 8px 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
@@ -524,21 +593,24 @@ ${tilesHtml}
     : ''
 }
 ${spotlightHtml(d, ed)}
-${isHidden(d, 'completed') ? '' : emailSection(d, SECTIONS[0], '&#10003;', ed)}
-${isHidden(d, 'progress') ? '' : emailSection(d, SECTIONS[1], '&#9658;', ed)}
-${isHidden(d, 'new') ? '' : emailSection(d, SECTIONS[2], '&#9733;', ed)}
-<tr><td style="padding:32px 32px 28px 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+${isHidden(d, 'completed') ? '' : completedHtml(d, ed)}
+${isHidden(d, 'progress') ? '' : progressHtml(d, ed) + holdHtml(d, ed)}
+${isHidden(d, 'new') ? '' : newHtml(d, ed)}
+<tr><td style="padding:32px 32px ${past ? '16px' : '28px'} 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 <td width="5" bgcolor="#FFCC00" style="background-color:#FFCC00;width:5px;">&nbsp;</td>
 <td width="50%" valign="top" bgcolor="#FBF6EC" style="background-color:#FBF6EC;padding:16px 18px;">${t('Submit a Request', { size: '10.5pt', color: '#57150B', bold: true })}<br>${t(`Send all dashboard and reporting requests to <a href="mailto:${mailbox}" style="color:#57150B;"><b>${mailbox}</b></a>, including dashboard updates, discrepancies or issues, and one-time or recurring reports. This keeps requests captured, prioritized, and assigned.`, { size: '10pt', color: '#2B2B2B' })}</td>
 <td width="50%" valign="top" bgcolor="#FBF6EC" style="background-color:#FBF6EC;padding:16px 18px;">${t('Weekly Office Hours', { size: '10.5pt', color: '#57150B', bold: true })}<br>${t(ohFmt(m.oh1) + (m.oh2 ? '<br><br>' + ohFmt(m.oh2) : ''), { size: '10pt', color: '#2B2B2B' })}</td>
 </tr></table></td></tr>
+${past ? `<tr><td style="padding:0 32px 24px 32px;">${t(`Past monthly updates can be found <a href="${esc(past)}" style="color:#57150B;"><b>here</b></a>.`, { size: '10pt', color: '#2B2B2B' })}</td></tr>` : ''}
 ${band('12px 32px', t('Rowan Online Operational Effectiveness Team &nbsp;|&nbsp; Monthly updates are sent the last Wednesday of every month.', { size: '8.5pt', color: '#F0E1BE' }))}
 </table>`
 }
 
 function buildPlain(d: StatusUpdateData): string {
   const m = d.meta
-  const lines = [`${m.month} Status Update`, '', m.intro, '']
+  const lines = [`${m.month} Dashboard Status Update`, '', m.intro]
+  if (m.scope.trim()) lines.push('', m.scope.trim())
+  lines.push('')
   if (spotOn(d)) {
     lines.push(
       'SPOTLIGHT: ' + m.spotTitle.trim(),
@@ -546,26 +618,27 @@ function buildPlain(d: StatusUpdateData): string {
       ''
     )
   }
-  for (const sec of SECTIONS) {
-    if (isHidden(d, sec.key)) continue
-    const list = sectionItems(d.items, sec.key)
-    if (!list.length) continue
-    lines.push(sec.label.toUpperCase())
-    for (const g of groupByArea(list)) {
-      if (g.area) lines.push('  ' + g.area)
-      for (const it of g.items) {
-        const prog = sec.key === 'progress'
-        lines.push(
-          `    - ${it.name}${prog ? ` [${it.status || ''}]` : ''}${it.launched ? ' (new dashboard)' : ''}: ${it.note}` +
-            (it.launched && isUrl(it.link) ? ' ' + it.link!.trim() : '') +
-            ((it.target || '').trim() && prog ? ` (Target: ${it.target!.trim()})` : '') +
-            ((it.requestedBy || '').trim() ? ` (Requested by ${it.requestedBy!.trim()})` : '')
-        )
-      }
-    }
-    lines.push('')
+  const line = (it: StatusItem, rest: string): string =>
+    `  - ${it.name}${it.area ? ` (${it.area})` : ''}${rest}` +
+    ((it.requestedBy || '').trim() ? ` (Requested by ${it.requestedBy!.trim()})` : '')
+  const block = (title: string, list: StatusItem[], rest: (it: StatusItem) => string): void => {
+    if (!list.length) return
+    lines.push(title.toUpperCase(), ...list.map((it) => line(it, rest(it))), '')
   }
+  const withLink = (it: StatusItem): string => `: ${it.note}` + (isUrl(it.link) ? ' ' + it.link!.trim() : '')
+  if (!isHidden(d, 'completed')) {
+    const list = filled(sectionItems(d.items, 'completed'))
+    block('Completed: new dashboards', list.filter((i) => i.launched), withLink)
+    block('Completed: updates and enhancements', list.filter((i) => !i.launched), withLink)
+  }
+  if (!isHidden(d, 'progress')) {
+    const list = filled(sectionItems(d.items, 'progress'))
+    block('In progress', list.filter((i) => !isHold(d, i)), (it) => ` [${it.status || ''}]`)
+    block('On hold', list.filter((i) => isHold(d, i)), (it) => (it.note.trim() ? `: ${it.note.trim()}` : ''))
+  }
+  if (!isHidden(d, 'new')) block('New requests', filled(sectionItems(d.items, 'new')), (it) => `: ${it.note}`)
   lines.push(`Requests: ${m.mailbox}`, `Office hours: ${m.oh1}; ${m.oh2}`)
+  if (isUrl(m.pastLink)) lines.push(`Past monthly updates: ${m.pastLink.trim()}`)
   return lines.join('\n')
 }
 
@@ -624,6 +697,8 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
   const [rollMonth, setRollMonth] = useState<string | null>(null)
   const [armed, setArmed] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
+  /** a status in use being removed: which one, and the status its items move to */
+  const [moving, setMoving] = useState<{ n: number; to: string } | null>(null)
   const [newColor, setNewColor] = useState('#88431E')
   const [confirmEl, confirm] = useConfirm()
   // a render with nothing changed, so a pending focus lands once the field is on screen
@@ -705,7 +780,8 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
 
   useEffect(() => {
     if (!toast) return
-    const timer = setTimeout(() => setToast(null), 5000)
+    // long enough to read: the paste tip runs twice the usual length
+    const timer = setTimeout(() => setToast(null), Math.max(5000, toast.length * 60))
     return () => clearTimeout(timer)
   }, [toast])
 
@@ -780,7 +856,8 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
   }
   const patchItem = (id: string, p: Partial<StatusItem>, delay?: number): void => patchItems({ [id]: p }, delay)
 
-  const firstStatus = (): string => cur().statuses[0]?.name ?? 'In Development'
+  const firstStatus = (): string =>
+    (cur().statuses.find((s) => !holdFlag(s)) ?? cur().statuses[0])?.name ?? 'In Development'
   const maxOrder = (pred: (i: StatusItem) => boolean): number =>
     cur().items.filter(pred).reduce((m, i) => Math.max(m, i.order), 0)
 
@@ -910,7 +987,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
     const it = cur().items.find((i) => i.id === id)
     if (!it) return
     const group = sectionItems(cur().items, it.section).filter(
-      (i) => i.area === it.area && !!i.launched === !!it.launched
+      (i) => i.area === it.area && !!i.launched === !!it.launched && isHold(cur(), i) === isHold(cur(), it)
     )
     const idx = group.findIndex((i) => i.id === id)
     const other = group[idx + dir]
@@ -1034,6 +1111,31 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
     setToast(`Removed status ${st.name}.`)
   }
 
+  /** where a removed status's items go: another On Hold status for an On Hold one, else the first other */
+  function startMove(n: number): void {
+    const st = cur().statuses[n]
+    const others = cur().statuses.filter((_, i) => i !== n)
+    const to = others.find((o) => holdFlag(o) === holdFlag(st)) ?? others[0]
+    if (to) setMoving({ n, to: to.name })
+  }
+
+  function moveAndRemoveStatus(): void {
+    const st = moving && cur().statuses[moving.n]
+    if (!moving || !st || moving.to === st.name) return
+    const used = usage(st.name)
+    change(
+      {
+        statuses: cur().statuses.filter((_, i) => i !== moving.n),
+        items: cur().items.map((i) =>
+          i.section === 'progress' && i.status === st.name ? { ...i, status: moving.to } : i
+        )
+      },
+      0
+    )
+    setMoving(null)
+    setToast(`Removed ${st.name}. Its ${used} item${used === 1 ? '' : 's'} moved to ${moving.to}.`)
+  }
+
   function addStatus(): void {
     const name = newName.trim()
     if (!name) {
@@ -1073,7 +1175,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
 
   async function copy(emailHtml: string, plain: string, done: string): Promise<void> {
     try {
-      await window.scribe.clipboard.writeRich(emailHtml, plain)
+      await window.scribe.clipboard.writeRich(colorCells(emailHtml), plain)
       setToast(done)
     } catch {
       setToast('Couldn’t reach the clipboard. Try again in a moment.')
@@ -1086,8 +1188,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
     void copy(
       buildEmail(cur()),
       buildPlain(cur()),
-      (n ? `Copied, with ${n} item${n === 1 ? '' : 's'} still flagged. ` : 'Copied. ') +
-        'In Outlook, paste and choose Keep source formatting.'
+      (n ? `Copied, with ${n} item${n === 1 ? '' : 's'} still flagged. ` : 'Copied. ') + PASTE_TIP
     )
   }
 
@@ -1130,7 +1231,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
     change(
       {
         issues: [issue, ...d.issues.filter((x) => x.id !== id)],
-        items: d.items.filter((i) => i.section !== 'completed').map((i) => ({ ...i, lastSentNote: i.note })),
+        items: d.items.filter((i) => i.section !== 'completed'),
         meta: { ...d.meta, month: next, spotOn: false }
       },
       0
@@ -1200,7 +1301,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
       const it = cur().items.find((i) => i.id === a)
       return it ? String(it[b as 'name' | 'note'] ?? '') : ''
     }
-    return String(cur().meta[a as 'month' | 'intro' | 'spotTitle' | 'spotBody'] ?? '')
+    return String(cur().meta[a as 'month' | 'intro' | 'scope' | 'spotTitle' | 'spotBody'] ?? '')
   }
 
   function previewEdit(key: string, value: string): void {
@@ -1320,6 +1421,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
 
   const row = (it: StatusItem, sec: Sec, pos: number, len: number): React.JSX.Element => {
     const prog = sec.key === 'progress'
+    const hold = isHold(data, it)
     const statusNames = data.statuses.map((s) => s.name)
     if (it.status && !statusNames.includes(it.status)) statusNames.push(it.status)
     const areas = it.area && !AREAS.includes(it.area) ? [...AREAS, it.area] : AREAS
@@ -1337,7 +1439,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
       <div
         key={it.id}
         id={`su-row-${it.id}`}
-        className={`su-row ${prog ? 'has-chip' : ''} ${isHold(data, it) ? 'hold' : ''} ${open ? 'open' : ''} ${linked ? 'linked' : ''}`}
+        className={`su-row ${prog ? 'has-chip' : ''} ${hold ? 'hold' : ''} ${open ? 'open' : ''} ${linked ? 'linked' : ''}`}
         style={chipC ? chipVars(chipC) : undefined}
         onFocus={() => {
           if (active?.id !== it.id || active.from !== 'editor') setActive({ id: it.id, from: 'editor' })
@@ -1356,11 +1458,6 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
             aria-label="Name"
             onChange={(e) => patchItem(it.id, { name: e.target.value })}
           />
-          {isStale(it) && (
-            <span className="su-stale" title="These notes match what went out last month">
-              Not updated since last month
-            </span>
-          )}
           {prog && (
             <button className="su-done" onClick={() => markDone(it.id)} title="Move to Completed">
               Mark done
@@ -1392,29 +1489,31 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
             <span aria-hidden="true">⋯</span>
           </button>
         </div>
-        {sec.key === 'completed' && it.launched && (
+        {sec.key === 'completed' && (
           <div className="su-link-row">
             <span className="su-link-lbl">Link</span>
             <input
               id={`su-${it.id}-link`}
               className={`su-link ${it.link && !isUrl(it.link) ? 'bad' : ''}`}
               value={it.link ?? ''}
-              placeholder="Paste the dashboard link (https://…)"
+              placeholder={it.launched ? 'Paste the dashboard link (https://…)' : 'Dashboard link, if there is one (https://…)'}
               aria-label="Dashboard link"
               inputMode="url"
               onChange={(e) => patchItem(it.id, { link: e.target.value })}
             />
           </div>
         )}
-        <textarea
-          id={`su-${it.id}-note`}
-          className="su-note"
-          rows={1}
-          value={it.note}
-          placeholder={sec.notePh}
-          aria-label={sec.noteLabel}
-          onChange={(e) => patchItem(it.id, { note: e.target.value })}
-        />
+        {(!prog || hold) && (
+          <textarea
+            id={`su-${it.id}-note`}
+            className="su-note"
+            rows={1}
+            value={it.note}
+            placeholder={hold ? 'Why it’s on hold, in a few words, like Awaiting Slate unification' : sec.notePh}
+            aria-label={hold ? 'Reason it’s on hold' : sec.noteLabel}
+            onChange={(e) => patchItem(it.id, { note: e.target.value })}
+          />
+        )}
         {!open && summary && (
           <button className="su-summary" onClick={() => toggleItem(it.id, true)}>
             {summary}
@@ -1433,8 +1532,8 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
                 />
               </label>
               {prog && (
-                <label>
-                  Target
+                <label title="For your own tracking; the email shows only the name and status">
+                  Target (not in the email)
                   <input
                     className="su-mini"
                     value={it.target ?? ''}
@@ -1521,6 +1620,28 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
 
   const sectionBody = (sec: Sec, list: StatusItem[]): React.JSX.Element | React.JSX.Element[] => {
     if (!list.length) return <p className="su-empty">Nothing here yet. Use Add item to start this section.</p>
+    if (sec.key === 'progress') {
+      const going = list.filter((i) => !isHold(data, i))
+      const held = list.filter((i) => isHold(data, i))
+      return (
+        <>
+          <div className="su-sub">
+            In progress <span className="su-count">{going.length}</span>
+          </div>
+          {going.length ? groups(sec, going) : <p className="su-empty">Nothing in progress.</p>}
+          <div className="su-sub">
+            On hold <span className="su-count">{held.length}</span>
+          </div>
+          {held.length ? (
+            groups(sec, held)
+          ) : (
+            <p className="su-empty">
+              Nothing on hold. Set an item’s status to On Hold to list it in its own section, with a short reason.
+            </p>
+          )}
+        </>
+      )
+    }
     if (sec.key !== 'completed') return groups(sec, list)
     const launched = list.filter((i) => i.launched)
     const rest = list.filter((i) => !i.launched)
@@ -1545,7 +1666,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
   }
 
   const metaInput = (
-    key: 'month' | 'mailbox' | 'oh1' | 'oh2' | 'spotTitle' | 'spotLink',
+    key: 'month' | 'mailbox' | 'oh1' | 'oh2' | 'spotTitle' | 'spotLink' | 'pastLink',
     label: string,
     ph = ''
   ): React.JSX.Element => (
@@ -1577,8 +1698,20 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
               onChange={(e) => setMeta({ intro: e.target.value })}
             />
           </label>
+          <label className="su-lbl full">
+            What this update covers
+            <textarea
+              id="su-m-scope"
+              className="text-input"
+              rows={2}
+              value={data.meta.scope}
+              placeholder="Shown under the intro. Leave blank to leave it out."
+              onChange={(e) => setMeta({ scope: e.target.value })}
+            />
+          </label>
           {metaInput('oh1', 'Office hours, first line')}
           {metaInput('oh2', 'Office hours, second line')}
+          {metaInput('pastLink', 'Past monthly updates link', 'https://… (linked at the bottom of the email)')}
         </div>
       )
     if (key === 'spot')
@@ -1673,11 +1806,45 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
                     On Hold
                   </label>
                   {used ? (
-                    <span className="su-used">{used} in use</span>
+                    <button
+                      className="su-del"
+                      title={`${used} item${used === 1 ? ' uses' : 's use'} this status`}
+                      disabled={data.statuses.length <= 1}
+                      onClick={() => (moving?.n === n ? setMoving(null) : startMove(n))}
+                    >
+                      Remove…
+                    </button>
                   ) : (
                     <button className="su-del" onClick={() => removeStatus(n)}>
                       Remove
                     </button>
+                  )}
+                  {moving?.n === n && (
+                    <div className="su-st-move">
+                      <span>
+                        Move its {used} item{used === 1 ? '' : 's'} to
+                      </span>
+                      <select
+                        className="cuc-select"
+                        value={moving.to}
+                        aria-label={`Move ${st.name} items to`}
+                        onChange={(e) => setMoving({ n, to: e.target.value })}
+                      >
+                        {data.statuses
+                          .filter((_, i) => i !== n)
+                          .map((o) => (
+                            <option key={o.name} value={o.name}>
+                              {o.name}
+                            </option>
+                          ))}
+                      </select>
+                      <button className="btn" onClick={moveAndRemoveStatus}>
+                        Move and remove {st.name}
+                      </button>
+                      <button className="btn btn-ghost" onClick={() => setMoving(null)}>
+                        Cancel
+                      </button>
+                    </div>
                   )}
                 </div>
               )
@@ -1718,8 +1885,8 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
           </div>
           <p className="su-hint">
             Pick any color; the chip gets a light tint with dark text so it stays readable in the email. Renaming a
-            status updates every item that uses it. Tick On Hold for statuses that should count toward the On Hold
-            tile. A status can be removed once no item uses it.
+            status updates every item that uses it. Tick On Hold for statuses whose items go in the email’s On Hold
+            section, with their reason. Removing a status in use moves its items to the status you pick.
           </p>
           <datalist id="su-brand-colors">
             {BRAND_COLORS.map((c) => (
@@ -1759,7 +1926,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
                   <button
                     className="btn"
                     onClick={() =>
-                      copy(x.html, x.plain, `Copied ${x.month}. In Outlook, paste and choose Keep source formatting.`)
+                      copy(x.html, x.plain, `Copied ${x.month}. ${PASTE_TIP}`)
                     }
                   >
                     Copy
@@ -2022,7 +2189,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
                   <span className="su-chev" aria-hidden="true">
                     ›
                   </span>
-                  {sec.label}
+                  {sec.key === 'progress' ? 'In Progress & On Hold' : sec.label}
                   <span className="su-count">{list.length}</span>
                 </button>
               </h3>
@@ -2060,7 +2227,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
                   copy(
                     issue.html,
                     issue.plain,
-                    `Copied ${issue.month}. In Outlook, paste and choose Keep source formatting.`
+                    `Copied ${issue.month}. ${PASTE_TIP}`
                   )
                 }
               >

@@ -189,7 +189,7 @@ const REPORTS: { key: ReportKey; name: string; hint: string; opens: boolean }[] 
   {
     key: 'status',
     name: 'Status update',
-    hint: 'The RO Ops monthly status update email: completed, in progress and new requests',
+    hint: 'The RO Ops monthly dashboard status update email: completed, in progress, on hold and new requests',
     opens: true
   },
   {
