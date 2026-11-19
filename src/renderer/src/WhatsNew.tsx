@@ -6,6 +6,12 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.45.0': [
+    'Action items is now your list, and only what you put on it. Every meeting’s summary still keeps all of its action items, each with an Add to my list button, and the Action items page offers the last week’s items to add. Add your own or ones you’re waiting on from someone else; Remove takes one off again, and it stays in its meeting. Your list starts empty, so add back what you want to follow.',
+    'Today, the morning brief, the weekly digest, People pages and the Claude app connection count only the items on your list.',
+    'Recordings made on your PC now play in Rowan on your iPhone.',
+    'Creating a sync account is clearer: Settings → Sync asks whether you have an account or want to create one, and if the hub sends a confirmation email, Rowan tells you to check for it instead of showing an error.'
+  ],
   '0.44.0': [
     'Make your own sync account. Once the person who runs your Rowan hub approves your email, open Settings → Sync, choose create an account, and pick your own password. You can do the same from the sign-in screen of Rowan on your iPhone.',
     'Hub administrators approve people from Settings → Sync → Who can join: enter an email, click Approve, and the instructions to send them are copied for you. The list shows who has joined, and Withdraw takes back an approval that hasn’t been used.',
