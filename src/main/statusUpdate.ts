@@ -36,12 +36,17 @@ const MONTHS = [
   'December'
 ]
 
+const SCOPE =
+  "This update covers the dashboards we worked on or paused this month. If a project isn't listed, it's still on our radar and in our project list."
+
 function defaultMeta(): StatusMeta {
   const now = new Date()
   return {
     month: `${MONTHS[now.getMonth()]} ${now.getFullYear()}`,
     intro:
       "Here's a look at what the team completed, what's in flight, and what's new this month across Rowan Online, WLS, Rowan Reach, and University dashboards.",
+    scope: SCOPE,
+    pastLink: '',
     mailbox: 'ROOperations@rowan.edu',
     oh1: 'Tuesdays, Room 105, 10:00 AM to 11:00 AM',
     oh2: 'Thursdays, Room 105, 11:00 AM to 12:00 PM',
@@ -56,10 +61,6 @@ function defaultMeta(): StatusMeta {
 const DEFAULT_STATUSES: StatusDef[] = [
   { name: 'In Development', tone: 'dev' },
   { name: 'Testing', tone: 'test' },
-  { name: 'Under Review', tone: 'test' },
-  { name: 'IDA Review', tone: 'test' },
-  { name: 'Requirements', tone: 'req' },
-  { name: 'Launching Soon', tone: 'go' },
   { name: 'On Hold', tone: 'hold' }
 ]
 
@@ -120,6 +121,9 @@ function normalize(raw: Record<string, unknown>): StatusUpdateData {
   const meta: StatusMeta = {
     month: typeof m.month === 'string' ? m.month : base.month,
     intro: typeof m.intro === 'string' ? m.intro : base.intro,
+    // saved before these existed: the sentence starts on, the link blank
+    scope: typeof m.scope === 'string' ? m.scope : base.scope,
+    pastLink: str(m.pastLink),
     mailbox: typeof m.mailbox === 'string' ? m.mailbox : base.mailbox,
     oh1: typeof m.oh1 === 'string' ? m.oh1 : base.oh1,
     oh2: typeof m.oh2 === 'string' ? m.oh2 : base.oh2,
