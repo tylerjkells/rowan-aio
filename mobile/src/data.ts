@@ -8,6 +8,11 @@ import type {
   PersonDetails,
   PlanItem,
   PlanStatus,
+  ReportKey,
+  StatusItem,
+  StatusUpdateData,
+  TeamDesk,
+  TeamTicket,
   Ticket,
   TicketNote,
   TicketPlan,
@@ -391,6 +396,8 @@ export interface PhoneSettings {
   people: string[]
   /** desktop sections switched off in Settings; the phone hides them too */
   hiddenTabs: string[]
+  /** the Tickets reports as you renamed them on the PC */
+  reportNames: Partial<Record<ReportKey, string>>
 }
 
 export function loadSettings(hub: Hub): Promise<{ value: PhoneSettings; stale: boolean }> {
@@ -401,7 +408,11 @@ export function loadSettings(hub: Hub): Promise<{ value: PhoneSettings; stale: b
       theme: typeof d?.body.theme === 'string' ? d.body.theme : 'studio',
       yourName: typeof d?.body.yourName === 'string' ? d.body.yourName : '',
       people: list(d?.body.people),
-      hiddenTabs: list(d?.body.hiddenTabs)
+      hiddenTabs: list(d?.body.hiddenTabs),
+      reportNames:
+        d?.body.reportNames && typeof d.body.reportNames === 'object'
+          ? (d.body.reportNames as Partial<Record<ReportKey, string>>)
+          : {}
     }
   })
 }
@@ -487,4 +498,78 @@ export async function attachment(hub: Hub, rel: string): Promise<Blob | null> {
   const doc = await getDoc<{ hash?: string }>(hub, 'blob', rel)
   if (!doc?.body.hash) return null
   return hub.download(`${hub.userId}/files/${doc.body.hash}`)
+}
+
+// ---- reports: the team's queue and the monthly status update ----------------------
+
+interface TeamFile {
+  tickets?: Record<string, TeamTicket>
+  syncedAt?: string | null
+  coverageStart?: string | null
+}
+
+/**
+ * team-tickets.json: the RO Operations group's tickets for the last year,
+ * kept to what the service report counts with, so the offline copy stays small.
+ */
+export function loadTeam(hub: Hub): Promise<{ value: TeamDesk; stale: boolean }> {
+  return cached('team', async () => {
+    const f = (await getDoc<TeamFile>(hub, 'file', 'team-tickets.json'))?.body
+    const tickets = Object.values(f?.tickets ?? {}).map(
+      (t): TeamTicket => ({
+        number: t.number,
+        sysId: '',
+        title: '',
+        caller: '',
+        assignee: t.assignee,
+        state: t.state,
+        active: t.active,
+        openedAt: t.openedAt,
+        closedAt: t.closedAt,
+        updatedAt: t.updatedAt,
+        type: '',
+        channel: '',
+        ...(t.gone ? { gone: true } : {}),
+        ...(t.resolvedAt !== undefined ? { resolvedAt: t.resolvedAt } : {})
+      })
+    )
+    return { tickets, syncedAt: f?.syncedAt ?? null, coverageStart: f?.coverageStart ?? null }
+  })
+}
+
+const STATUS_META: StatusUpdateData['meta'] = {
+  month: '',
+  intro: '',
+  scope: '',
+  pastLink: '',
+  mailbox: '',
+  oh1: '',
+  oh2: '',
+  hidden: [],
+  spotOn: false,
+  spotTitle: '',
+  spotBody: '',
+  spotLink: ''
+}
+
+/**
+ * status-update.json as the PC saved it; null before one has been started.
+ * Past issues stay on the PC (the phone shows this month's).
+ */
+export function loadStatusUpdate(hub: Hub): Promise<{ value: StatusUpdateData | null; stale: boolean }> {
+  return cached('statusUpdate', async () => {
+    const b = (await getDoc<Partial<StatusUpdateData> & { items?: unknown }>(hub, 'file', 'status-update.json'))?.body
+    if (!b) return null
+    const raw = b.items
+    const items = Array.isArray(raw)
+      ? (raw as StatusItem[])
+      : Object.entries((raw ?? {}) as Record<string, StatusItem>).map(([id, it]) => ({ ...it, id }))
+    return {
+      meta: { ...STATUS_META, ...b.meta },
+      statuses: b.statuses?.length ? b.statuses : [{ name: 'In Development', tone: 'dev' }, { name: 'Testing', tone: 'test' }, { name: 'On Hold', tone: 'hold' }],
+      items: items.map((it) => ({ ...it, area: it.area ?? '', name: it.name ?? '', note: it.note ?? '', order: it.order ?? 0 })),
+      issues: [],
+      spotImg: b.spotImg ?? null
+    }
+  })
 }

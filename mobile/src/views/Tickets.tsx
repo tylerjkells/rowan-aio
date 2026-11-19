@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Ticket, TicketNote, TicketPlan } from '../../../src/shared/types'
 import { useApp } from '../App'
 import { TICKET_PLANS, loadTickets, peek, setTicketNote, type TicketFile } from '../data'
+import { REPORTS, reportName } from './Reports'
 import { BackIcon, ChevronIcon, Problem, Stale, dayInSentence, dayLabel, timeOf } from '../ui'
 
 const SN = 'https://support.rowan.edu'
@@ -49,11 +50,33 @@ function flags(t: Ticket, me: string | null): string[] {
 
 const GROUPS: { plan: TicketPlan; label: string }[] = [...TICKET_PLANS.map((p) => ({ plan: p.id, label: p.label })), { plan: '', label: 'Not sorted' }]
 
+type Tab = 'open' | 'closed' | 'reports'
+
+/** the tab you were on, so Back from a ticket or a report lands there again */
+function readTab(): Tab {
+  try {
+    const v = sessionStorage.getItem('rowan.ticketsTab')
+    return v === 'closed' || v === 'reports' ? v : 'open'
+  } catch {
+    return 'open'
+  }
+}
+
 export function TicketsView({ selected }: { selected: string | null }): React.JSX.Element {
-  const { go } = useApp()
+  const { go, settings } = useApp()
   const { file, stale, error } = useTickets()
-  const [closed, setClosed] = useState(false)
+  const [tab, setTabState] = useState<Tab>(readTab)
   const [query, setQuery] = useState('')
+  const closed = tab === 'closed'
+
+  function setTab(t: Tab): void {
+    setTabState(t)
+    try {
+      sessionStorage.setItem('rowan.ticketsTab', t)
+    } catch {
+      // Back just opens Open
+    }
+  }
 
   const groups = useMemo(() => {
     if (!file) return []
@@ -71,18 +94,37 @@ export function TicketsView({ selected }: { selected: string | null }): React.JS
       <header className="page-head">
         <h1 className="large-title">Tickets</h1>
         <div className="segmented" role="tablist">
-          <button role="tab" aria-selected={!closed} className={!closed ? 'on' : ''} onClick={() => setClosed(false)}>
-            Open
-          </button>
-          <button role="tab" aria-selected={closed} className={closed ? 'on' : ''} onClick={() => setClosed(true)}>
-            Closed
-          </button>
+          {(
+            [
+              ['open', 'Open'],
+              ['closed', 'Closed'],
+              ['reports', 'Reports']
+            ] as [Tab, string][]
+          ).map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
+              {label}
+            </button>
+          ))}
         </div>
-        <input className="search" type="search" placeholder="Search tickets" aria-label="Search tickets" value={query} onChange={(e) => setQuery(e.target.value)} />
+        {tab !== 'reports' && (
+          <input className="search" type="search" placeholder="Search tickets" aria-label="Search tickets" value={query} onChange={(e) => setQuery(e.target.value)} />
+        )}
       </header>
-      <Stale show={stale} />
-      <Problem error={error} />
-      {file === null ? (
+      <Stale show={stale && tab !== 'reports'} />
+      <Problem error={tab === 'reports' ? null : error} />
+      {tab === 'reports' ? (
+        <div className="group">
+          {REPORTS.map((r) => (
+            <button key={r.key} className="row" onClick={() => go(`/report/${r.key}`)}>
+              <span className="row-main">
+                <span className="row-title">{reportName(settings?.reportNames, r.key)}</span>
+                <span className="row-sub">{r.sub}</span>
+              </span>
+              <ChevronIcon size={18} />
+            </button>
+          ))}
+        </div>
+      ) : file === null ? (
         <div className="group skeleton tall" />
       ) : groups.length === 0 ? (
         <p className="empty">{Object.keys(file.tickets).length ? 'Nothing here.' : 'No tickets yet. Update them in Rowan on your PC.'}</p>

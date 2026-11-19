@@ -37,7 +37,11 @@ const MONTHS = [
 ]
 
 const SCOPE =
+  "This update covers the dashboards we worked on or paused this month. If a project isn't listed, it's still on our radar and on our upcoming project list."
+/** earlier wordings of SCOPE, moved up to today's when left as they were */
+const OLD_SCOPES = [
   "This update covers the dashboards we worked on or paused this month. If a project isn't listed, it's still on our radar and in our project list."
+]
 
 function defaultMeta(): StatusMeta {
   const now = new Date()
@@ -122,7 +126,7 @@ function normalize(raw: Record<string, unknown>): StatusUpdateData {
     month: typeof m.month === 'string' ? m.month : base.month,
     intro: typeof m.intro === 'string' ? m.intro : base.intro,
     // saved before these existed: the sentence starts on, the link blank
-    scope: typeof m.scope === 'string' ? m.scope : base.scope,
+    scope: typeof m.scope === 'string' && !OLD_SCOPES.includes(m.scope) ? m.scope : base.scope,
     pastLink: str(m.pastLink),
     mailbox: typeof m.mailbox === 'string' ? m.mailbox : base.mailbox,
     oh1: typeof m.oh1 === 'string' ? m.oh1 : base.oh1,

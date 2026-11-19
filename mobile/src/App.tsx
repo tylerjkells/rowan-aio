@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { ReportKey } from '../../src/shared/types'
 import { Hub, HubError, takeAuthReturn } from './api'
 import { clearCache, loadSettings, peek, type PhoneSettings } from './data'
 import { ActionsIcon, MeetingsIcon, MicIcon, MoreIcon, TodayIcon, WIDE, errorText, useMedia } from './ui'
@@ -12,6 +13,7 @@ import { PlannerView } from './views/Planner'
 import { RecordView, useRecording } from './views/Record'
 import { PeopleView, PersonView } from './views/People'
 import { TicketsView, TicketView } from './views/Tickets'
+import { ReportView, isReport } from './views/Reports'
 import { DashboardsView, LinksView } from './views/Links'
 import { GuideView, ToolboxView } from './views/Toolbox'
 import { BrandView } from './views/Brand'
@@ -25,16 +27,26 @@ type Route =
   | { name: 'person'; id: string }
   | { name: 'ticket'; id: string }
   | { name: 'guide'; id: string }
+  | { name: 'report'; id: ReportKey }
 
 function parse(hash: string): Route {
   const [, a, b] = hash.replace(/^#/, '').split('/')
   if ((a === 'meeting' || a === 'person' || a === 'ticket' || a === 'guide') && b) return { name: a, id: decodeURIComponent(b) }
+  if (a === 'report' && b && isReport(b)) return { name: 'report', id: b }
   return { name: (SIMPLE as readonly string[]).includes(a) ? (a as (typeof SIMPLE)[number]) : 'today' }
 }
 
 /** the section a screen belongs to, for highlighting it in the tabs or sidebar */
 function sectionOf(r: Route): string {
-  return r.name === 'meeting' ? 'meetings' : r.name === 'person' ? 'people' : r.name === 'ticket' ? 'tickets' : r.name === 'guide' ? 'toolbox' : r.name
+  return r.name === 'meeting'
+    ? 'meetings'
+    : r.name === 'person'
+      ? 'people'
+      : r.name === 'ticket' || r.name === 'report'
+        ? 'tickets'
+        : r.name === 'guide'
+          ? 'toolbox'
+          : r.name
 }
 
 /** lists that open an item: on a wide screen the two sit side by side */
@@ -231,6 +243,8 @@ export default function App(): React.JSX.Element {
         return <ToolboxView />
       case 'guide':
         return <GuideView id={r.id} />
+      case 'report':
+        return <ReportView id={r.id} />
       case 'brand':
         return <BrandView />
       case 'more':
