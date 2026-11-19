@@ -6,7 +6,7 @@
 // surface is three database functions, sign-in, and file storage.
 // ---------------------------------------------------------------------------
 
-import { CONFIRM_EMAIL_PROBLEM, signUpProblem, type SignupApproval } from '../../shared/hub'
+import { signUpProblem, type SignupApproval } from '../../shared/hub'
 
 export interface HubConfig {
   url: string
@@ -171,13 +171,14 @@ export class SupabaseHub implements Hub {
   /**
    * Create an account with a password the person chooses. The hub only
    * accepts an email an administrator approved (approved_signups migration).
+   * Null: the account was made, but the hub wants the email confirmed first.
    */
   static async signUp(
     cfg: HubConfig,
     email: string,
     password: string,
     onSession: (s: SavedSession) => void
-  ): Promise<SupabaseHub> {
+  ): Promise<SupabaseHub | null> {
     const res = await call(`${trimUrl(cfg.url)}/auth/v1/signup`, {
       method: 'POST',
       headers: { apikey: cfg.key, 'Content-Type': 'application/json' },
@@ -190,7 +191,7 @@ export class SupabaseHub implements Hub {
     }
     const t = (await res.json()) as Partial<TokenResponse>
     // with "Confirm email" on, the hub answers with the user and no session
-    if (!t.access_token || !t.refresh_token || !t.user?.id) throw new HubError(CONFIRM_EMAIL_PROBLEM, 'auth')
+    if (!t.access_token || !t.refresh_token || !t.user?.id) return null
     const session = { userId: t.user.id, email: t.user.email ?? email.trim(), refreshToken: t.refresh_token }
     onSession(session)
     const hub = new SupabaseHub(cfg, session, onSession)

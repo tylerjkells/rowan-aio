@@ -1430,18 +1430,25 @@ function registerIpc(): void {
     return items
   })
 
-  // dismiss / snooze: triage states that aren't "done"
+  // on your list or not, dismiss, snooze: states that aren't "done"
   ipcMain.handle(
     'actions:setState',
     (
       _e,
       meetingId: string,
       index: number,
-      patch: { dismissed?: boolean; snoozedUntil?: string | null }
+      patch: { tracked?: boolean; dismissed?: boolean; snoozedUntil?: string | null }
     ) => {
       const m = readMeeting(meetingId)
       const item = m?.summary?.actionItems[index]
       if (!m || !item) return null
+      if (patch.tracked !== undefined) {
+        if (patch.tracked) {
+          item.tracked = true
+          // back on the list means it's live again
+          delete item.dismissed
+        } else delete item.tracked
+      }
       if (patch.dismissed !== undefined) {
         if (patch.dismissed) item.dismissed = true
         else delete item.dismissed

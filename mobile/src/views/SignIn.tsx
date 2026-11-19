@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MIN_PASSWORD, looksLikeEmail } from '../../../src/shared/hub'
+import { MIN_PASSWORD, confirmEmailNote, looksLikeEmail } from '../../../src/shared/hub'
 import { Hub, hubConfig, setCustomHub } from '../api'
 import { errorText } from '../ui'
 
@@ -10,6 +10,7 @@ export function SignIn({ note, onSignedIn }: { note: string | null; onSignedIn: 
   const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(note)
+  const [info, setInfo] = useState<string | null>(null)
   const [hubOpen, setHubOpen] = useState(() => hubConfig() === null)
   const [hubUrl, setHubUrl] = useState(() => hubConfig()?.url ?? '')
   const [hubKey, setHubKey] = useState(() => hubConfig()?.key ?? '')
@@ -19,6 +20,7 @@ export function SignIn({ note, onSignedIn }: { note: string | null; onSignedIn: 
     e.preventDefault()
     setBusy(true)
     setError(null)
+    setInfo(null)
     try {
       if (hubOpen) {
         if (!/^https:\/\/\S+$/.test(hubUrl.trim()) || !hubKey.trim()) throw new Error('Enter the hub address (https://…) and its key.')
@@ -28,7 +30,15 @@ export function SignIn({ note, onSignedIn }: { note: string | null; onSignedIn: 
         if (!looksLikeEmail(email)) throw new Error('Enter the email that was approved for you.')
         if (password.length < MIN_PASSWORD) throw new Error(`Use at least ${MIN_PASSWORD} characters for your password.`)
         if (password !== confirm) throw new Error('The two passwords don’t match.')
-        onSignedIn(await Hub.signUp(email, password))
+        const hub = await Hub.signUp(email, password)
+        if (hub) onSignedIn(hub)
+        else {
+          // the account exists; the hub wants the email confirmed before it lets them in
+          setCreating(false)
+          setPassword('')
+          setConfirm('')
+          setInfo(confirmEmailNote(email))
+        }
       } else {
         onSignedIn(await Hub.signIn(email, password))
       }
@@ -87,6 +97,11 @@ export function SignIn({ note, onSignedIn }: { note: string | null; onSignedIn: 
       {error && (
         <p className="problem" role="alert">
           {error}
+        </p>
+      )}
+      {info && (
+        <p className="notice" role="status">
+          {info}
         </p>
       )}
       <p className="fine">

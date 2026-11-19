@@ -352,8 +352,11 @@ function start(h: SupabaseHub): SyncStatus {
   return syncStatus()
 }
 
-/** a new account, with a password the person picks; their email must be approved */
-async function signUp(email: string, password: string): Promise<SyncStatus> {
+/**
+ * A new account, with a password the person picks; their email must be
+ * approved. `confirm`: made, but the hub wants the email confirmed first.
+ */
+async function signUp(email: string, password: string): Promise<{ confirm: boolean; status: SyncStatus }> {
   const cfg = hubConfig()
   if (!cfg) throw new Error('This build has no sync hub set up.')
   if (!looksLikeEmail(email)) throw new Error('Enter the email that was approved for you.')
@@ -365,7 +368,8 @@ async function signUp(email: string, password: string): Promise<SyncStatus> {
       `This PC's library already syncs with ${own.email}. Sign in with that account instead.`
     )
   }
-  return start(await SupabaseHub.signUp(cfg, email, password, (s) => saveSession(cfg, s)))
+  const h = await SupabaseHub.signUp(cfg, email, password, (s) => saveSession(cfg, s))
+  return h ? { confirm: false, status: start(h) } : { confirm: true, status: syncStatus() }
 }
 
 function adminHub(): SupabaseHub {

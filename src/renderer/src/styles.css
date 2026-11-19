@@ -2699,6 +2699,14 @@ select.text-input {
   padding-left: 0;
 }
 
+.sync-mode {
+  margin-bottom: var(--s2);
+}
+
+.sync-mode-desc {
+  margin: 0 0 var(--s3);
+}
+
 .sync-signin.creating {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
@@ -6107,6 +6115,37 @@ button.speaker-chip-btn:hover {
 .ai-row:focus-within .ai-actions,
 .ai-row.snoozing .ai-actions {
   opacity: 1;
+}
+.track-btn {
+  flex: none;
+  padding: 3px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.track-btn.on {
+  background: var(--accent-tint);
+  border-color: transparent;
+  color: var(--accent-strong);
+}
+.ai-actions.shown {
+  opacity: 1;
+}
+.ai-row.suggest {
+  align-items: center;
+}
+.ai-add {
+  padding: 4px 10px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.ai-owner-plain {
+  color: var(--ink-soft);
+}
+.ai-meeting-toggle.static {
+  cursor: default;
+}
+.ai-recent {
+  margin-top: var(--s5);
 }
 .ai-action {
   font-size: 12px;

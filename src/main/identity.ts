@@ -190,6 +190,7 @@ export function actionRollup(m: Meeting, ctx: IdentityContext): ActionRollupItem
     owners: resolveOwners(a.owner, ctx),
     dismissed: a.dismissed ?? false,
     snoozedUntil: a.snoozedUntil ?? undefined,
-    clickupUrl: a.clickupUrl
+    clickupUrl: a.clickupUrl,
+    tracked: !!a.tracked
   }))
 }

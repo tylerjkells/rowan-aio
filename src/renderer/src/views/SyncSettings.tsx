@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MIN_PASSWORD, PHONE_APP_URL, inviteText, looksLikeEmail, type SignupApproval } from '../../../shared/hub'
+import { MIN_PASSWORD, PHONE_APP_URL, confirmEmailNote, inviteText, looksLikeEmail, type SignupApproval } from '../../../shared/hub'
 import type { SyncStatus } from '../../../shared/types'
 
 /** the live sync status, kept current by the main process */
@@ -306,6 +306,11 @@ export function SyncSettings({ status }: { status: SyncStatus | null }): React.J
   }
 
   if (!status.signedIn) {
+    const choose = (next: boolean): void => {
+      setCreating(next)
+      setNote(null)
+      setConfirm('')
+    }
     return (
       <>
         {channel !== 'stable' && (
@@ -314,6 +319,19 @@ export function SyncSettings({ status }: { status: SyncStatus | null }): React.J
             you want this test copy merged into your real library.
           </p>
         )}
+        <div className="mode-toggle sync-mode" role="radiogroup" aria-label="Sign in or create an account">
+          <button type="button" role="radio" aria-checked={!creating} className={creating ? '' : 'active'} onClick={() => choose(false)}>
+            I have an account
+          </button>
+          <button type="button" role="radio" aria-checked={creating} className={creating ? 'active' : ''} onClick={() => choose(true)}>
+            Create an account
+          </button>
+        </div>
+        <p className="opt-desc sync-mode-desc">
+          {creating
+            ? 'First ask the person who runs your Rowan hub to approve your email. Then enter that email and choose your own password; you’ll use the same one on your phone.'
+            : 'Sign in with the account you made here or on your phone.'}
+        </p>
         <form
           className={`sync-signin ${creating ? 'creating' : ''}`}
           onSubmit={(e) => {
@@ -321,12 +339,18 @@ export function SyncSettings({ status }: { status: SyncStatus | null }): React.J
             act(async () => {
               if (creating) {
                 if (password !== confirm) throw new Error('The two passwords don’t match.')
-                await window.scribe.sync.signUp(email, password)
+                const r = await window.scribe.sync.signUp(email, password)
+                setPassword('')
+                setConfirm('')
+                if (r.confirm) {
+                  // the account exists; the hub wants the email confirmed before it lets them in
+                  setCreating(false)
+                  setNote({ ok: true, msg: confirmEmailNote(email) })
+                }
               } else {
                 await window.scribe.sync.signIn(email, password)
+                setPassword('')
               }
-              setPassword('')
-              setConfirm('')
             })
           }}
         >
@@ -334,7 +358,7 @@ export function SyncSettings({ status }: { status: SyncStatus | null }): React.J
             className="text-input"
             type="email"
             autoComplete="username"
-            placeholder="Email"
+            placeholder={creating ? 'Your approved email' : 'Email'}
             aria-label="Sync account email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -377,30 +401,6 @@ export function SyncSettings({ status }: { status: SyncStatus | null }): React.J
           </p>
         )}
         <p className="opt-desc sync-gap">
-          {creating ? (
-            <>
-              Use the email the person who runs your sync hub approved for you, and choose your own
-              password. Already have an account?{' '}
-            </>
-          ) : (
-            <>
-              New to sync? Ask the person who runs your sync hub to approve your email, then{' '}
-            </>
-          )}
-          <button
-            type="button"
-            className="link-btn"
-            onClick={() => {
-              setCreating((v) => !v)
-              setNote(null)
-              setConfirm('')
-            }}
-          >
-            {creating ? 'Sign in' : 'create an account'}
-          </button>
-          .
-        </p>
-        <p className="opt-desc">
           The first time you sign in, this PC&apos;s library uploads in the background; another PC
           signing in to the same account then gets all of it.
         </p>
