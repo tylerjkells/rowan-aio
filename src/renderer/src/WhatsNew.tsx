@@ -6,6 +6,12 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.46.0': [
+    'The status update has its new format. The title reads Dashboard Status Update, each item’s area sits under its name instead of in a bar, and Updates and Enhancements get Open dashboard links like New Dashboards. In Progress shows just each name and status, and On Hold is its own section with a few words on why. A line under the intro says what the update covers, and the bottom links to past monthly updates once you add the link under Email details.',
+    'Trimming the In Progress statuses is quicker: Remove… on a status that items use moves them to the status you pick.',
+    'The status update’s white and gold text stays readable when Outlook pastes with Merge formatting, and the copy message says where to make Keep source formatting Outlook’s default.',
+    'Add a dashboard takes Tableau’s embed code as well as a link: paste the code from Share and Rowan pulls out the dashboard’s address and names it after the view.'
+  ],
   '0.45.0': [
     'Action items is now your list, and only what you put on it. Every meeting’s summary still keeps all of its action items, each with an Add to my list button, and the Action items page offers the last week’s items to add. Add your own or ones you’re waiting on from someone else; Remove takes one off again, and it stays in its meeting. Your list starts empty, so add back what you want to follow.',
     'Today, the morning brief, the weekly digest, People pages and the Claude app connection count only the items on your list.',
