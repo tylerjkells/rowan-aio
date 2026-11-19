@@ -492,6 +492,33 @@ function ohFmt(line: string): string {
   return m ? esc(m[1]) + '<br>' + keep(m[2]) : esc(raw).replace(/([0-9]) (AM|PM)/gi, '$1&nbsp;$2')
 }
 
+/** new Outlook merges formatting on paste by default, which turns the text black */
+const PASTE_TIP =
+  'Paste with Keep source formatting. To make that Outlook’s default: Settings › Mail › Compose and reply › Pasting from other apps.'
+
+/** white, gold, cream: text that needs its dark cell to be read */
+function isLight(hex: string): boolean {
+  const m = hex.match(/^#([0-9a-f]{6})$/i)
+  if (!m) return false
+  const n = parseInt(m[1], 16)
+  return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 150
+}
+
+/**
+ * Light text's color, on its colored cell too. New Outlook pastes with Merge
+ * formatting unless set otherwise, which keeps the cells' colors but turns
+ * every run of text black; a color on the cell itself survives, so white on
+ * maroon stays white (when Outlook's own default text color is Automatic).
+ * Done at copy time, so past issues saved before this get it as well.
+ */
+function colorCells(html: string): string {
+  return html.replace(
+    /<td\b([^>]*\bbgcolor="[^"]*"[^>]*?)style="((?:(?!<\/?td\b)[\s\S])*?<font face="[^"]*" color="(#[0-9A-Fa-f]{6})")/g,
+    (all, attrs: string, rest: string, color: string) =>
+      isLight(color) && !/^color:/.test(rest) ? `<td${attrs}style="color:${color};${rest}` : all
+  )
+}
+
 /** the email as it is copied; ed adds the preview's edit-in-place markers */
 function buildEmail(d: StatusUpdateData, ed = false): string {
   const m = d.meta
@@ -705,7 +732,8 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
 
   useEffect(() => {
     if (!toast) return
-    const timer = setTimeout(() => setToast(null), 5000)
+    // long enough to read: the paste tip runs twice the usual length
+    const timer = setTimeout(() => setToast(null), Math.max(5000, toast.length * 60))
     return () => clearTimeout(timer)
   }, [toast])
 
@@ -1073,7 +1101,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
 
   async function copy(emailHtml: string, plain: string, done: string): Promise<void> {
     try {
-      await window.scribe.clipboard.writeRich(emailHtml, plain)
+      await window.scribe.clipboard.writeRich(colorCells(emailHtml), plain)
       setToast(done)
     } catch {
       setToast('Couldn’t reach the clipboard. Try again in a moment.')
@@ -1086,8 +1114,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
     void copy(
       buildEmail(cur()),
       buildPlain(cur()),
-      (n ? `Copied, with ${n} item${n === 1 ? '' : 's'} still flagged. ` : 'Copied. ') +
-        'In Outlook, paste and choose Keep source formatting.'
+      (n ? `Copied, with ${n} item${n === 1 ? '' : 's'} still flagged. ` : 'Copied. ') + PASTE_TIP
     )
   }
 
@@ -1759,7 +1786,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
                   <button
                     className="btn"
                     onClick={() =>
-                      copy(x.html, x.plain, `Copied ${x.month}. In Outlook, paste and choose Keep source formatting.`)
+                      copy(x.html, x.plain, `Copied ${x.month}. ${PASTE_TIP}`)
                     }
                   >
                     Copy
@@ -2060,7 +2087,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
                   copy(
                     issue.html,
                     issue.plain,
-                    `Copied ${issue.month}. In Outlook, paste and choose Keep source formatting.`
+                    `Copied ${issue.month}. ${PASTE_TIP}`
                   )
                 }
               >
