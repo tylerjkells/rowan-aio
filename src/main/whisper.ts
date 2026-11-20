@@ -147,9 +147,80 @@ export async function setupEngine(model: WhisperModel, onProgress: ProgressFn): 
   if (!existsSync(mp) || statSync(mp).size < 50_000_000) {
     await downloadWithProgress(MODEL_URLS[model], mp, 'model', `Speech model (${model})`, onProgress)
   }
+  // under 1 MB; a failure here only means the engine hears silence too
+  await ensureVadModel().catch(() => {})
 
   onProgress({ phase: 'model', percent: 100, detail: 'Ready', done: true })
   return engineStatus(model)
+}
+
+// ---------------------------------------------------------------------------
+// Speech detection (VAD). whisper.cpp can run a tiny Silero model first and
+// hand only the stretches with speech to Whisper, so silence costs nothing
+// and can't be "heard" as made-up lines. It needs an engine from mid-2025 or
+// later and a <1 MB model, fetched on first use; without either, chunks run
+// on the whole audio as before.
+// ---------------------------------------------------------------------------
+
+const VAD_MODEL_URL = 'https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin'
+
+function vadModelPath(): string {
+  return join(modelsDir(), 'ggml-silero-v6.2.0.bin')
+}
+
+function vadModelReady(): boolean {
+  const p = vadModelPath()
+  return existsSync(p) && statSync(p).size > 100_000
+}
+
+let vadDownload: Promise<void> | null = null
+
+/** fetch the speech-detection model once; concurrent callers share the download */
+function ensureVadModel(): Promise<void> {
+  if (vadModelReady()) return Promise.resolve()
+  vadDownload ??= downloadWithProgress(VAD_MODEL_URL, vadModelPath(), 'model', 'Speech detection', () => {}).finally(
+    () => {
+      vadDownload = null
+    }
+  )
+  return vadDownload
+}
+
+/** set when a run with speech detection failed, so the rest of this session goes without it */
+let vadBroken = false
+
+/** what the installed whisper-cli understands, read from its --help once per binary */
+let engineFlags: { binary: string; vad: boolean } | null = null
+
+async function binarySupportsVad(binary: string): Promise<boolean> {
+  if (engineFlags?.binary === binary) return engineFlags.vad
+  const help = await new Promise<string>((resolve) => {
+    let out = ''
+    const p = spawn(binary, ['--help'], { windowsHide: true })
+    const timer = setTimeout(() => p.kill(), 15_000)
+    p.stdout.on('data', (d: Buffer) => (out += d.toString()))
+    p.stderr.on('data', (d: Buffer) => (out += d.toString()))
+    p.on('close', () => {
+      clearTimeout(timer)
+      resolve(out)
+    })
+    p.on('error', () => {
+      clearTimeout(timer)
+      resolve('')
+    })
+  })
+  engineFlags = { binary, vad: /--vad-model/.test(help) }
+  return engineFlags.vad
+}
+
+/** whether this run can skip silence; starts the model download when only that is missing */
+async function vadArgs(binary: string): Promise<string[]> {
+  if (vadBroken || !(await binarySupportsVad(binary))) return []
+  if (!vadModelReady()) {
+    void ensureVadModel().catch(() => {})
+    return []
+  }
+  return ['--vad', '--vad-model', vadModelPath()]
 }
 
 interface WhisperJsonOutput {
@@ -167,15 +238,47 @@ export interface TranscribeOptions {
   onProgress?: (percent: number) => void
 }
 
+/**
+ * Greedy decoding: one guess per word instead of whisper-cli's default beam
+ * search over five, which costs several times the decoding work for a
+ * difference in accuracy too small to measure on meeting audio.
+ */
+const DECODING_ARGS = ['--beam-size', '1']
+
 /** Full-quality default: most of the machine, leaving headroom for the app
  *  and the user's meeting software. */
 export function defaultThreads(): number {
   return Math.max(4, Math.min(12, cpus().length - 4))
 }
 
-/** Conservative thread count for transcribing while a meeting is live. */
+/**
+ * Thread count for transcribing while a meeting is live: half the logical
+ * processors, which leaves the call app (a core or two) plenty. The old
+ * "all but 8" gave a 12-thread laptop only 4, too few to keep up.
+ */
 export function liveThreads(): number {
-  return Math.max(2, Math.min(6, cpus().length - 8))
+  return Math.max(2, Math.min(8, Math.floor(cpus().length / 2)))
+}
+
+function runWhisper(binary: string, args: string[], onProgress?: (percent: number) => void): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const p = spawn(binary, args, { windowsHide: true })
+    let stderr = ''
+    p.stderr.on('data', (d: Buffer) => {
+      const s = d.toString()
+      stderr += s
+      if (!onProgress) return
+      const m = s.match(/progress\s*=\s*(\d+)%/g)
+      if (m) {
+        const last = m[m.length - 1].match(/(\d+)%/)
+        if (last) onProgress(Number(last[1]))
+      }
+    })
+    p.on('close', (code) =>
+      code === 0 ? resolve() : reject(new Error(`Whisper exited with code ${code}: ${stderr.slice(-800)}`))
+    )
+    p.on('error', reject)
+  })
 }
 
 export async function transcribeFile(
@@ -195,30 +298,22 @@ export async function transcribeFile(
     '-oj',
     '-of', outBase,
     '-l', 'en',
-    '-t', String(opts.threads ?? defaultThreads())
+    '-t', String(opts.threads ?? defaultThreads()),
+    ...DECODING_ARGS
   ]
   if (model === 'small.en-tdrz') args.push('--tinydiarize')
   if (opts.prompt) args.push('--prompt', opts.prompt)
   if (opts.onProgress) args.push('--print-progress')
 
-  await new Promise<void>((resolve, reject) => {
-    const p = spawn(binary, args, { windowsHide: true })
-    let stderr = ''
-    p.stderr.on('data', (d: Buffer) => {
-      const s = d.toString()
-      stderr += s
-      if (!opts.onProgress) return
-      const m = s.match(/progress\s*=\s*(\d+)%/g)
-      if (m) {
-        const last = m[m.length - 1].match(/(\d+)%/)
-        if (last) opts.onProgress(Number(last[1]))
-      }
-    })
-    p.on('close', (code) =>
-      code === 0 ? resolve() : reject(new Error(`Whisper exited with code ${code}: ${stderr.slice(-800)}`))
-    )
-    p.on('error', reject)
-  })
+  const vad = await vadArgs(binary)
+  try {
+    await runWhisper(binary, [...args, ...vad], opts.onProgress)
+  } catch (err) {
+    if (vad.length === 0) throw err
+    // an engine whose speech detection misbehaves still transcribes without it
+    vadBroken = true
+    await runWhisper(binary, args, opts.onProgress)
+  }
 
   const jsonPath = outBase + '.json'
   const parsed = JSON.parse(readFileSync(jsonPath, 'utf-8')) as WhisperJsonOutput

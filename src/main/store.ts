@@ -14,7 +14,14 @@ import {
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { LiveTranscriber } from './live'
-import { engineStatus, meetingPrompt, vocabularyPrompt } from './whisper'
+import {
+  engineStatus,
+  meetingPrompt,
+  vocabularyPrompt,
+  transcribeFile,
+  liveThreads,
+  defaultThreads
+} from './whisper'
 import { getSettings } from './settings'
 import { findLiveEvent, inviteesOf } from './calendar'
 import type {
@@ -203,20 +210,23 @@ export function beginRecording(mode: RecordingMode): string {
   const engine = engineStatus(settings.whisperModel)
   const live =
     engine.binaryReady && engine.modelReady
-      ? new LiveTranscriber(
-          meetingDir(id),
-          settings.whisperModel,
-          (segs, ms) => broadcastLive(id, segs, ms),
-          vocabularyPrompt(settings.vocabulary),
+      ? new LiveTranscriber({
+          dir: meetingDir(id),
+          model: settings.whisperModel,
+          onUpdate: (segs, ms) => broadcastLive(id, segs, ms),
+          transcribe: transcribeFile,
+          liveThreads: liveThreads(),
+          catchUpThreads: defaultThreads(),
+          vocab: vocabularyPrompt(settings.vocabulary),
           // its own session is gone once it stops, so any left are other meetings
-          () => sessions.size > 0
-        )
+          otherRecordingLive: () => sessions.size > 0
+        })
       : null
 
   sessions.set(id, { id, mode, startedAt: now.toISOString(), pcmStream, pcmBytes: 0, live })
 
   // the calendar event (if any) adds its invitees and title words to the
-  // hints; the first chunk is cut 45s in, so this lands well before it
+  // hints; the first chunk is cut 20-30s in, so this normally lands before it
   if (live && settings.hasCalendar && settings.vocabFromCalendar) {
     findLiveEvent(now.toISOString())
       .then(async (event) => {
