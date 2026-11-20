@@ -6,6 +6,11 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.48.0': [
+    'Live transcription is about twice as fast and a little more accurate. It should now keep pace with your meeting instead of falling minutes behind, so the transcript is ready moments after you stop recording rather than 10–15 minutes later, and words show up sooner while you record.',
+    'Silence is skipped, so quiet stretches no longer turn into made-up lines like “Thanks for watching.” This uses a small speech-detection file (under 1 MB) that downloads on your first recording.',
+    'With the Small + speaker turns model, live recordings now keep the speaker-change marks, so the me/them labels follow whole turns.'
+  ],
   '0.47.0': [
     'Rowan on your iPhone has the Tickets reports: open Tickets and tap Reports. The service report’s snapshot (last week, last month, month to date or 12 months), this month’s status update, the agenda summary and the monthly recap are all there, with the same numbers as on your PC. Copy as text copies the agenda or the recap; editing and updating stay on the PC.',
     'The status update’s line under the intro now ends “on our upcoming project list.” If you hadn’t changed that line, it updates on its own.'
