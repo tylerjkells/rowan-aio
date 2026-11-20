@@ -1,13 +1,43 @@
 import { writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
-import { transcribeFile, liveThreads, defaultThreads } from './whisper'
 import type { TranscriptSegment, WhisperModel } from '../shared/types'
 
 const SAMPLE_RATE = 16000
 const BYTES_PER_SEC = SAMPLE_RATE * 2 // 16-bit mono
-const CUT_TARGET_SEC = 45
-const CUT_SEARCH_SEC = 15
+// Whisper decodes 30s windows and pads anything shorter, so a chunk just
+// under 30s costs one window; a 45s chunk cost two.
+const CUT_TARGET_SEC = 29
+const CUT_SEARCH_SEC = 8
 const MIN_TAIL_SEC = 1
+
+/** one whisper run over a chunk's wav; injected so tests can stand in for the engine */
+export type TranscribeChunk = (
+  wavFile: string,
+  model: WhisperModel,
+  opts: { threads: number; prompt?: string }
+) => Promise<TranscriptSegment[]>
+
+export interface LiveTranscriberOptions {
+  /** where chunk wavs are written while they transcribe */
+  dir: string
+  model: WhisperModel
+  onUpdate: (segments: TranscriptSegment[], transcribedMs: number) => void
+  transcribe: TranscribeChunk
+  /** threads for a chunk while the meeting is live, leaving the call its share of the CPU */
+  liveThreads: number
+  /** threads for the whole machine, once the recording stopped */
+  catchUpThreads: number
+  /** user vocabulary prepended to each chunk's decoding context */
+  vocab?: string
+  /** whether another recording is live, so catching up should leave it CPU */
+  otherRecordingLive?: () => boolean
+}
+
+interface Chunk {
+  pcm: Buffer
+  offsetMs: number
+  index: number
+}
 
 function wavHeader(dataBytes: number): Buffer {
   const h = Buffer.alloc(44)
@@ -41,33 +71,38 @@ function rms(buf: Buffer, start: number, end: number): number {
 
 /**
  * Transcribes a recording incrementally while it is still being captured.
- * PCM is accumulated and cut into ~45s chunks at the quietest moment in the
- * last 15s of each chunk, so words are not split mid-utterance. Each chunk is
- * transcribed with the previous chunk's tail as decoding context.
+ * PCM is accumulated and cut into chunks just under Whisper's 30s window, at
+ * the quietest moment near the end of each, so words are not split
+ * mid-utterance. Each chunk is transcribed with the previous chunk's tail as
+ * decoding context.
+ *
+ * Chunks run one at a time: while the meeting is live on a share of the CPU,
+ * and once it stops on the whole machine. (Whisper scales close to linearly
+ * with threads, so running two chunks side by side would gain little and
+ * cost the second one its context.)
  */
 export class LiveTranscriber {
   private buffers: Buffer[] = []
   private bytesBuffered = 0
+  /** end of the audio cut into chunks so far */
   private offsetMs = 0
   private chunkIndex = 0
+  private pending: Chunk[] = []
+  private running = false
+  /** the last chunk's text, decoding context for the next */
   private prevText = ''
-  private queue: Promise<void> = Promise.resolve()
   private failed = false
   private finished = false
+  private vocab: string
   /** end of the audio transcribed so far */
   private doneMs = 0
   private onDrainProgress: ((percent: number) => void) | null = null
+  private idle: (() => void)[] = []
   readonly segments: TranscriptSegment[] = []
 
-  constructor(
-    private dir: string,
-    private model: WhisperModel,
-    private onUpdate: (segments: TranscriptSegment[], transcribedMs: number) => void,
-    /** user vocabulary prepended to each chunk's decoding context */
-    private vocab: string = '',
-    /** whether another recording is live, so catching up should leave it CPU */
-    private otherRecordingLive: () => boolean = () => false
-  ) {}
+  constructor(private o: LiveTranscriberOptions) {
+    this.vocab = o.vocab ?? ''
+  }
 
   /** swap the spelling hints, e.g. once the calendar event is known; applies from the next chunk */
   setVocab(vocab: string): void {
@@ -108,38 +143,60 @@ export class LiveTranscriber {
     this.bytesBuffered = rest.length
     if (chunk.length < MIN_TAIL_SEC * BYTES_PER_SEC) return
 
-    const chunkOffsetMs = this.offsetMs
+    this.pending.push({ pcm: Buffer.from(chunk), offsetMs: this.offsetMs, index: this.chunkIndex++ })
     this.offsetMs += (chunk.length / BYTES_PER_SEC) * 1000
-    const index = this.chunkIndex++
-    this.queue = this.queue
-      .then(() => this.runChunk(Buffer.from(chunk), chunkOffsetMs, index))
-      .catch(() => {
-        this.failed = true
-      })
+    this.pump()
   }
 
-  private async runChunk(pcm: Buffer, offsetMs: number, index: number): Promise<void> {
-    if (this.failed) return
-    const wav = join(this.dir, `live-${index}.wav`)
+  /** threads for the next chunk: the whole machine once stopped, unless another meeting is recording */
+  private threads(): number {
+    const catchingUp = this.finished && !(this.o.otherRecordingLive?.() ?? false)
+    return catchingUp ? this.o.catchUpThreads : this.o.liveThreads
+  }
+
+  /** start the next queued chunk once the one before it is done */
+  private pump(): void {
+    if (!this.failed && !this.running && this.pending.length > 0) {
+      const chunk = this.pending.shift()!
+      this.running = true
+      this.runChunk(chunk, this.threads())
+        .catch(() => {
+          this.failed = true
+        })
+        .finally(() => {
+          this.running = false
+          this.pump()
+        })
+    }
+    if (!this.running && (this.failed || this.pending.length === 0)) {
+      for (const resolve of this.idle.splice(0)) resolve()
+    }
+  }
+
+  private async runChunk(chunk: Chunk, threads: number): Promise<void> {
+    const { pcm, offsetMs, index } = chunk
+    const wav = join(this.o.dir, `live-${index}.wav`)
     try {
       writeFileSync(wav, Buffer.concat([wavHeader(pcm.length), pcm]))
-      const threads = this.finished && !this.otherRecordingLive() ? defaultThreads() : liveThreads()
-      const segs = await transcribeFile(wav, this.model, {
+      const segs = await this.o.transcribe(wav, this.o.model, {
         threads,
         prompt: [this.vocab, this.prevText.slice(-200)].filter(Boolean).join(' ') || undefined
       })
+      if (this.failed) return
       // whisper pads short chunks to its 30s window; clamp times to real audio
       const chunkMs = (pcm.length / BYTES_PER_SEC) * 1000
       for (const s of segs) {
         this.segments.push({
           from: Math.round(Math.min(s.from, chunkMs) + offsetMs),
           to: Math.round(Math.min(s.to, chunkMs) + offsetMs),
-          text: s.text
+          text: s.text,
+          // tinydiarize's speaker-change marks, which labelSpeakers groups by
+          ...(s.turn ? { turn: true } : {})
         })
       }
       this.prevText = segs.map((s) => s.text).join(' ')
       this.doneMs = offsetMs + chunkMs
-      this.onUpdate([...this.segments], Math.round(this.offsetMs))
+      this.o.onUpdate([...this.segments], Math.round(this.doneMs))
       this.reportDrain()
     } finally {
       rmSync(wav, { force: true })
@@ -166,7 +223,9 @@ export class LiveTranscriber {
     this.end()
     this.onDrainProgress = onProgress ?? null
     this.reportDrain()
-    await this.queue
+    if (this.running || (!this.failed && this.pending.length > 0)) {
+      await new Promise<void>((resolve) => this.idle.push(resolve))
+    }
     if (this.failed) return null
     return this.segments
   }
@@ -180,5 +239,6 @@ export class LiveTranscriber {
     this.failed = true
     this.finished = true
     this.buffers = []
+    this.pending = []
   }
 }
