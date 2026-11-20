@@ -76,10 +76,10 @@ function rms(buf: Buffer, start: number, end: number): number {
  * mid-utterance. Each chunk is transcribed with the previous chunk's tail as
  * decoding context.
  *
- * While the meeting is live, chunks run one at a time on a share of the CPU.
- * Once it stops, any backlog runs two chunks at a time across the machine
- * (whisper gains less from more threads than from a second chunk), and
- * results are still added to the transcript in order.
+ * Chunks run one at a time: while the meeting is live on a share of the CPU,
+ * and once it stops on the whole machine. (Whisper scales close to linearly
+ * with threads, so running two chunks side by side would gain little and
+ * cost the second one its context.)
  */
 export class LiveTranscriber {
   private buffers: Buffer[] = []
@@ -88,13 +88,9 @@ export class LiveTranscriber {
   private offsetMs = 0
   private chunkIndex = 0
   private pending: Chunk[] = []
-  private running = 0
-  /** chunks transcribed ahead of an earlier one still running, by index */
-  private landed = new Map<number, { segments: TranscriptSegment[]; endMs: number }>()
-  /** each transcribed chunk's text, the decoding context for the chunk after it */
-  private texts = new Map<number, string>()
-  /** the next chunk to add to the transcript */
-  private nextIndex = 0
+  private running = false
+  /** the last chunk's text, decoding context for the next */
+  private prevText = ''
   private failed = false
   private finished = false
   private vocab: string
@@ -152,31 +148,27 @@ export class LiveTranscriber {
     this.pump()
   }
 
-  /** how many chunks run at once, and on how many threads each */
-  private plan(): { workers: number; threads: number } {
+  /** threads for the next chunk: the whole machine once stopped, unless another meeting is recording */
+  private threads(): number {
     const catchingUp = this.finished && !(this.o.otherRecordingLive?.() ?? false)
-    if (!catchingUp) return { workers: 1, threads: this.o.liveThreads }
-    if (this.o.catchUpThreads < 4) return { workers: 1, threads: this.o.catchUpThreads }
-    return { workers: 2, threads: Math.floor(this.o.catchUpThreads / 2) }
+    return catchingUp ? this.o.catchUpThreads : this.o.liveThreads
   }
 
-  /** start queued chunks while there is room */
+  /** start the next queued chunk once the one before it is done */
   private pump(): void {
-    while (!this.failed && this.pending.length > 0) {
-      const { workers, threads } = this.plan()
-      if (this.running >= workers) break
+    if (!this.failed && !this.running && this.pending.length > 0) {
       const chunk = this.pending.shift()!
-      this.running++
-      this.runChunk(chunk, threads)
+      this.running = true
+      this.runChunk(chunk, this.threads())
         .catch(() => {
           this.failed = true
         })
         .finally(() => {
-          this.running--
+          this.running = false
           this.pump()
         })
     }
-    if (this.running === 0 && (this.failed || this.pending.length === 0)) {
+    if (!this.running && (this.failed || this.pending.length === 0)) {
       for (const resolve of this.idle.splice(0)) resolve()
     }
   }
@@ -186,45 +178,29 @@ export class LiveTranscriber {
     const wav = join(this.o.dir, `live-${index}.wav`)
     try {
       writeFileSync(wav, Buffer.concat([wavHeader(pcm.length), pcm]))
-      // the chunk before this one, when it's done; a chunk run alongside it goes without
-      const prev = this.texts.get(index - 1) ?? ''
       const segs = await this.o.transcribe(wav, this.o.model, {
         threads,
-        prompt: [this.vocab, prev.slice(-200)].filter(Boolean).join(' ') || undefined
+        prompt: [this.vocab, this.prevText.slice(-200)].filter(Boolean).join(' ') || undefined
       })
       if (this.failed) return
       // whisper pads short chunks to its 30s window; clamp times to real audio
       const chunkMs = (pcm.length / BYTES_PER_SEC) * 1000
-      this.texts.set(index, segs.map((s) => s.text).join(' '))
-      this.landed.set(index, {
-        endMs: offsetMs + chunkMs,
-        segments: segs.map((s) => ({
+      for (const s of segs) {
+        this.segments.push({
           from: Math.round(Math.min(s.from, chunkMs) + offsetMs),
           to: Math.round(Math.min(s.to, chunkMs) + offsetMs),
           text: s.text,
+          // tinydiarize's speaker-change marks, which labelSpeakers groups by
           ...(s.turn ? { turn: true } : {})
-        }))
-      })
-      this.commit()
+        })
+      }
+      this.prevText = segs.map((s) => s.text).join(' ')
+      this.doneMs = offsetMs + chunkMs
+      this.o.onUpdate([...this.segments], Math.round(this.doneMs))
+      this.reportDrain()
     } finally {
       rmSync(wav, { force: true })
     }
-  }
-
-  /** add finished chunks to the transcript in recording order */
-  private commit(): void {
-    let added = false
-    for (let next = this.landed.get(this.nextIndex); next; next = this.landed.get(this.nextIndex)) {
-      this.landed.delete(this.nextIndex)
-      this.texts.delete(this.nextIndex - 1)
-      this.segments.push(...next.segments)
-      this.doneMs = next.endMs
-      this.nextIndex++
-      added = true
-    }
-    if (!added) return
-    this.o.onUpdate([...this.segments], Math.round(this.doneMs))
-    this.reportDrain()
   }
 
   /**
@@ -235,8 +211,6 @@ export class LiveTranscriber {
     if (this.finished) return
     this.finished = true
     if (this.bytesBuffered > 0) this.cut(true)
-    // the backlog can spread across the machine now
-    this.pump()
   }
 
   /**
@@ -249,7 +223,7 @@ export class LiveTranscriber {
     this.end()
     this.onDrainProgress = onProgress ?? null
     this.reportDrain()
-    if (this.running > 0 || (!this.failed && this.pending.length > 0)) {
+    if (this.running || (!this.failed && this.pending.length > 0)) {
       await new Promise<void>((resolve) => this.idle.push(resolve))
     }
     if (this.failed) return null

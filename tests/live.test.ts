@@ -101,24 +101,25 @@ test('while live, one chunk at a time with the previous chunk as context', async
   rmSync(dir, { recursive: true, force: true })
 })
 
-test('after stopping, the backlog runs two at a time and lands in order', async () => {
-  // later chunks finish first, to shake out ordering
-  const engine = fakeEngine((i) => 40 - i * 3)
+test('after stopping, the backlog gets the whole machine and lands in order', async () => {
+  const engine = fakeEngine((i) => 20 - i * 2)
   const updates: TranscriptSegment[][] = []
   const { live, dir } = make(engine, updates)
   feed(live, speech(200))
-  // stop immediately: nearly every chunk is backlog
+  // stop immediately: every chunk but the first (already running) is backlog
   const segs = await live.drained()
   rmSync(dir, { recursive: true, force: true })
 
   assert.ok(segs)
-  assert.equal(engine.maxRunning(), 2)
+  assert.equal(engine.maxRunning(), 1)
   assert.deepEqual(
     segs.map((s) => s.text),
     segs.map((_, i) => `chunk ${i}.`)
   )
-  // catch-up chunks split the machine
-  assert.ok(engine.calls.slice(1).every((c) => c.threads === 4))
+  assert.equal(engine.calls[0].threads, 6)
+  assert.ok(engine.calls.slice(1).every((c) => c.threads === 8))
+  // context carries through the backlog too
+  assert.equal(engine.calls[3].prompt, 'Rowan, KPI chunk 2.')
   // every update is a prefix of the final transcript, in order
   for (const u of updates) assert.deepEqual(u, segs.slice(0, u.length))
 })
