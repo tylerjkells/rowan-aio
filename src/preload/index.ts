@@ -466,7 +466,13 @@ const api = {
     copy: (rect: Rect): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('capture:copy', rect),
     /** the same, saved as a PNG wherever the user picks */
     save: (rect: Rect, name: string): Promise<{ ok: boolean; error?: string; path?: string }> =>
-      ipcRenderer.invoke('capture:save', rect, name)
+      ipcRenderer.invoke('capture:save', rect, name),
+    /** a picture the page drew itself (a PNG data URL) onto the clipboard */
+    copyImage: (dataUrl: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('capture:copyImage', dataUrl),
+    /** the same, saved as a PNG wherever the user picks */
+    saveImage: (dataUrl: string, name: string): Promise<{ ok: boolean; error?: string; path?: string }> =>
+      ipcRenderer.invoke('capture:saveImage', dataUrl, name)
   },
   brand: {
     get: (): Promise<BrandData> => ipcRenderer.invoke('brand:get'),

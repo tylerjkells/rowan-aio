@@ -8,6 +8,7 @@ import {
   protocol,
   dialog,
   nativeTheme,
+  nativeImage,
   clipboard
 } from 'electron'
 import { writeFileSync } from 'fs'
@@ -1259,10 +1260,9 @@ function registerIpc(): void {
     clipboard.writeImage(image)
     return { ok: true }
   })
-  ipcMain.handle('capture:save', async (e, rect: Electron.Rectangle, name: string) => {
-    const image = await e.sender.capturePage(rect)
-    if (image.isEmpty()) return { ok: false, error: 'Nothing was captured' }
-    const win = BrowserWindow.fromWebContents(e.sender)
+  /** a PNG saved wherever the user picks, starting in Downloads */
+  async function savePng(sender: Electron.WebContents, image: Electron.NativeImage, name: string) {
+    const win = BrowserWindow.fromWebContents(sender)
     const opts = {
       defaultPath: join(app.getPath('downloads'), name),
       filters: [{ name: 'PNG image', extensions: ['png'] }]
@@ -1271,6 +1271,29 @@ function registerIpc(): void {
     if (res.canceled || !res.filePath) return { ok: false }
     writeFileSync(res.filePath, image.toPNG())
     return { ok: true, path: res.filePath }
+  }
+  ipcMain.handle('capture:save', async (e, rect: Electron.Rectangle, name: string) => {
+    const image = await e.sender.capturePage(rect)
+    if (image.isEmpty()) return { ok: false, error: 'Nothing was captured' }
+    return savePng(e.sender, image, name)
+  })
+  // a picture the page drew itself (the status update, taller than the
+  // screen, so it can't be captured from it), handed over as a PNG data URL
+  const pngOf = (dataUrl: unknown): Electron.NativeImage | null => {
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png;base64,')) return null
+    const image = nativeImage.createFromDataURL(dataUrl)
+    return image.isEmpty() ? null : image
+  }
+  ipcMain.handle('capture:copyImage', (_e, dataUrl: string) => {
+    const image = pngOf(dataUrl)
+    if (!image) return { ok: false, error: 'The picture came out empty' }
+    clipboard.writeImage(image)
+    return { ok: true }
+  })
+  ipcMain.handle('capture:saveImage', (e, dataUrl: string, name: string) => {
+    const image = pngOf(dataUrl)
+    if (!image) return { ok: false, error: 'The picture came out empty' }
+    return savePng(e.sender, image, name)
   })
 
   ipcMain.handle('brand:get', () => getBrand())

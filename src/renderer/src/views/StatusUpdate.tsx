@@ -10,6 +10,7 @@ import type {
   StatusUpdateData
 } from '../../../shared/types'
 import { useConfirm } from '../ui'
+import { htmlToPng } from '../htmlImage'
 import {
   AREAS,
   isHex,
@@ -1055,6 +1056,19 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
       setToast(done)
     } catch {
       setToast('Couldn’t reach the clipboard. Try again in a moment.')
+    }
+  }
+
+  /** the email as a picture, for the running Google Doc of past issues */
+  async function emailImage(emailHtml: string, month: string, save: boolean): Promise<void> {
+    try {
+      const png = await htmlToPng(emailHtml)
+      const name = `${month.trim() || 'Status'} Dashboard Status Update.png`.replace(/[\\/:*?"<>|]/g, '')
+      const r = save ? await window.scribe.capture.saveImage(png, name) : await window.scribe.capture.copyImage(png)
+      if (r.ok) setToast(save ? 'Saved the picture.' : 'Copied as a picture. Paste it into the Google Doc.')
+      else if (r.error) setToast(`Couldn’t make the picture: ${r.error}.`)
+    } catch {
+      setToast('Couldn’t make the picture. Try again in a moment.')
     }
   }
 
@@ -2109,6 +2123,16 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
               >
                 Copy this issue
               </button>
+              <button
+                className="btn"
+                onClick={() => void emailImage(issue.html, issue.month, false)}
+                title="Copy this issue as one picture, for a document"
+              >
+                Copy image
+              </button>
+              <button className="btn" onClick={() => void emailImage(issue.html, issue.month, true)}>
+                Save image…
+              </button>
               <button className="btn" onClick={() => setViewing(null)}>
                 Back to current
               </button>
@@ -2117,7 +2141,30 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
         ) : (
           <>
             <h3>Email preview</h3>
-            <span>Click any name or note to edit it here. This is exactly what gets copied.</span>
+            <span className="su-preview-actions">
+              <button
+                className="btn"
+                onClick={() => {
+                  void flush()
+                  void emailImage(buildEmail(cur()), cur().meta.month, false)
+                }}
+                title="Copy the email as one picture, for a document like the Google Doc of past issues"
+              >
+                Copy image
+              </button>
+              <button
+                className="btn"
+                onClick={() => {
+                  void flush()
+                  void emailImage(buildEmail(cur()), cur().meta.month, true)
+                }}
+              >
+                Save image…
+              </button>
+            </span>
+            <span className="su-preview-hint">
+              Click any name or note to edit it here. This is exactly what gets copied.
+            </span>
           </>
         )}
       </div>
