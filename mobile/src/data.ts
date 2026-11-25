@@ -542,6 +542,7 @@ const STATUS_META: StatusUpdateData['meta'] = {
   intro: '',
   scope: '',
   pastLink: '',
+  labels: {},
   mailbox: '',
   oh1: '',
   oh2: '',

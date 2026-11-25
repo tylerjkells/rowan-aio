@@ -5,6 +5,7 @@ import type {
   StatusImage,
   StatusIssue,
   StatusItem,
+  StatusLabel,
   StatusMeta,
   StatusSection,
   StatusUpdateData
@@ -20,10 +21,12 @@ import {
   isHold,
   isUrl,
   sectionItems,
-  groupByArea,
   countsOf,
   isHidden,
   filled,
+  label,
+  labelDef,
+  STATUS_LABELS,
   type Chip
 } from '../../../shared/statusItems'
 
@@ -68,11 +71,12 @@ const MONTHS = [
   'December'
 ]
 
-type PanelKey = 'meta' | 'spot' | 'statuses' | 'issues' | 'data'
+type PanelKey = 'meta' | 'words' | 'spot' | 'statuses' | 'issues' | 'data'
 
 /** the settings that open under the pills above the items */
 const PANELS: { key: PanelKey; label: string; hint: string }[] = [
   { key: 'meta', label: 'Email details', hint: 'Month, intro, request mailbox and office hours' },
+  { key: 'words', label: 'Wording', hint: 'Every fixed word in the email: headings, columns, buttons, the footer' },
   { key: 'spot', label: 'Spotlight', hint: 'An optional featured dashboard or tip' },
   { key: 'statuses', label: 'Statuses', hint: 'Add, rename and recolor the In Progress statuses' },
   { key: 'issues', label: 'Past issues', hint: 'Each month as it was sent' },
@@ -274,6 +278,14 @@ function t(text: string, o: TextOpts): string {
 const editAttr = (ed: boolean, key: string): string =>
   ed ? ` data-su-edit="${esc(key)}" contenteditable="plaintext-only"` : ''
 const rowAttr = (ed: boolean, id: string): string => (ed ? ` data-su-row="${esc(id)}"` : '')
+/** a piece of fixed wording, clickable in the preview; the copied email gets the bare text */
+const ek = (ed: boolean, key: StatusLabel, html: string): string =>
+  ed ? `<span${editAttr(ed, `label:${key}`)}>${html}</span>` : html
+/** a label as it reads in the email, editable in place */
+const lab = (d: StatusUpdateData, ed: boolean, key: StatusLabel): string =>
+  ek(ed, key, labelDef(key).upper ? up(label(d, key)) : esc(label(d, key)))
+/** one that must not wrap, like a button's words */
+const keep = (s: string): string => esc(s).replace(/ /g, '&nbsp;')
 
 const br = (s: string | undefined): string => esc(s).replace(/\n/g, '<br>')
 const up = (s: string | undefined): string => esc(String(s || '').toUpperCase())
@@ -283,11 +295,11 @@ const th = (text: string, attrs = ''): string =>
   `<td ${attrs} bgcolor="#4A4A4A" style="background-color:#4A4A4A;padding:8px 10px;">${t(text, { size: '9pt', color: '#FFFFFF', bold: true })}</td>`
 const chip = (text: string, bg: string, fg: string): string =>
   `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td nowrap bgcolor="${bg}" style="background-color:${bg};padding:3px 8px;">${t(text, { size: '8pt', color: fg, bold: true, spacing: '0.5px', lh: '1.2' })}</td></tr></table>`
-const subLabel = (text: string, top: number): string =>
-  `<tr><td style="padding:${top}px 32px 6px 32px;">${t(up(text), { size: '9pt', color: '#88431E', bold: true, spacing: '1px' })}</td></tr>`
-const reqLine = (it: StatusItem): string =>
+const subLabel = (html: string, top: number): string =>
+  `<tr><td style="padding:${top}px 32px 6px 32px;">${t(html, { size: '9pt', color: '#88431E', bold: true, spacing: '1px' })}</td></tr>`
+const reqLine = (d: StatusUpdateData, it: StatusItem): string =>
   (it.requestedBy || '').trim()
-    ? '<br>' + t('Requested by ' + esc(it.requestedBy!.trim()), { size: '8.5pt', color: '#75787B' })
+    ? '<br>' + t(esc(label(d, 'requestedBy')) + ' ' + esc(it.requestedBy!.trim()), { size: '8.5pt', color: '#75787B' })
     : ''
 const btnLink = (href: string, label: string): string =>
   `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td nowrap bgcolor="#57150B" style="background-color:#57150B;padding:6px 12px;"><a href="${esc(href)}" style="color:#FFFFFF;text-decoration:none;">${t(label, { size: '9pt', color: '#FFFFFF', bold: true, lh: '1.2' })}</a></td></tr></table>`
@@ -311,7 +323,7 @@ function spotlightHtml(d: StatusUpdateData, ed: boolean): string {
   const link = m.spotLink.trim()
   return `<tr><td style="padding:20px 32px 0 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 <td width="5" bgcolor="#57150B" style="background-color:#57150B;width:5px;">&nbsp;</td>
-<td valign="top" bgcolor="#FFF6D6" style="background-color:#FFF6D6;padding:16px 18px;">${t('SPOTLIGHT', { size: '8.5pt', color: '#88431E', bold: true, spacing: '1px' })}${m.spotTitle.trim() ? '<br>' + t(esc(m.spotTitle.trim()), { size: '13pt', color: '#57150B', bold: true, serif: true, lh: '1.3', attrs: editAttr(ed, 'meta:spotTitle') }) : ''}${spotImgHtml(d, link)}${m.spotBody.trim() ? (d.spotImg ? '' : '<br>') + t(br(m.spotBody.trim()), { size: '10pt', color: '#2B2B2B', lh: '1.5', attrs: editAttr(ed, 'meta:spotBody') }) : ''}${isUrl(link) ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:10px;">${btnLink(link, 'Take&nbsp;a&nbsp;look')}</td></tr></table>` : ''}</td>
+<td valign="top" bgcolor="#FFF6D6" style="background-color:#FFF6D6;padding:16px 18px;">${t(lab(d, ed, 'spotlight'), { size: '8.5pt', color: '#88431E', bold: true, spacing: '1px' })}${m.spotTitle.trim() ? '<br>' + t(esc(m.spotTitle.trim()), { size: '13pt', color: '#57150B', bold: true, serif: true, lh: '1.3', attrs: editAttr(ed, 'meta:spotTitle') }) : ''}${spotImgHtml(d, link)}${m.spotBody.trim() ? (d.spotImg ? '' : '<br>') + t(br(m.spotBody.trim()), { size: '10pt', color: '#2B2B2B', lh: '1.5', attrs: editAttr(ed, 'meta:spotBody') }) : ''}${isUrl(link) ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:10px;">${btnLink(link, keep(label(d, 'spotButton')))}</td></tr></table>` : ''}</td>
 </tr></table></td></tr>`
 }
 
@@ -319,8 +331,8 @@ function spotlightHtml(d: StatusUpdateData, ed: boolean): string {
 const areaLine = (it: StatusItem): string =>
   it.area ? '<br>' + t(esc(it.area), { size: '8.5pt', color: '#75787B' }) : ''
 
-const nameCell = (it: StatusItem, ed: boolean): string =>
-  `<td valign="top" style="${CELL}">${t(esc(it.name), { size: '10pt', color: '#2B2B2B', bold: true, attrs: editAttr(ed, `item:${it.id}:name`) })}${areaLine(it)}${reqLine(it)}</td>`
+const nameCell = (d: StatusUpdateData, it: StatusItem, ed: boolean): string =>
+  `<td valign="top" style="${CELL}">${t(esc(it.name), { size: '10pt', color: '#2B2B2B', bold: true, attrs: editAttr(ed, `item:${it.id}:name`) })}${areaLine(it)}${reqLine(d, it)}</td>`
 
 const noteCell = (it: StatusItem, ed: boolean): string =>
   `<td valign="top" style="${CELL}">${t(br(it.note), { size: '10pt', color: '#2B2B2B', attrs: editAttr(ed, `item:${it.id}:note`) })}</td>`
@@ -330,25 +342,28 @@ const itemTable = (head: string, rows: string): string =>
 <tr>${head}</tr>${rows}</table></td></tr>`
 
 /** completed items with an Open dashboard button; missing is what the Link column says without one */
-function linkTable(list: StatusItem[], ed: boolean, noteHead: string, missing: string): string {
+function linkTable(d: StatusUpdateData, list: StatusItem[], ed: boolean, noteHead: StatusLabel, missing: boolean): string {
   let rows = ''
   for (const it of list) {
     const link = isUrl(it.link)
-      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr><td nowrap bgcolor="#57150B" style="background-color:#57150B;padding:6px 12px;"><a href="${esc(it.link!.trim())}" style="color:#FFFFFF;text-decoration:none;">${t('Open&nbsp;dashboard', { size: '9pt', color: '#FFFFFF', bold: true, lh: '1.2' })}</a></td></tr></table>`
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr><td nowrap bgcolor="#57150B" style="background-color:#57150B;padding:6px 12px;"><a href="${esc(it.link!.trim())}" style="color:#FFFFFF;text-decoration:none;">${t(keep(label(d, 'openDashboard')), { size: '9pt', color: '#FFFFFF', bold: true, lh: '1.2' })}</a></td></tr></table>`
       : missing
-        ? t(missing, { size: '9pt', color: '#75787B' })
+        ? t(ek(ed, 'linkSoon', keep(label(d, 'linkSoon'))), { size: '9pt', color: '#75787B' })
         : '&nbsp;'
     rows += `<tr${rowAttr(ed, it.id)}>
-${nameCell(it, ed)}
+${nameCell(d, it, ed)}
 ${noteCell(it, ed)}
 <td valign="top" align="right" nowrap style="${CELL}">${link}</td>
 </tr>`
   }
-  return itemTable(th('Dashboard', 'width="30%"') + th(noteHead) + th('Link', 'width="150" align="right"'), rows)
+  return itemTable(
+    th(lab(d, ed, 'colDashboard'), 'width="30%"') + th(lab(d, ed, noteHead)) + th(lab(d, ed, 'colLink'), 'width="150" align="right"'),
+    rows
+  )
 }
 
-function sectionTitle(symbol: string, label: string, sub = ''): string {
-  return `<tr><td style="padding:28px 32px 8px 32px;">${tableOpen}<tr><td bgcolor="#57150B" style="background-color:#57150B;border-bottom:4px solid #FFCC00;padding:9px 12px;"><h2 style="margin:0;padding:0;font-size:15pt;line-height:1.2;">${t(symbol + '&nbsp; ' + up(label), { size: '15pt', color: '#FFFFFF', bold: true, serif: true, spacing: '0.5px', lh: '1.2' })}</h2></td></tr></table>${sub ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:6px;">${t(sub, { size: '9pt', color: '#75787B' })}</td></tr></table>` : ''}</td></tr>`
+function sectionTitle(symbol: string, labelHtml: string, subHtml = ''): string {
+  return `<tr><td style="padding:28px 32px 8px 32px;">${tableOpen}<tr><td bgcolor="#57150B" style="background-color:#57150B;border-bottom:4px solid #FFCC00;padding:9px 12px;"><h2 style="margin:0;padding:0;font-size:15pt;line-height:1.2;">${t(symbol + '&nbsp; ' + labelHtml, { size: '15pt', color: '#FFFFFF', bold: true, serif: true, spacing: '0.5px', lh: '1.2' })}</h2></td></tr></table>${subHtml ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:6px;">${t(subHtml, { size: '9pt', color: '#75787B' })}</td></tr></table>` : ''}</td></tr>`
 }
 
 /** new dashboards, then updates and enhancements, both with their links */
@@ -358,12 +373,12 @@ function completedHtml(d: StatusUpdateData, ed: boolean): string {
   const launched = list.filter((i) => i.launched)
   const rest = list.filter((i) => !i.launched)
   return (
-    sectionTitle('&#10003;', 'Completed') +
+    sectionTitle('&#10003;', lab(d, ed, 'completed')) +
     (launched.length
-      ? subLabel('New Dashboards', 6) + linkTable(launched, ed, 'What it covers', 'Link&nbsp;coming&nbsp;soon')
+      ? subLabel(lab(d, ed, 'newDashboards'), 6) + linkTable(d, launched, ed, 'colCovers', true)
       : '') +
     (rest.length
-      ? subLabel('Updates and Enhancements', launched.length ? 22 : 6) + linkTable(rest, ed, 'What changed', '')
+      ? subLabel(lab(d, ed, 'updates'), launched.length ? 22 : 6) + linkTable(d, rest, ed, 'colChanged', false)
       : '')
   )
 }
@@ -376,28 +391,34 @@ function progressHtml(d: StatusUpdateData, ed: boolean): string {
   for (const it of list) {
     const st = chipColors(statusDef(d, it.status))
     rows += `<tr${rowAttr(ed, it.id)}>
-${nameCell(it, ed)}
+${nameCell(d, it, ed)}
 <td valign="top" style="${CELL}">${chip(up(it.status || 'In Development').replace(/ /g, '&nbsp;'), st.bg, st.fg)}</td>
 </tr>`
   }
-  return sectionTitle('&#9658;', 'In Progress') + itemTable(th('Dashboard / Project') + th('Status', 'width="34%"'), rows)
+  return (
+    sectionTitle('&#9658;', lab(d, ed, 'progress')) +
+    itemTable(th(lab(d, ed, 'colDashboard')) + th(lab(d, ed, 'colStatus'), 'width="34%"'), rows)
+  )
 }
 
 /** paused, each with a few words on why */
 function holdHtml(d: StatusUpdateData, ed: boolean): string {
   const list = filled(sectionItems(d.items, 'progress')).filter((i) => isHold(d, i))
   if (!list.length) return ''
-  const rows = list.map((it) => `<tr${rowAttr(ed, it.id)}>\n${nameCell(it, ed)}\n${noteCell(it, ed)}\n</tr>`).join('')
-  return sectionTitle('&#10074;&#10074;', 'On Hold') + itemTable(th('Dashboard / Project', 'width="40%"') + th('Reason'), rows)
+  const rows = list.map((it) => `<tr${rowAttr(ed, it.id)}>\n${nameCell(d, it, ed)}\n${noteCell(it, ed)}\n</tr>`).join('')
+  return (
+    sectionTitle('&#10074;&#10074;', lab(d, ed, 'hold')) +
+    itemTable(th(lab(d, ed, 'colDashboard'), 'width="40%"') + th(lab(d, ed, 'colReason')), rows)
+  )
 }
 
 function newHtml(d: StatusUpdateData, ed: boolean): string {
   const list = filled(sectionItems(d.items, 'new'))
   if (!list.length) return ''
-  const rows = list.map((it) => `<tr${rowAttr(ed, it.id)}>\n${nameCell(it, ed)}\n${noteCell(it, ed)}\n</tr>`).join('')
+  const rows = list.map((it) => `<tr${rowAttr(ed, it.id)}>\n${nameCell(d, it, ed)}\n${noteCell(it, ed)}\n</tr>`).join('')
   return (
-    sectionTitle('&#9733;', 'New Requests', 'Currently in requirements gathering') +
-    itemTable(th('Dashboard / Project', 'width="34%"') + th('Purpose'), rows)
+    sectionTitle('&#9733;', lab(d, ed, 'new'), label(d, 'newSub').trim() ? lab(d, ed, 'newSub') : '') +
+    itemTable(th(lab(d, ed, 'colDashboard'), 'width="34%"') + th(lab(d, ed, 'colPurpose')), rows)
   )
 }
 
@@ -440,26 +461,34 @@ function colorCells(html: string): string {
 function buildEmail(d: StatusUpdateData, ed = false): string {
   const m = d.meta
   const s = countsOf(d)
-  const tileDefs: [number, string, string, string, string][] = []
-  if (!isHidden(d, 'completed')) tileDefs.push([s.completed, 'Completed', '#57150B', '#FFCC00', '#FFFFFF'])
+  const tileDefs: [number, StatusLabel, string, string, string][] = []
+  if (!isHidden(d, 'completed')) tileDefs.push([s.completed, 'completed', '#57150B', '#FFCC00', '#FFFFFF'])
   if (!isHidden(d, 'progress'))
     tileDefs.push(
-      [s.progress, 'In Progress', '#88431E', '#FFFFFF', '#FFFFFF'],
-      [s.hold, 'On Hold', '#75787B', '#FFFFFF', '#FFFFFF']
+      [s.progress, 'progress', '#88431E', '#FFFFFF', '#FFFFFF'],
+      [s.hold, 'hold', '#75787B', '#FFFFFF', '#FFFFFF']
     )
-  if (!isHidden(d, 'new')) tileDefs.push([s.fresh, 'New Requests', '#FFCC00', '#57150B', '#57150B'])
+  if (!isHidden(d, 'new')) tileDefs.push([s.fresh, 'new', '#FFCC00', '#57150B', '#57150B'])
   const tw = tileDefs.length ? Math.floor(100 / tileDefs.length) : 100
-  const tile = (n: number, label: string, bg: string, numColor: string, labColor: string, last: boolean): string =>
-    `<td width="${tw}%" align="center" valign="middle" bgcolor="${bg}" style="background-color:${bg};padding:14px 4px;${last ? '' : 'border-right:4px solid #FFFFFF;'}"><h2 style="margin:0;padding:0;font-size:22pt;line-height:1.1;">${t(String(n), { size: '22pt', color: numColor, bold: true, serif: true, lh: '1.1' })}</h2>${t(up(label), { size: '8pt', color: labColor, bold: true, spacing: '1px' })}</td>`
+  const tile = (n: number, key: StatusLabel, bg: string, numColor: string, labColor: string, last: boolean): string =>
+    `<td width="${tw}%" align="center" valign="middle" bgcolor="${bg}" style="background-color:${bg};padding:14px 4px;${last ? '' : 'border-right:4px solid #FFFFFF;'}"><h2 style="margin:0;padding:0;font-size:22pt;line-height:1.1;">${t(String(n), { size: '22pt', color: numColor, bold: true, serif: true, lh: '1.1' })}</h2>${t(lab(d, ed, key), { size: '8pt', color: labColor, bold: true, spacing: '1px' })}</td>`
   const tilesHtml = tileDefs.map((x, i) => tile(...x, i === tileDefs.length - 1)).join('\n')
   const mailbox = esc(m.mailbox)
   const past = isUrl(m.pastLink) ? m.pastLink.trim() : ''
+  const mailLink = `<a href="mailto:${mailbox}" style="color:#57150B;"><b>${mailbox}</b></a>`
+  // [these words] link to the past updates; without brackets the whole line does
+  const pastHtml = (): string => {
+    const pastA = (words: string): string => `<a href="${esc(past)}" style="color:#57150B;"><b>${esc(words)}</b></a>`
+    const text = label(d, 'past')
+    const b = text.match(/^([\s\S]*?)\[([^\]]+)\]([\s\S]*)$/)
+    return b ? esc(b[1]) + pastA(b[2]) + esc(b[3]) : pastA(text)
+  }
   const band = (pad: string, inner: string): string =>
     `<tr><td bgcolor="#57150B" style="background-color:#57150B;padding:${pad};">${inner}</td></tr>`
   return `<table role="presentation" width="680" cellpadding="0" cellspacing="0" border="0" align="center" bgcolor="#FFFFFF" style="width:680px;max-width:680px;background-color:#FFFFFF;border:1px solid #E2D6BF;margin:0 auto;">
 <tr><td bgcolor="#FFCC00" height="6" style="background-color:#FFCC00;height:6px;line-height:6px;font-size:6px;">&nbsp;</td></tr>
-${band('24px 32px 2px 32px', t('ROWAN ONLINE OPERATIONAL EFFECTIVENESS TEAM', { size: '9pt', color: '#FFCC00', bold: true, spacing: '1.5px' }))}
-${band('4px 32px 22px 32px', `<h1 style="margin:0;padding:0;font-size:21pt;line-height:1.2;">${t(`<span${editAttr(ed, 'meta:month')}>${esc(m.month)}</span> Dashboard Status Update`, { size: '21pt', color: '#FFFFFF', bold: true, serif: true, lh: '1.2' })}</h1>`)}
+${band('24px 32px 2px 32px', t(lab(d, ed, 'team'), { size: '9pt', color: '#FFCC00', bold: true, spacing: '1.5px' }))}
+${band('4px 32px 22px 32px', `<h1 style="margin:0;padding:0;font-size:21pt;line-height:1.2;">${t(`<span${editAttr(ed, 'meta:month')}>${esc(m.month)}</span> ${lab(d, ed, 'title')}`, { size: '21pt', color: '#FFFFFF', bold: true, serif: true, lh: '1.2' })}</h1>`)}
 ${m.intro ? `<tr><td style="padding:24px 32px 8px 32px;">${t(br(m.intro), { size: '10.5pt', color: '#2B2B2B', lh: '1.5', attrs: editAttr(ed, 'meta:intro') })}</td></tr>` : ''}
 ${m.scope.trim() ? `<tr><td style="padding:${m.intro ? '4px' : '24px'} 32px 8px 32px;">${t(br(m.scope), { size: '9.5pt', color: '#5A5C5E', lh: '1.5', attrs: editAttr(ed, 'meta:scope') })}</td></tr>` : ''}
 ${
@@ -475,29 +504,30 @@ ${isHidden(d, 'progress') ? '' : progressHtml(d, ed) + holdHtml(d, ed)}
 ${isHidden(d, 'new') ? '' : newHtml(d, ed)}
 <tr><td style="padding:32px 32px ${past ? '16px' : '28px'} 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 <td width="5" bgcolor="#FFCC00" style="background-color:#FFCC00;width:5px;">&nbsp;</td>
-<td width="50%" valign="top" bgcolor="#FBF6EC" style="background-color:#FBF6EC;padding:16px 18px;">${t('Submit a Request', { size: '10.5pt', color: '#57150B', bold: true })}<br>${t(`Send all dashboard and reporting requests to <a href="mailto:${mailbox}" style="color:#57150B;"><b>${mailbox}</b></a>, including dashboard updates, discrepancies or issues, and one-time or recurring reports. This keeps requests captured, prioritized, and assigned.`, { size: '10pt', color: '#2B2B2B' })}</td>
-<td width="50%" valign="top" bgcolor="#FBF6EC" style="background-color:#FBF6EC;padding:16px 18px;">${t('Weekly Office Hours', { size: '10.5pt', color: '#57150B', bold: true })}<br>${t(ohFmt(m.oh1) + (m.oh2 ? '<br><br>' + ohFmt(m.oh2) : ''), { size: '10pt', color: '#2B2B2B' })}</td>
+<td width="50%" valign="top" bgcolor="#FBF6EC" style="background-color:#FBF6EC;padding:16px 18px;">${t(lab(d, ed, 'requestTitle'), { size: '10.5pt', color: '#57150B', bold: true })}<br>${t(esc(label(d, 'requestBody')).split('{mailbox}').join(mailLink), { size: '10pt', color: '#2B2B2B' })}</td>
+<td width="50%" valign="top" bgcolor="#FBF6EC" style="background-color:#FBF6EC;padding:16px 18px;">${t(lab(d, ed, 'hoursTitle'), { size: '10.5pt', color: '#57150B', bold: true })}<br>${t(ohFmt(m.oh1) + (m.oh2 ? '<br><br>' + ohFmt(m.oh2) : ''), { size: '10pt', color: '#2B2B2B' })}</td>
 </tr></table></td></tr>
-${past ? `<tr><td style="padding:0 32px 24px 32px;">${t(`Past monthly updates can be found <a href="${esc(past)}" style="color:#57150B;"><b>here</b></a>.`, { size: '10pt', color: '#2B2B2B' })}</td></tr>` : ''}
-${band('12px 32px', t('Rowan Online Operational Effectiveness Team &nbsp;|&nbsp; Monthly updates are sent the last Wednesday of every month.', { size: '8.5pt', color: '#F0E1BE' }))}
+${past ? `<tr><td style="padding:0 32px 24px 32px;">${t(pastHtml(), { size: '10pt', color: '#2B2B2B' })}</td></tr>` : ''}
+${band('12px 32px', t(ek(ed, 'footer', esc(label(d, 'footer')).replace(/ \| /g, ' &nbsp;|&nbsp; ')), { size: '8.5pt', color: '#F0E1BE' }))}
 </table>`
 }
 
 function buildPlain(d: StatusUpdateData): string {
   const m = d.meta
-  const lines = [`${m.month} Dashboard Status Update`, '', m.intro]
+  const L = (key: StatusLabel): string => label(d, key)
+  const lines = [`${m.month} ${L('title')}`, '', m.intro]
   if (m.scope.trim()) lines.push('', m.scope.trim())
   lines.push('')
   if (spotOn(d)) {
     lines.push(
-      'SPOTLIGHT: ' + m.spotTitle.trim(),
+      `${L('spotlight').toUpperCase()}: ${m.spotTitle.trim()}`,
       m.spotBody.trim() + (isUrl(m.spotLink) ? ' ' + m.spotLink.trim() : ''),
       ''
     )
   }
   const line = (it: StatusItem, rest: string): string =>
     `  - ${it.name}${it.area ? ` (${it.area})` : ''}${rest}` +
-    ((it.requestedBy || '').trim() ? ` (Requested by ${it.requestedBy!.trim()})` : '')
+    ((it.requestedBy || '').trim() ? ` (${L('requestedBy')} ${it.requestedBy!.trim()})` : '')
   const block = (title: string, list: StatusItem[], rest: (it: StatusItem) => string): void => {
     if (!list.length) return
     lines.push(title.toUpperCase(), ...list.map((it) => line(it, rest(it))), '')
@@ -505,15 +535,15 @@ function buildPlain(d: StatusUpdateData): string {
   const withLink = (it: StatusItem): string => `: ${it.note}` + (isUrl(it.link) ? ' ' + it.link!.trim() : '')
   if (!isHidden(d, 'completed')) {
     const list = filled(sectionItems(d.items, 'completed'))
-    block('Completed: new dashboards', list.filter((i) => i.launched), withLink)
-    block('Completed: updates and enhancements', list.filter((i) => !i.launched), withLink)
+    block(`${L('completed')}: ${L('newDashboards')}`, list.filter((i) => i.launched), withLink)
+    block(`${L('completed')}: ${L('updates')}`, list.filter((i) => !i.launched), withLink)
   }
   if (!isHidden(d, 'progress')) {
     const list = filled(sectionItems(d.items, 'progress'))
-    block('In progress', list.filter((i) => !isHold(d, i)), (it) => ` [${it.status || ''}]`)
-    block('On hold', list.filter((i) => isHold(d, i)), (it) => (it.note.trim() ? `: ${it.note.trim()}` : ''))
+    block(L('progress'), list.filter((i) => !isHold(d, i)), (it) => ` [${it.status || ''}]`)
+    block(L('hold'), list.filter((i) => isHold(d, i)), (it) => (it.note.trim() ? `: ${it.note.trim()}` : ''))
   }
-  if (!isHidden(d, 'new')) block('New requests', filled(sectionItems(d.items, 'new')), (it) => `: ${it.note}`)
+  if (!isHidden(d, 'new')) block(L('new'), filled(sectionItems(d.items, 'new')), (it) => `: ${it.note}`)
   lines.push(`Requests: ${m.mailbox}`, `Office hours: ${m.oh1}; ${m.oh2}`)
   if (isUrl(m.pastLink)) lines.push(`Past monthly updates: ${m.pastLink.trim()}`)
   return lines.join('\n')
@@ -727,6 +757,13 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
   }
 
   const setMeta = (p: Partial<StatusMeta>, delay?: number): void => change({ meta: { ...cur().meta, ...p } }, delay)
+  /** your wording for a label; blank goes back to the default */
+  function setLabel(key: StatusLabel, value: string, delay?: number): void {
+    const labels = { ...cur().meta.labels }
+    if (value.trim()) labels[key] = value
+    else delete labels[key]
+    setMeta({ labels }, delay)
+  }
 
   function patchItems(patches: Record<string, Partial<StatusItem>>, delay?: number): void {
     change({ items: cur().items.map((i) => (patches[i.id] ? { ...i, ...patches[i.id] } : i)) }, delay)
@@ -858,29 +895,6 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
       localStorage.setItem(PLAN_OPEN_KEY, String(!o))
       return !o
     })
-  }
-
-  function moveItem(id: string, dir: -1 | 1): void {
-    const it = cur().items.find((i) => i.id === id)
-    if (!it) return
-    const group = sectionItems(cur().items, it.section).filter(
-      (i) => i.area === it.area && !!i.launched === !!it.launched && isHold(cur(), i) === isHold(cur(), it)
-    )
-    const idx = group.findIndex((i) => i.id === id)
-    const other = group[idx + dir]
-    if (!other) return
-    const patches: Record<string, Partial<StatusItem>> = {}
-    let a = it.order
-    let b = other.order
-    if (a === b) {
-      group.forEach((g, n) => (patches[g.id] = { order: (n + 1) * 10 }))
-      a = (idx + 1) * 10
-      b = (idx + dir + 1) * 10
-    }
-    patches[it.id] = { order: b }
-    patches[other.id] = { order: a }
-    focusAfter.current = { id: `su-${id}-${dir < 0 ? 'up' : 'down'}` }
-    patchItems(patches, 0)
   }
 
   function changeSection(id: string, section: StatusSection): void {
@@ -1183,7 +1197,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
 
   const editTarget = (e: React.SyntheticEvent): HTMLElement | null =>
     (e.target as HTMLElement).closest<HTMLElement>('[data-su-edit]')
-  const singleLine = (key: string): boolean => /:(name|month|spotTitle)$/.test(key)
+  const singleLine = (key: string): boolean => /:(name|month|spotTitle)$|^label:/.test(key)
 
   function fieldValue(key: string): string {
     const [kind, a, b] = key.split(':')
@@ -1191,12 +1205,14 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
       const it = cur().items.find((i) => i.id === a)
       return it ? String(it[b as 'name' | 'note'] ?? '') : ''
     }
+    if (kind === 'label') return label(cur(), a as StatusLabel)
     return String(cur().meta[a as 'month' | 'intro' | 'scope' | 'spotTitle' | 'spotBody'] ?? '')
   }
 
   function previewEdit(key: string, value: string): void {
     const [kind, a, b] = key.split(':')
     if (kind === 'item') patchItem(a, { [b]: value } as Partial<StatusItem>)
+    else if (kind === 'label') setLabel(a as StatusLabel, value)
     else setMeta({ [a]: value } as Partial<StatusMeta>)
   }
 
@@ -1309,7 +1325,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
   const issues = [...data.issues].sort((a, b) => b.archivedAt.localeCompare(a.archivedAt))
   const fresh = data.items.length === 0 && data.issues.length === 0
 
-  const row = (it: StatusItem, sec: Sec, pos: number, len: number): React.JSX.Element => {
+  const row = (it: StatusItem, sec: Sec): React.JSX.Element => {
     const prog = sec.key === 'progress'
     const hold = isHold(data, it)
     const statusNames = data.statuses.map((s) => s.name)
@@ -1320,6 +1336,7 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
     const linked = active?.id === it.id && active.from === 'preview'
     const chipC = prog ? chipColors(statusDef(data, it.status)) : null
     const summary = [
+      it.area,
       it.requestedBy?.trim() && `Requested by ${it.requestedBy.trim()}`,
       prog && it.target?.trim() && `Target ${it.target.trim()}`
     ]
@@ -1470,24 +1487,6 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
                 </label>
               )}
               <span className="su-grow" />
-              <button
-                id={`su-${it.id}-up`}
-                className="su-ic"
-                onClick={() => moveItem(it.id, -1)}
-                disabled={pos === 0}
-                aria-label="Move up"
-              >
-                ↑
-              </button>
-              <button
-                id={`su-${it.id}-down`}
-                className="su-ic"
-                onClick={() => moveItem(it.id, 1)}
-                disabled={pos === len - 1}
-                aria-label="Move down"
-              >
-                ↓
-              </button>
               <button className={`su-del ${delArmed ? 'armed' : ''}`} onClick={() => deleteItem(it.id)}>
                 {delArmed ? 'Confirm delete' : 'Delete'}
               </button>
@@ -1498,17 +1497,12 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
     )
   }
 
-  const groups = (sec: Sec, list: StatusItem[]): React.JSX.Element[] => {
-    const gs = groupByArea(list)
-    return gs.map((g) => (
-      <div key={g.area || '-'} className="su-group">
-        {(g.area || gs.length > 1) && <div className="su-area">{g.area || 'No area'}</div>}
-        {g.items.map((it, n) => row(it, sec, n, g.items.length))}
-      </div>
-    ))
-  }
+  // A to Z, areas mixed, as the email lists them
+  const groups = (sec: Sec, list: StatusItem[]): React.JSX.Element => (
+    <div className="su-group">{list.map((it) => row(it, sec))}</div>
+  )
 
-  const sectionBody = (sec: Sec, list: StatusItem[]): React.JSX.Element | React.JSX.Element[] => {
+  const sectionBody = (sec: Sec, list: StatusItem[]): React.JSX.Element => {
     if (!list.length) return <p className="su-empty">Nothing here yet. Use Add item to start this section.</p>
     if (sec.key === 'progress') {
       const going = list.filter((i) => !isHold(data, i))
@@ -1604,6 +1598,66 @@ export function StatusUpdate({ title, onBack }: { title: string; onBack: () => v
           {metaInput('pastLink', 'Past monthly updates link', 'https://… (linked at the bottom of the email)')}
         </div>
       )
+    if (key === 'words') {
+      const groups = [...new Set(STATUS_LABELS.map((l) => l.group))]
+      const changed = Object.keys(data.meta.labels).length
+      return (
+        <div className="su-grid su-words">
+          <p className="su-hint full">
+            Leave a box empty to use the wording shown in it. You can also click most of these right in the email
+            preview to change them there.
+          </p>
+          {groups.map((g) => (
+            <div key={g} className="su-words-group full">
+              <h4>{g}</h4>
+              <div className="su-grid">
+                {STATUS_LABELS.filter((l) => l.group === g).map((l) => {
+                  const v = data.meta.labels[l.key] ?? ''
+                  return (
+                    <div key={l.key} className={`su-lbl ${l.multi ? 'full' : ''}`}>
+                      <span className="su-words-name">
+                        <label htmlFor={`su-w-${l.key}`}>{l.name}</label>
+                        {v && (
+                          <button type="button" className="link-btn" onClick={() => setLabel(l.key, '', 0)}>
+                            Reset
+                          </button>
+                        )}
+                      </span>
+                      {l.multi ? (
+                        <textarea
+                          id={`su-w-${l.key}`}
+                          className="text-input"
+                          rows={3}
+                          value={v}
+                          placeholder={l.def}
+                          onChange={(e) => setLabel(l.key, e.target.value)}
+                        />
+                      ) : (
+                        <input
+                          id={`su-w-${l.key}`}
+                          className="text-input"
+                          value={v}
+                          placeholder={l.def}
+                          onChange={(e) => setLabel(l.key, e.target.value)}
+                        />
+                      )}
+                      {l.hint && <span className="su-hint">{l.hint}</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+          {changed > 0 && (
+            <div className="full">
+              <button className="btn btn-ghost" onClick={() => setMeta({ labels: {} }, 0)}>
+                Put all {changed} back to the defaults
+              </button>
+            </div>
+          )}
+        </div>
+      )
+    }
     if (key === 'spot')
       return (
         <div className="su-grid">

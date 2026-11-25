@@ -9748,6 +9748,27 @@ button.tkr-hbar:focus-visible {
   font-weight: 400;
   color: var(--ink-faint);
 }
+.su-words .su-grid {
+  padding: 0;
+}
+.su-words-group h4 {
+  margin: 4px 0 8px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.su-words-name {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.su-words-name .link-btn {
+  font-size: 12px;
+  font-weight: 500;
+}
 .su-check-lbl {
   display: inline-flex;
   align-items: center;
@@ -10016,14 +10037,6 @@ button.tkr-hbar:focus-visible {
   font-weight: 650;
   color: var(--ink-soft);
 }
-.su-area {
-  margin: 10px 0 6px;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
 .su-empty {
   margin: 0;
   padding: 8px 0 10px;
@@ -10247,23 +10260,6 @@ button.tkr-hbar:focus-visible {
 }
 .su-grow {
   flex: 1;
-}
-.su-ic {
-  display: inline-grid;
-  place-items: center;
-  width: 26px;
-  height: 24px;
-  border: 1px solid var(--line-soft);
-  border-radius: 6px;
-  color: var(--ink-faint);
-}
-.su-ic:hover:not(:disabled) {
-  border-color: var(--line-strong);
-  color: var(--ink);
-}
-.su-ic:disabled {
-  opacity: 0.35;
-  cursor: default;
 }
 .su-del {
   padding: 3px 8px;

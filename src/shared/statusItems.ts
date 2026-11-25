@@ -1,4 +1,4 @@
-import type { StatusDef, StatusItem, StatusSection, StatusUpdateData } from './types'
+import type { StatusDef, StatusItem, StatusLabel, StatusSection, StatusUpdateData } from './types'
 
 // ---------------------------------------------------------------------------
 // The monthly status update's items as the email lists them: in area order,
@@ -100,34 +100,13 @@ export const isHold = (d: StatusUpdateData, it: StatusItem): boolean =>
   it.section === 'progress' && holdFlag(statusDef(d, it.status))
 export const isUrl = (u: string | undefined): boolean => /^https?:\/\/\S+$/i.test(String(u || '').trim())
 
-export function areaRank(a: string): number {
-  const i = AREAS.indexOf(a)
-  return i === -1 ? (a ? 50 : 99) : i
-}
+const byName = (a: string, b: string): number => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })
 
+/** a section's items A to Z by name, whatever their area */
 export function sectionItems(items: StatusItem[], key: StatusSection): StatusItem[] {
   return items
     .filter((it) => (it.section || 'progress') === key)
-    .sort(
-      (a, b) =>
-        areaRank(a.area) - areaRank(b.area) ||
-        a.area.localeCompare(b.area) ||
-        a.order - b.order ||
-        a.name.localeCompare(b.name)
-    )
-}
-
-export function groupByArea(list: StatusItem[]): { area: string; items: StatusItem[] }[] {
-  const groups: { area: string; items: StatusItem[] }[] = []
-  for (const it of list) {
-    let g = groups[groups.length - 1]
-    if (!g || g.area !== it.area) {
-      g = { area: it.area, items: [] }
-      groups.push(g)
-    }
-    g.items.push(it)
-  }
-  return groups
+    .sort((a, b) => byName(a.name.trim(), b.name.trim()) || byName(a.area, b.area) || a.order - b.order)
 }
 
 export function countsOf(d: StatusUpdateData): { completed: number; progress: number; hold: number; fresh: number } {
@@ -144,3 +123,74 @@ export const isHidden = (d: StatusUpdateData, key: StatusSection): boolean => d.
 
 /** what goes out: anything with a name or a note */
 export const filled = (list: StatusItem[]): StatusItem[] => list.filter((i) => i.name.trim() || i.note.trim())
+
+// ---- wording ------------------------------------------------------------------
+// Every fixed word in the email can be changed; only changes are saved, so a
+// label left alone follows any later change to its default.
+
+export interface LabelDef {
+  key: StatusLabel
+  /** the panel's heading this one sits under */
+  group: string
+  name: string
+  def: string
+  hint?: string
+  /** shown in capitals in the email */
+  upper?: boolean
+  multi?: boolean
+}
+
+export const STATUS_LABELS: LabelDef[] = [
+  { key: 'team', group: 'Header', name: 'Team name', def: 'Rowan Online Operational Effectiveness Team', upper: true },
+  { key: 'title', group: 'Header', name: 'Title, after the month', def: 'Dashboard Status Update' },
+  { key: 'completed', group: 'Sections and counts', name: 'Completed', def: 'Completed', upper: true },
+  { key: 'progress', group: 'Sections and counts', name: 'In Progress', def: 'In Progress', upper: true },
+  { key: 'hold', group: 'Sections and counts', name: 'On Hold', def: 'On Hold', upper: true },
+  { key: 'new', group: 'Sections and counts', name: 'New Requests', def: 'New Requests', upper: true },
+  { key: 'newDashboards', group: 'Sections and counts', name: 'Completed: new dashboards', def: 'New Dashboards', upper: true },
+  { key: 'updates', group: 'Sections and counts', name: 'Completed: updates', def: 'Updates and Enhancements', upper: true },
+  { key: 'newSub', group: 'Sections and counts', name: 'Under New Requests', def: 'Currently in requirements gathering' },
+  { key: 'colDashboard', group: 'Table headings', name: 'Name column', def: 'Dashboard' },
+  { key: 'colCovers', group: 'Table headings', name: 'New dashboards: about', def: 'What it covers' },
+  { key: 'colChanged', group: 'Table headings', name: 'Updates: about', def: 'What changed' },
+  { key: 'colLink', group: 'Table headings', name: 'Link column', def: 'Link' },
+  { key: 'colStatus', group: 'Table headings', name: 'In Progress: status', def: 'Status' },
+  { key: 'colReason', group: 'Table headings', name: 'On Hold: reason', def: 'Reason' },
+  { key: 'colPurpose', group: 'Table headings', name: 'New Requests: purpose', def: 'Purpose' },
+  { key: 'openDashboard', group: 'Buttons and small print', name: 'Dashboard button', def: 'Open dashboard' },
+  { key: 'linkSoon', group: 'Buttons and small print', name: 'No link yet', def: 'Link coming soon' },
+  { key: 'requestedBy', group: 'Buttons and small print', name: 'Before a requester’s name', def: 'Requested by' },
+  { key: 'spotlight', group: 'Buttons and small print', name: 'Spotlight label', def: 'Spotlight', upper: true },
+  { key: 'spotButton', group: 'Buttons and small print', name: 'Spotlight button', def: 'Take a look' },
+  { key: 'requestTitle', group: 'Bottom of the email', name: 'Request box title', def: 'Submit a Request' },
+  {
+    key: 'requestBody',
+    group: 'Bottom of the email',
+    name: 'Request box text',
+    def: 'Send all dashboard and reporting requests to {mailbox}, including dashboard updates, discrepancies or issues, and one-time or recurring reports. This keeps requests captured, prioritized, and assigned.',
+    hint: '{mailbox} is where the request mailbox goes, as a link.',
+    multi: true
+  },
+  { key: 'hoursTitle', group: 'Bottom of the email', name: 'Office hours title', def: 'Weekly Office Hours' },
+  {
+    key: 'past',
+    group: 'Bottom of the email',
+    name: 'Past updates line',
+    def: 'Past monthly updates can be found [here].',
+    hint: 'The words in [brackets] link to the past updates.'
+  },
+  {
+    key: 'footer',
+    group: 'Bottom of the email',
+    name: 'Footer',
+    def: 'Rowan Online Operational Effectiveness Team | Monthly updates are sent the last Wednesday of every month.'
+  }
+]
+
+export const labelDef = (key: StatusLabel): LabelDef => STATUS_LABELS.find((l) => l.key === key)!
+
+/** a piece of the email's wording: yours where you changed it, else the default */
+export function label(d: StatusUpdateData, key: StatusLabel): string {
+  const v = d.meta.labels?.[key]
+  return v?.trim() ? v : labelDef(key).def
+}
