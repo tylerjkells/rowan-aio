@@ -10350,6 +10350,10 @@ button.tkr-hbar:focus-visible {
   display: flex;
   gap: var(--s2);
 }
+.su-preview-hint {
+  flex-basis: 100%;
+  margin-top: calc(-1 * var(--s2));
+}
 .su-viewing {
   font-size: 13px;
 }
