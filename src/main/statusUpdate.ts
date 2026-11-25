@@ -51,6 +51,7 @@ function defaultMeta(): StatusMeta {
       "Here's a look at what the team completed, what's in flight, and what's new this month across Rowan Online, WLS, Rowan Reach, and University dashboards.",
     scope: SCOPE,
     pastLink: '',
+    labels: {},
     mailbox: 'ROOperations@rowan.edu',
     oh1: 'Tuesdays, Room 105, 10:00 AM to 11:00 AM',
     oh2: 'Thursdays, Room 105, 11:00 AM to 12:00 PM',
@@ -128,6 +129,10 @@ function normalize(raw: Record<string, unknown>): StatusUpdateData {
     // saved before these existed: the sentence starts on, the link blank
     scope: typeof m.scope === 'string' && !OLD_SCOPES.includes(m.scope) ? m.scope : base.scope,
     pastLink: str(m.pastLink),
+    labels:
+      m.labels && typeof m.labels === 'object'
+        ? Object.fromEntries(Object.entries(m.labels).filter(([, v]) => typeof v === 'string' && v.trim()))
+        : {},
     mailbox: typeof m.mailbox === 'string' ? m.mailbox : base.mailbox,
     oh1: typeof m.oh1 === 'string' ? m.oh1 : base.oh1,
     oh2: typeof m.oh2 === 'string' ? m.oh2 : base.oh2,

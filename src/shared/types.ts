@@ -669,6 +669,35 @@ export type TicketSyncResult =
   | { ok: true; desk: TicketDesk; summary: TicketSyncSummary }
   | { ok: false; error: string }
 
+/** each fixed piece of wording in the status update email (defaults in shared/statusItems) */
+export type StatusLabel =
+  | 'team'
+  | 'title'
+  | 'completed'
+  | 'progress'
+  | 'hold'
+  | 'new'
+  | 'newDashboards'
+  | 'updates'
+  | 'newSub'
+  | 'colDashboard'
+  | 'colCovers'
+  | 'colChanged'
+  | 'colLink'
+  | 'colStatus'
+  | 'colReason'
+  | 'colPurpose'
+  | 'openDashboard'
+  | 'linkSoon'
+  | 'requestedBy'
+  | 'spotlight'
+  | 'spotButton'
+  | 'requestTitle'
+  | 'requestBody'
+  | 'hoursTitle'
+  | 'past'
+  | 'footer'
+
 /** the three parts of the monthly status update email */
 export type StatusSection = 'completed' | 'progress' | 'new'
 
@@ -711,6 +740,8 @@ export interface StatusMeta {
   scope: string
   /** where past monthly updates are kept, linked at the bottom */
   pastLink: string
+  /** the email's fixed wording where you changed it; anything not here is the default */
+  labels: Partial<Record<StatusLabel, string>>
   mailbox: string
   oh1: string
   oh2: string

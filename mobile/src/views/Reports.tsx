@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ReportKey, StatusItem, StatusUpdateData, TeamDesk, Ticket } from '../../../src/shared/types'
+import type { ReportKey, StatusItem, StatusLabel, StatusUpdateData, TeamDesk, Ticket } from '../../../src/shared/types'
 import {
   AGE,
   bandOf,
@@ -35,7 +35,7 @@ import {
   type AgendaBy,
   type AgendaOpts
 } from '../../../src/shared/ticketReports'
-import { chipColors, countsOf, filled, isHidden, isHold, isUrl, sectionItems, statusDef } from '../../../src/shared/statusItems'
+import { chipColors, countsOf, filled, isHidden, isHold, isUrl, label, sectionItems, statusDef } from '../../../src/shared/statusItems'
 import { useApp } from '../App'
 import { loadStatusUpdate, loadTeam, loadTickets, peek, type TicketFile } from '../data'
 import { BackIcon, ChevronIcon, Problem, Stale } from '../ui'
@@ -430,7 +430,15 @@ function StatusChip({ d, it }: { d: StatusUpdateData; it: StatusItem }): React.J
   )
 }
 
-function ItemRows({ items, render }: { items: StatusItem[]; render: (it: StatusItem) => React.ReactNode }): React.JSX.Element {
+function ItemRows({
+  d,
+  items,
+  render
+}: {
+  d: StatusUpdateData
+  items: StatusItem[]
+  render: (it: StatusItem) => React.ReactNode
+}): React.JSX.Element {
   return (
     <div className="group">
       {items.map((it) => (
@@ -438,7 +446,7 @@ function ItemRows({ items, render }: { items: StatusItem[]; render: (it: StatusI
           <span className="row-main">
             <span className="row-title">{it.name || 'Untitled'}</span>
             {(it.area || it.requestedBy?.trim()) && (
-              <span className="row-sub">{[it.area, it.requestedBy?.trim() && `Requested by ${it.requestedBy.trim()}`].filter(Boolean).join(' · ')}</span>
+              <span className="row-sub">{[it.area, it.requestedBy?.trim() && `${label(d, 'requestedBy')} ${it.requestedBy.trim()}`].filter(Boolean).join(' · ')}</span>
             )}
             {render(it)}
           </span>
@@ -456,9 +464,9 @@ function StatusReport(): React.JSX.Element {
   const withLink = (it: StatusItem): React.ReactNode => (
     <>
       {note(it)}
-      {isUrl(it.link) && (
+      {d && isUrl(it.link) && (
         <a className="link inline" href={it.link!.trim()} target="_blank" rel="noopener noreferrer">
-          Open dashboard
+          {label(d, 'openDashboard')}
         </a>
       )}
     </>
@@ -490,22 +498,25 @@ function StatusReport(): React.JSX.Element {
   const fresh = isHidden(d, 'new') ? [] : filled(sectionItems(d.items, 'new'))
   const launched = completed.filter((i) => i.launched)
   const updates = completed.filter((i) => !i.launched)
+  const L = (key: StatusLabel): string => label(d, key)
   const tiles: [string, number][] = [
-    ...(isHidden(d, 'completed') ? [] : ([['Completed', counts.completed]] as [string, number][])),
+    ...(isHidden(d, 'completed') ? [] : ([[L('completed'), counts.completed]] as [string, number][])),
     ...(isHidden(d, 'progress')
       ? []
       : ([
-          ['In progress', counts.progress],
-          ['On hold', counts.hold]
+          [L('progress'), counts.progress],
+          [L('hold'), counts.hold]
         ] as [string, number][])),
-    ...(isHidden(d, 'new') ? [] : ([['New requests', counts.fresh]] as [string, number][]))
+    ...(isHidden(d, 'new') ? [] : ([[L('new'), counts.fresh]] as [string, number][]))
   ]
 
   return (
     <article className="report">
       <header className="page-head">
-        <p className="eyebrow">Rowan Online Operational Effectiveness Team</p>
-        <h1 className="large-title">{m.month} Dashboard Status Update</h1>
+        <p className="eyebrow">{L('team')}</p>
+        <h1 className="large-title">
+          {m.month} {L('title')}
+        </h1>
       </header>
       <Stale show={stale} />
       <Problem error={error} />
@@ -525,14 +536,14 @@ function StatusReport(): React.JSX.Element {
 
       {m.spotOn && (m.spotTitle.trim() || m.spotBody.trim()) && (
         <section>
-          <h2 className="section-title">Spotlight</h2>
+          <h2 className="section-title">{L('spotlight')}</h2>
           <div className="card spotlight">
             {m.spotTitle.trim() && <h3 className="spot-title">{m.spotTitle}</h3>}
             {d.spotImg?.data && <img className="spot-img" src={d.spotImg.data} alt="" />}
             {m.spotBody.trim() && <p className="row-text">{m.spotBody}</p>}
             {isUrl(m.spotLink) && (
               <a className="link inline" href={m.spotLink.trim()} target="_blank" rel="noopener noreferrer">
-                Take a look
+                {L('spotButton')}
               </a>
             )}
           </div>
@@ -541,32 +552,42 @@ function StatusReport(): React.JSX.Element {
 
       {launched.length > 0 && (
         <section>
-          <h2 className="section-title">Completed · New dashboards</h2>
-          <ItemRows items={launched} render={withLink} />
+          <h2 className="section-title">
+            {L('completed')} · {L('newDashboards')}
+          </h2>
+          <ItemRows d={d} items={launched} render={withLink} />
         </section>
       )}
       {updates.length > 0 && (
         <section>
-          <h2 className="section-title">Completed · Updates and enhancements</h2>
-          <ItemRows items={updates} render={withLink} />
+          <h2 className="section-title">
+            {L('completed')} · {L('updates')}
+          </h2>
+          <ItemRows d={d} items={updates} render={withLink} />
         </section>
       )}
       {going.length > 0 && (
         <section>
-          <h2 className="section-title">In progress · {going.length}</h2>
-          <ItemRows items={going} render={(it) => <StatusChip d={d} it={it} />} />
+          <h2 className="section-title">
+            {L('progress')} · {going.length}
+          </h2>
+          <ItemRows d={d} items={going} render={(it) => <StatusChip d={d} it={it} />} />
         </section>
       )}
       {held.length > 0 && (
         <section>
-          <h2 className="section-title">On hold · {held.length}</h2>
-          <ItemRows items={held} render={note} />
+          <h2 className="section-title">
+            {L('hold')} · {held.length}
+          </h2>
+          <ItemRows d={d} items={held} render={note} />
         </section>
       )}
       {fresh.length > 0 && (
         <section>
-          <h2 className="section-title">New requests · {fresh.length}</h2>
-          <ItemRows items={fresh} render={note} />
+          <h2 className="section-title">
+            {L('new')} · {fresh.length}
+          </h2>
+          <ItemRows d={d} items={fresh} render={note} />
         </section>
       )}
 
