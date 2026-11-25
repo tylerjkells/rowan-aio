@@ -6,6 +6,9 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.49.0': [
+    'Copy the status update as a picture: Copy image and Save image… sit at the top of the email preview, and beside Copy this issue when you view a past issue. It’s the whole email in one sharp image, for a document like your Google Doc of past editions, where pasted email falls apart.'
+  ],
   '0.48.0': [
     'Live transcription is about twice as fast and a little more accurate. It should now keep pace with your meeting instead of falling minutes behind, so the transcript is ready moments after you stop recording rather than 10–15 minutes later, and words show up sooner while you record.',
     'Silence is skipped, so quiet stretches no longer turn into made-up lines like “Thanks for watching.” This uses a small speech-detection file (under 1 MB) that downloads on your first recording.',
