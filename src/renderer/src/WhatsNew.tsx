@@ -6,6 +6,10 @@ import { useEffect, useState } from 'react'
  * history. scripts/whatsnew-notes.js reads this map for the GitHub release.
  */
 const NOTES: Record<string, string[]> = {
+  '0.50.0': [
+    'Change any word in the status update. The new Wording panel lists every fixed piece of the email (the team name, the title, section and count names, table headings, buttons, the request box, the past updates line and the footer), with Reset to go back to the default. Most can also be clicked and typed over right in the email preview.',
+    'The status update’s lists now run A to Z by name, with the areas mixed together; each item’s area still shows under its name. The name column reads just Dashboard.'
+  ],
   '0.49.0': [
     'Copy the status update as a picture: Copy image and Save image… sit at the top of the email preview, and beside Copy this issue when you view a past issue. It’s the whole email in one sharp image, for a document like your Google Doc of past editions, where pasted email falls apart.'
   ],
